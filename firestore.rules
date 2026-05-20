@@ -1,0 +1,151 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+    // 1. Master Deny-All
+    match /{document=**} {
+      allow read, write: if false;
+    }
+
+    // ═══════════════════════════════════════════
+    //  HELPERS
+    // ═══════════════════════════════════════════
+    function isSignedIn() {
+      return request.auth != null;
+    }
+    
+    function isEmailVerified() {
+      return isSignedIn() && request.auth.token.email_verified == true;
+    }
+
+    function isAdmin() {
+      return isSignedIn() && (
+        request.auth.token.email == 'krish02shiva@gmail.com'
+      );
+    }
+
+    function isValidId(id) {
+      return id is string && id.size() <= 128 && id.matches('^[a-zA-Z0-9_\\-]+$');
+    }
+
+    function incoming() {
+      return request.resource.data;
+    }
+
+    function existing() {
+      return resource.data;
+    }
+
+    // ═══════════════════════════════════════════
+    //  VALIDATION HELPERS
+    // ═══════════════════════════════════════════
+
+    function isValidFact(data) {
+      let requiredFields = ['cat', 'emoji', 'title', 'year', 'excerpt', 'full', 'featured', 'createdAt'];
+      return data.keys().hasAll(requiredFields)
+        && data.keys().size() == requiredFields.size()
+        && data.cat in ['history', 'science', 'inventions', 'discoveries', 'birthdays']
+        && data.title is string && data.title.size() <= 200
+        && data.excerpt is string && data.excerpt.size() <= 500
+        && data.full is string && data.full.size() <= 10000
+        && data.year is number
+        && data.featured is bool
+        && data.createdAt == request.time;
+    }
+
+    function isValidBirthday(data) {
+      let requiredFields = ['name', 'year', 'field', 'date', 'color', 'init', 'createdAt'];
+      return data.keys().hasAll(requiredFields)
+        && data.keys().size() == requiredFields.size()
+        && data.name is string && data.name.size() <= 100
+        && data.field is string && data.field.size() <= 100
+        && data.date is string && data.date.size() <= 50
+        && data.year is number
+        && data.createdAt == request.time;
+    }
+
+    function isValidQuizQuestion(data) {
+      let requiredFields = ['q', 'opts', 'correct', 'cat', 'createdAt'];
+      return data.keys().hasAll(requiredFields)
+        && data.keys().size() == requiredFields.size()
+        && data.q is string && data.q.size() <= 500
+        && data.opts is list && data.opts.size() == 4
+        && data.opts[0] is string
+        && data.correct is int && data.correct >= 0 && data.correct < 4
+        && data.cat is string
+        && data.createdAt == request.time;
+    }
+
+    function isValidSubscriber(data) {
+      let requiredFields = ['email', 'subscribedAt'];
+      return data.keys().hasAll(requiredFields)
+        && data.keys().size() == requiredFields.size()
+        && data.email is string && data.email.size() <= 100 && data.email.matches('^.+@.+\\..+$')
+        && data.subscribedAt == request.time;
+    }
+
+    function isValidContactMessage(data) {
+      let requiredFields = ['name', 'email', 'subject', 'message', 'sentAt'];
+      return data.keys().hasAll(requiredFields)
+        && data.keys().size() == requiredFields.size()
+        && data.name is string && data.name.size() <= 100
+        && data.email is string && data.email.size() <= 100 && data.email.matches('^.+@.+\\..+$')
+        && data.subject is string && data.subject.size() <= 200
+        && data.message is string && data.message.size() <= 2000
+        && data.sentAt == request.time;
+    }
+
+    function isValidUserProfile(data) {
+      let requiredFields = ['uid', 'name', 'email', 'phoneNumber', 'photoURL', 'role', 'createdAt'];
+      return data.keys().hasAll(requiredFields)
+        && data.keys().size() == requiredFields.size()
+        && data.uid == request.auth.uid
+        && (data.email == null || (data.email is string && data.email.matches('^.+@.+\\..+$')))
+        && (data.phoneNumber == null || data.phoneNumber is string)
+        && data.role in ['admin', 'user']
+        && (data.role == 'admin' ? isAdmin() : true)
+        && data.createdAt == (resource == null ? request.time : resource.data.createdAt);
+    }
+
+    // ═══════════════════════════════════════════
+    //  RULES
+    // ═══════════════════════════════════════════
+
+    match /facts/{factId} {
+      allow read: if true;
+      allow create: if isAdmin() && isValidFact(incoming());
+      allow update: if isAdmin() && isValidFact(incoming());
+      allow delete: if isAdmin();
+    }
+
+    match /birthdays/{bdayId} {
+      allow read: if true;
+      allow create: if isAdmin() && isValidBirthday(incoming());
+      allow update: if isAdmin() && isValidBirthday(incoming());
+      allow delete: if isAdmin();
+    }
+
+    match /quiz_questions/{qId} {
+      allow read: if true;
+      allow create: if isAdmin() && isValidQuizQuestion(incoming());
+      allow update: if isAdmin() && isValidQuizQuestion(incoming());
+      allow delete: if isAdmin();
+    }
+
+    match /subscribers/{subId} {
+      allow list, get: if isAdmin();
+      allow create: if isValidSubscriber(incoming());
+    }
+
+    match /contact_messages/{msgId} {
+      allow list, get: if isAdmin();
+      allow create: if isValidContactMessage(incoming());
+    }
+
+    match /users/{uid} {
+      allow get: if isSignedIn() && (request.auth.uid == uid || isAdmin());
+      allow list: if isAdmin();
+      allow create: if isSignedIn() && request.auth.uid == uid && isValidUserProfile(incoming());
+      allow update: if isSignedIn() && request.auth.uid == uid && isValidUserProfile(incoming());
+    }
+  }
+}

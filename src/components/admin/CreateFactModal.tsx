@@ -1,0 +1,155 @@
+import React, { useState } from 'react';
+import { motion, AnimatePresence } from 'motion/react';
+import { X, Save, Plus } from 'lucide-react';
+import { factService } from '../../services/factService';
+import { Fact, Category } from '../../types';
+
+interface CreateFactModalProps {
+  isOpen: boolean;
+  onClose: () => void;
+  onSuccess: (newFact: Fact) => void;
+  initialCat?: Category;
+}
+
+export const CreateFactModal = ({ isOpen, onClose, onSuccess, initialCat }: CreateFactModalProps) => {
+  const [loading, setLoading] = useState(false);
+  const [formData, setFormData] = useState<Partial<Fact>>({
+    cat: initialCat || 'history',
+    title: '',
+    excerpt: '',
+    full: '',
+    year: new Date().getFullYear(),
+    featured: false,
+    emoji: '📝'
+  });
+
+  const categories = ['history', 'science', 'inventions', 'discoveries'];
+
+  if (!isOpen) return null;
+
+  const handleSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setLoading(true);
+    try {
+      const id = formData.title?.toLowerCase().replace(/\s+/g, '-') || `fact-${Date.now()}`;
+      const newFact = { ...formData, id } as Fact;
+      await factService.createFact(newFact);
+      onSuccess(newFact);
+      onClose();
+    } catch (err) {
+      alert("Failed to create fact");
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  return (
+    <AnimatePresence>
+      <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm">
+        <motion.div 
+          initial={{ opacity: 0, scale: 0.95, y: 20 }}
+          animate={{ opacity: 1, scale: 1, y: 0 }}
+          exit={{ opacity: 0, scale: 0.95, y: 20 }}
+          className="bg-paper w-full max-w-2xl rounded-3xl shadow-2xl overflow-hidden border border-black/5"
+        >
+          <div className="p-6 border-b border-black/5 flex items-center justify-between bg-paper2">
+            <h2 className="text-2xl font-serif font-black flex items-center gap-3">
+              <Plus className="text-gold" /> Create New Fact Article
+            </h2>
+            <button onClick={onClose} className="p-2 hover:bg-black/5 rounded-full transition-all">
+              <X size={24} />
+            </button>
+          </div>
+
+          <form onSubmit={handleSubmit} className="p-8 space-y-6 max-h-[70vh] overflow-y-auto">
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-6">
+              <div className="space-y-2">
+                <label className="text-xs font-bold uppercase tracking-widest text-ink3">Category</label>
+                <select 
+                  value={formData.cat}
+                  onChange={(e) => setFormData({...formData, cat: e.target.value as Category})}
+                  className="w-full bg-white border border-black/10 rounded-xl px-4 py-3 focus:border-gold outline-none transition-all"
+                >
+                  {categories.map(c => <option key={c} value={c}>{c.toUpperCase()}</option>)}
+                </select>
+              </div>
+
+              <div className="space-y-2">
+                <label className="text-xs font-bold uppercase tracking-widest text-ink3">Year</label>
+                <input 
+                  type="number"
+                  value={formData.year}
+                  onChange={(e) => setFormData({...formData, year: parseInt(e.target.value)})}
+                  className="w-full bg-white border border-black/10 rounded-xl px-4 py-3 focus:border-gold outline-none transition-all"
+                  required
+                />
+              </div>
+            </div>
+
+            <div className="space-y-2">
+              <label className="text-xs font-bold uppercase tracking-widest text-ink3">Title</label>
+              <input 
+                value={formData.title}
+                onChange={(e) => setFormData({...formData, title: e.target.value})}
+                className="w-full bg-white border border-black/10 rounded-xl px-4 py-3 focus:border-gold outline-none transition-all font-serif text-lg font-bold"
+                placeholder="The Great Wall..."
+                required
+              />
+            </div>
+
+            <div className="space-y-2">
+              <label className="text-xs font-bold uppercase tracking-widest text-ink3">Excerpt (Short Summary)</label>
+              <textarea 
+                value={formData.excerpt}
+                onChange={(e) => setFormData({...formData, excerpt: e.target.value})}
+                className="w-full bg-white border border-black/10 rounded-xl px-4 py-3 focus:border-gold outline-none transition-all h-24 resize-none"
+                placeholder="Briefly describe the fact..."
+                required
+              />
+            </div>
+
+            <div className="space-y-2">
+              <label className="text-xs font-bold uppercase tracking-widest text-ink3">Full Article Content (Markdown)</label>
+              <textarea 
+                value={formData.full}
+                onChange={(e) => setFormData({...formData, full: e.target.value})}
+                className="w-full bg-white border border-black/10 rounded-xl px-4 py-3 focus:border-gold outline-none transition-all h-64 font-serif leading-relaxed"
+                placeholder="Write the full story here... Use Markdown."
+                required
+              />
+            </div>
+
+            <div className="flex items-center gap-4 py-2">
+              <label className="flex items-center gap-2 cursor-pointer group">
+                <input 
+                  type="checkbox"
+                  checked={formData.featured}
+                  onChange={(e) => setFormData({...formData, featured: e.target.checked})}
+                  className="w-5 h-5 accent-gold cursor-pointer"
+                />
+                <span className="text-sm font-bold text-ink2 group-hover:text-ink transition-all">Feature this article on home page</span>
+              </label>
+            </div>
+          </form>
+
+          <div className="p-6 border-t border-black/5 bg-paper2 flex justify-end gap-4">
+            <button 
+              type="button" 
+              onClick={onClose}
+              className="px-6 py-2.5 rounded-xl text-ink3 font-bold hover:bg-black/5 transition-all"
+            >
+              Discard
+            </button>
+            <button 
+              onClick={handleSubmit}
+              disabled={loading}
+              className="flex items-center gap-2 px-8 py-2.5 bg-ink text-white rounded-xl font-bold hover:bg-gold transition-all shadow-lg shadow-black/10 disabled:opacity-50"
+            >
+              {loading ? "Publishing..." : <><Save size={18} /> Publish Fact</>}
+            </button>
+          </div>
+        </motion.div>
+      </div>
+    </AnimatePresence>
+  );
+};

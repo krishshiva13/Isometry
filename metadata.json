@@ -1,0 +1,6 @@
+{
+  "name": "FActHub",
+  "description": "Explore fascinating facts about history, science, inventions, discoveries, and famous birthdays with a daily quiz and AI-powered updates.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}
