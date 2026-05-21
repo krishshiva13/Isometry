@@ -7,7 +7,8 @@ import dotenv from "dotenv";
 dotenv.config();
 
 const app = express();
-const PORT = 3000;
+// This is the CRITICAL fix: dynamic port matching for App Hosting (defaults to 3000 in local dev)
+const PORT = process.env.PORT ? parseInt(process.env.PORT, 10) : 3000;
 
 app.use(express.json());
 
@@ -19,7 +20,7 @@ const ai = new GoogleGenAI({
       'User-Agent': 'aistudio-build',
     }
   }
-});
+ });
 
 // API Routes
 app.get("/api/health", (req, res) => {
