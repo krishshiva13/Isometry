@@ -1,15 +1,17 @@
 import React, { useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
-import { Search, Menu, X, User as UserIcon, LogOut, Shield } from 'lucide-react';
+import { Search, Menu, X, User as UserIcon, LogOut, Shield, Plus } from 'lucide-react';
 import { cn } from '../lib/utils';
 import { authService } from '../services/authService';
 import { AuthModal } from './AuthModal';
 import { useAuth } from '../contexts/AuthContext';
+import { CreateFactModal } from './admin/CreateFactModal';
 
 export const Header = () => {
   const [isMenuOpen, setIsMenuOpen] = useState(false);
   const [isSearchOpen, setIsSearchOpen] = useState(false);
   const [isAuthModalOpen, setIsAuthModalOpen] = useState(false);
+  const [isCreateModalOpen, setIsCreateModalOpen] = useState(false);
   const { user, isAdmin } = useAuth();
   const navigate = useNavigate();
 
@@ -58,6 +60,16 @@ export const Header = () => {
               <Search size={16} />
               <span>Search…</span>
             </button>
+
+            {isAdmin && (
+              <button 
+                onClick={() => setIsCreateModalOpen(true)}
+                className="flex items-center gap-1.5 bg-gold/10 hover:bg-gold/20 text-gold border border-gold/20 font-bold text-xs px-3 py-1.5 sm:px-4 sm:py-2 rounded-full transition-all"
+              >
+                <Plus size={14} />
+                <span>Add Fact</span>
+              </button>
+            )}
 
             {user ? (
               <div className="flex items-center gap-2 relative group">
@@ -113,6 +125,16 @@ export const Header = () => {
       <AuthModal 
         isOpen={isAuthModalOpen} 
         onClose={() => setIsAuthModalOpen(false)} 
+      />
+
+      <CreateFactModal 
+        isOpen={isCreateModalOpen}
+        onClose={() => setIsCreateModalOpen(false)}
+        onSuccess={(newFact) => {
+          setIsCreateModalOpen(false);
+          // Redirect to the newly created fact or refresh
+          navigate(`/article/${newFact.id}`);
+        }}
       />
 
       {/* Mobile Nav */}

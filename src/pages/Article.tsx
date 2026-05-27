@@ -84,7 +84,14 @@ export const Article = () => {
 
   const startEditing = () => {
     if (!fact) return;
-    setEditData({ title: fact.title, full: fact.full, excerpt: fact.excerpt, year: fact.year });
+    setEditData({ 
+      title: fact.title, 
+      full: fact.full, 
+      excerpt: fact.excerpt, 
+      year: fact.year,
+      emoji: fact.emoji || '📝',
+      imageUrl: fact.imageUrl || ''
+    });
     setIsEditing(true);
   };
 
@@ -200,11 +207,47 @@ export const Article = () => {
             </div>
 
             {isEditing ? (
-              <input 
-                value={editData.title}
-                onChange={(e) => setEditData({...editData, title: e.target.value})}
-                className="w-full text-4xl sm:text-5xl font-serif font-black text-ink bg-white border border-black/10 p-4 rounded-xl focus:outline-none focus:border-gold"
-              />
+              <div className="space-y-4 bg-paper2 p-6 rounded-2xl border border-black/5">
+                <div className="space-y-1">
+                  <label className="text-xs font-bold uppercase tracking-widest text-ink3">Article Title</label>
+                  <input 
+                    value={editData.title}
+                    onChange={(e) => setEditData({...editData, title: e.target.value})}
+                    className="w-full text-2xl font-serif font-black text-ink bg-white border border-black/10 p-3 rounded-xl focus:outline-none focus:border-gold"
+                  />
+                </div>
+                
+                <div className="space-y-1">
+                  <label className="text-xs font-bold uppercase tracking-widest text-ink3">Short Summary (Excerpt)</label>
+                  <textarea 
+                    value={editData.excerpt}
+                    onChange={(e) => setEditData({...editData, excerpt: e.target.value})}
+                    className="w-full bg-white border border-black/10 p-3 rounded-xl text-sm focus:outline-none focus:border-gold resize-none h-20"
+                    placeholder="Short summary of the article..."
+                  />
+                </div>
+
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                  <div className="space-y-1">
+                    <label className="text-xs font-bold uppercase tracking-widest text-ink3">Accent Emoji</label>
+                    <input 
+                      value={editData.emoji}
+                      onChange={(e) => setEditData({...editData, emoji: e.target.value})}
+                      className="w-full bg-white border border-black/10 p-3 rounded-xl focus:outline-none focus:border-gold"
+                      placeholder="📝"
+                    />
+                  </div>
+                  <div className="space-y-1">
+                    <label className="text-xs font-bold uppercase tracking-widest text-ink3">Cover Image URL (Optional)</label>
+                    <input 
+                      value={editData.imageUrl}
+                      onChange={(e) => setEditData({...editData, imageUrl: e.target.value})}
+                      className="w-full bg-white border border-black/10 p-3 rounded-xl text-sm focus:outline-none focus:border-gold"
+                      placeholder="https://images.unsplash.com/photo-..."
+                    />
+                  </div>
+                </div>
+              </div>
             ) : (
               <h1 className="text-4xl sm:text-5xl lg:text-5xl font-serif font-black text-ink leading-tight tracking-tight">
                 {fact.title}
@@ -229,17 +272,38 @@ export const Article = () => {
               <span>FActHub Verified</span>
             </div>
 
-            <div className={cn("w-full aspect-video rounded-2xl flex items-center justify-center text-[6rem] relative overflow-hidden", {
-              "bg-coral-l": fact.cat === 'history',
-              "bg-teal-l": fact.cat === 'science',
-              "bg-gold-l/10": fact.cat === 'inventions',
-              "bg-indigo-l": fact.cat === 'discoveries'
-            })}>
-              <span className="relative z-10">{fact.emoji}</span>
-              <div className="absolute bottom-0 right-0 p-4 opacity-50">
-                <div className="bg-paper2 px-3 py-1 rounded border border-black/5 text-[0.6rem] font-mono">AD-ZONE 300x60</div>
+            {fact.imageUrl ? (
+              <div className="w-full aspect-video rounded-2xl overflow-hidden relative shadow-lg group border border-black/5 bg-paper2">
+                <img 
+                  src={fact.imageUrl} 
+                  alt={fact.title} 
+                  className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-500" 
+                  referrerPolicy="no-referrer"
+                  onError={(e) => {
+                    // fall back gracefully if invalid link
+                    (e.target as any).style.display = 'none';
+                  }}
+                />
+                <div className="absolute top-4 left-4 bg-black/50 backdrop-blur-md text-white font-mono text-[10px] uppercase font-bold px-3 py-1 rounded-full">
+                  Verified Media Accent
+                </div>
+                <div className="absolute bottom-0 right-0 p-4 opacity-50">
+                  <div className="bg-paper2 px-3 py-1 rounded border border-black/5 text-[0.6rem] font-mono">AD-ZONE 300x60</div>
+                </div>
               </div>
-            </div>
+            ) : (
+              <div className={cn("w-full aspect-video rounded-2xl flex items-center justify-center text-[6rem] relative overflow-hidden border border-black/5", {
+                "bg-coral-l": fact.cat === 'history',
+                "bg-teal-l": fact.cat === 'science',
+                "bg-gold-l/10": fact.cat === 'inventions',
+                "bg-indigo-l": fact.cat === 'discoveries'
+              })}>
+                <span className="relative z-10">{fact.emoji}</span>
+                <div className="absolute bottom-0 right-0 p-4 opacity-50">
+                  <div className="bg-paper2 px-3 py-1 rounded border border-black/5 text-[0.6rem] font-mono">AD-ZONE 300x60</div>
+                </div>
+              </div>
+            )}
           </header>
 
           <div className="prose prose-lg max-w-none prose-headings:font-serif prose-headings:font-black prose-p:leading-relaxed prose-p:text-ink2 prose-blockquote:border-gold prose-blockquote:bg-paper2 prose-blockquote:py-1 prose-blockquote:px-6 prose-blockquote:italic">

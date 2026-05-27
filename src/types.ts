@@ -10,6 +10,7 @@ export interface Fact {
   full: string;
   featured: boolean;
   createdAt?: string;
+  imageUrl?: string;
 }
 
 export interface Birthday {

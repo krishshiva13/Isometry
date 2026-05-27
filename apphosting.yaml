@@ -1,0 +1,16 @@
+# apphosting.yaml
+# Firebase App Hosting configuration file
+# This tells App Hosting how to run your full-stack Express server and how to map secrets securely.
+
+specVersion: v1beta1
+
+runConfig:
+  concurrency: 80
+  cpu: 1
+  memoryMiB: 512
+
+# Secrets mapped from Google Cloud Secret Manager
+# App Hosting will securely fetch this secret and inject it as GEMINI_API_KEY in the environment.
+secrets:
+  - variable: GEMINI_API_KEY
+    secret: GEMINI_API_KEY

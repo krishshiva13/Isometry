@@ -20,7 +20,8 @@ export const CreateFactModal = ({ isOpen, onClose, onSuccess, initialCat }: Crea
     full: '',
     year: new Date().getFullYear(),
     featured: false,
-    emoji: '📝'
+    emoji: '📝',
+    imageUrl: ''
   });
 
   const categories = ['history', 'science', 'inventions', 'discoveries'];
@@ -95,6 +96,28 @@ export const CreateFactModal = ({ isOpen, onClose, onSuccess, initialCat }: Crea
                 placeholder="The Great Wall..."
                 required
               />
+            </div>
+
+            <div className="grid grid-cols-1 sm:grid-cols-3 gap-6">
+              <div className="space-y-2">
+                <label className="text-xs font-bold uppercase tracking-widest text-ink3">Emoji Accent</label>
+                <input 
+                  value={formData.emoji}
+                  onChange={(e) => setFormData({...formData, emoji: e.target.value})}
+                  className="w-full bg-white border border-black/10 rounded-xl px-4 py-3 focus:border-gold outline-none transition-all text-center text-xl"
+                  placeholder="📝"
+                />
+              </div>
+
+              <div className="sm:col-span-2 space-y-2">
+                <label className="text-xs font-bold uppercase tracking-widest text-ink3">Cover Image URL (Optional)</label>
+                <input 
+                  value={formData.imageUrl}
+                  onChange={(e) => setFormData({...formData, imageUrl: e.target.value})}
+                  className="w-full bg-white border border-black/10 rounded-xl px-4 py-3 focus:border-gold outline-none transition-all text-sm"
+                  placeholder="https://images.unsplash.com/photo-..."
+                />
+              </div>
             </div>
 
             <div className="space-y-2">
