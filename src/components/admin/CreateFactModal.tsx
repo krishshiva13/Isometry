@@ -21,7 +21,9 @@ export const CreateFactModal = ({ isOpen, onClose, onSuccess, initialCat }: Crea
     year: new Date().getFullYear(),
     featured: false,
     emoji: '📝',
-    imageUrl: ''
+    imageUrl: '',
+    eventMonth: 0,
+    eventDay: 0
   });
 
   const categories = ['history', 'science', 'inventions', 'discoveries'];
@@ -63,13 +65,13 @@ export const CreateFactModal = ({ isOpen, onClose, onSuccess, initialCat }: Crea
           </div>
 
           <form onSubmit={handleSubmit} className="p-8 space-y-6 max-h-[70vh] overflow-y-auto">
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-6">
+            <div className="grid grid-cols-1 sm:grid-cols-4 gap-4">
               <div className="space-y-2">
                 <label className="text-xs font-bold uppercase tracking-widest text-ink3">Category</label>
                 <select 
                   value={formData.cat}
                   onChange={(e) => setFormData({...formData, cat: e.target.value as Category})}
-                  className="w-full bg-white border border-black/10 rounded-xl px-4 py-3 focus:border-gold outline-none transition-all"
+                  className="w-full bg-white border border-black/10 rounded-xl px-3 py-3 focus:border-gold outline-none transition-all text-sm"
                 >
                   {categories.map(c => <option key={c} value={c}>{c.toUpperCase()}</option>)}
                 </select>
@@ -81,9 +83,39 @@ export const CreateFactModal = ({ isOpen, onClose, onSuccess, initialCat }: Crea
                   type="number"
                   value={formData.year}
                   onChange={(e) => setFormData({...formData, year: parseInt(e.target.value)})}
-                  className="w-full bg-white border border-black/10 rounded-xl px-4 py-3 focus:border-gold outline-none transition-all"
+                  className="w-full bg-white border border-black/10 rounded-xl px-3 py-3 focus:border-gold outline-none transition-all text-sm"
                   required
                 />
+              </div>
+
+              <div className="space-y-2">
+                <label className="text-xs font-bold uppercase tracking-widest text-ink3">Event Month</label>
+                <select 
+                  value={formData.eventMonth || 0}
+                  onChange={(e) => setFormData({...formData, eventMonth: parseInt(e.target.value)})}
+                  className="w-full bg-white border border-black/10 rounded-xl px-3 py-3 focus:border-gold outline-none transition-all text-sm"
+                >
+                  <option value={0}>None (Any)</option>
+                  {Array.from({ length: 12 }, (_, i) => (
+                    <option key={i + 1} value={i + 1}>
+                      {new Date(2000, i, 1).toLocaleString('en-US', { month: 'long' })}
+                    </option>
+                  ))}
+                </select>
+              </div>
+
+              <div className="space-y-2">
+                <label className="text-xs font-bold uppercase tracking-widest text-ink3">Event Day</label>
+                <select 
+                  value={formData.eventDay || 0}
+                  onChange={(e) => setFormData({...formData, eventDay: parseInt(e.target.value)})}
+                  className="w-full bg-white border border-black/10 rounded-xl px-3 py-3 focus:border-gold outline-none transition-all text-sm"
+                >
+                  <option value={0}>None (Any)</option>
+                  {Array.from({ length: 31 }, (_, i) => (
+                    <option key={i + 1} value={i + 1}>{i + 1}</option>
+                  ))}
+                </select>
               </div>
             </div>
 

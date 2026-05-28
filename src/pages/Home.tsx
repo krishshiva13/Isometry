@@ -45,6 +45,11 @@ export const Home = () => {
   const mainFeat = featuredFacts[0];
   const sideFeat = featuredFacts.slice(1, 5);
 
+  const today = new Date();
+  const curMonth = today.getMonth() + 1;
+  const curDay = today.getDate();
+  const todayEvents = facts.filter(f => f.eventMonth === curMonth && f.eventDay === curDay);
+
   return (
     <div className="fade-in">
       <Helmet>
@@ -84,21 +89,54 @@ export const Home = () => {
             </div>
           </div>
 
-          <div className="hidden lg:block bg-white/5 border border-white/10 rounded-2xl p-6 backdrop-blur-sm">
-            <div className="font-mono text-[0.7rem] text-gold-l uppercase tracking-widest mb-6">✦ Today in History</div>
+          <div className="hidden lg:block bg-white/5 border border-white/10 rounded-2xl p-6 backdrop-blur-sm self-stretch max-h-[480px] overflow-y-auto">
+            <div className="font-mono text-[0.7rem] text-gold-l uppercase tracking-widest mb-6 flex justify-between items-center">
+              <span>✦ Today in History</span>
+              {todayEvents.length > 0 && <span className="bg-gold text-ink text-[9px] font-bold px-1.5 py-0.5 rounded-full">{todayEvents.length} Active</span>}
+            </div>
+            
             <div className="space-y-6">
-              {[
-                { year: 1940, text: 'Winston Churchill became British PM' },
-                { year: 1796, text: 'Edward Jenner administered first vaccine' },
-                { year: 1969, text: 'Apollo 11 mission reached lunar orbit' }
-              ].map((ev, i) => (
-                <div key={i} className="group border-b border-white/10 pb-6 last:border-0 last:pb-0">
-                  <div className="text-2xl font-serif font-bold text-gold-l leading-none">{ev.year}</div>
-                  <div className="text-sm text-white/70 mt-2 leading-snug group-hover:text-white transition-colors">
-                    {ev.text}
-                  </div>
-                </div>
-              ))}
+              {todayEvents.length > 0 ? (
+                todayEvents.map((ev) => (
+                  <Link 
+                    key={ev.id} 
+                    to={`/article/${ev.id}`} 
+                    className="block group border-b border-white/10 pb-6 last:border-0 last:pb-0 hover:scale-[1.01] transition-all"
+                  >
+                    <div className="text-2xl font-serif font-bold text-gold-l leading-none flex items-center gap-2">
+                      <span className="text-lg">{ev.emoji || "⏳"}</span>
+                      {ev.year < 0 ? `${Math.abs(ev.year)} BC` : ev.year}
+                    </div>
+                    <div className="text-sm text-white/70 mt-2 leading-snug group-hover:text-gold-l transition-colors">
+                      {ev.title}
+                    </div>
+                    <div className="text-[10px] text-white/40 mt-1 uppercase font-semibold font-mono">Read Article →</div>
+                  </Link>
+                ))
+              ) : (
+                <>
+                  {[
+                    { year: 1940, text: 'Winston Churchill became British PM' },
+                    { year: 1796, text: 'Edward Jenner administered first vaccine' },
+                    { year: 1969, text: 'Apollo 11 mission reached lunar orbit' }
+                  ].map((ev, i) => (
+                    <div key={i} className="group border-b border-white/10 pb-6 last:border-0 last:pb-0">
+                      <div className="text-2xl font-serif font-bold text-gold-l leading-none">{ev.year}</div>
+                      <div className="text-sm text-white/70 mt-2 leading-snug group-hover:text-white transition-colors">
+                        {ev.text}
+                      </div>
+                    </div>
+                  ))}
+                  
+                  {isAdmin && (
+                    <div className="pt-2">
+                      <div className="p-4 rounded-xl bg-white/5 border border-white/10 text-[11px] text-white/50 text-center leading-relaxed font-sans">
+                        💡 <strong>Admin Hint:</strong> Show custom articles here! Create or Edit any article and set its <strong>Event month & day</strong> to match today's date!
+                      </div>
+                    </div>
+                  )}
+                </>
+              )}
             </div>
           </div>
         </div>

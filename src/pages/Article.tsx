@@ -10,6 +10,97 @@ import { cn } from '../lib/utils';
 import { INITIAL_FACTS } from '../seed';
 import { useAuth } from '../contexts/AuthContext';
 
+const renderHighlightedText = (text: string) => {
+  if (!text) return null;
+  
+  const regex = /\[(gold|coral|teal|indigo|red|green|blue|slate|purple)\](.*?)\[\/\1\]/gi;
+  const elements: (string | React.ReactNode)[] = [];
+  let lastIndex = 0;
+  let match;
+  
+  const localRegex = new RegExp(regex);
+  
+  while ((match = localRegex.exec(text)) !== null) {
+    const matchIndex = match.index;
+    const color = match[1].toLowerCase();
+    const content = match[2];
+    
+    if (matchIndex > lastIndex) {
+      elements.push(text.substring(lastIndex, matchIndex));
+    }
+    
+    let textColorClass = "text-gold";
+    if (color === "coral") textColorClass = "text-coral font-bold";
+    else if (color === "teal") textColorClass = "text-teal font-bold";
+    else if (color === "indigo") textColorClass = "text-indigo font-bold";
+    else if (color === "red") textColorClass = "text-rose-600 font-bold";
+    else if (color === "green") textColorClass = "text-emerald-600 font-bold";
+    else if (color === "blue") textColorClass = "text-blue-600 font-bold";
+    else if (color === "slate") textColorClass = "text-slate-600 font-bold";
+    else if (color === "purple") textColorClass = "text-purple-600 font-bold";
+    else textColorClass = "text-gold font-bold";
+    
+    elements.push(
+      <span key={matchIndex} className={textColorClass}>
+        {content}
+      </span>
+    );
+    
+    lastIndex = localRegex.lastIndex;
+  }
+  
+  if (lastIndex < text.length) {
+    elements.push(text.substring(lastIndex));
+  }
+  
+  return elements.length > 0 ? elements : text;
+};
+
+const renderers = {
+  h1: ({ children }: any) => {
+    const text = typeof children === 'string' ? children : '';
+    return (
+      <h1 className="text-3xl font-serif font-black text-ink mt-8 mb-4">
+        {text ? renderHighlightedText(text) : React.Children.map(children, child => typeof child === 'string' ? renderHighlightedText(child) : child)}
+      </h1>
+    );
+  },
+  h2: ({ children }: any) => {
+    const text = typeof children === 'string' ? children : '';
+    return (
+      <h2 className="text-2xl font-serif font-black text-ink mt-6 mb-3">
+        {text ? renderHighlightedText(text) : React.Children.map(children, child => typeof child === 'string' ? renderHighlightedText(child) : child)}
+      </h2>
+    );
+  },
+  h3: ({ children }: any) => {
+    const text = typeof children === 'string' ? children : '';
+    return (
+      <h3 className="text-xl font-serif font-bold text-ink mt-4 mb-2">
+        {text ? renderHighlightedText(text) : React.Children.map(children, child => typeof child === 'string' ? renderHighlightedText(child) : child)}
+      </h3>
+    );
+  },
+  p: ({ children }: any) => {
+    const formattedChildren = React.Children.map(children, child => {
+      if (typeof child === 'string') {
+        return renderHighlightedText(child);
+      }
+      return child;
+    });
+    return <p className="leading-relaxed text-ink2 mb-6">{formattedChildren}</p>;
+  },
+  li: ({ children }: any) => {
+    const formattedChildren = React.Children.map(children, child => {
+      if (typeof child === 'string') {
+        return renderHighlightedText(child);
+      }
+      return child;
+    });
+    return <li className="text-ink2 mb-2">{formattedChildren}</li>;
+  }
+};
+
 export const Article = () => {
   const { id } = useParams<{ id: string }>();
   const [fact, setFact] = useState<Fact | null>(null);
@@ -90,7 +181,9 @@ export const Article = () => {
       excerpt: fact.excerpt, 
       year: fact.year,
       emoji: fact.emoji || '📝',
-      imageUrl: fact.imageUrl || ''
+      imageUrl: fact.imageUrl || '',
+      eventMonth: fact.eventMonth || 0,
+      eventDay: fact.eventDay || 0
     });
     setIsEditing(true);
   };
@@ -227,24 +320,55 @@ export const Article = () => {
                   />
                 </div>
 
-                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                  <div className="space-y-1">
+                <div className="grid grid-cols-1 sm:grid-cols-4 gap-4">
+                  <div className="space-y-1 col-span-1">
                     <label className="text-xs font-bold uppercase tracking-widest text-ink3">Accent Emoji</label>
                     <input 
                       value={editData.emoji}
                       onChange={(e) => setEditData({...editData, emoji: e.target.value})}
-                      className="w-full bg-white border border-black/10 p-3 rounded-xl focus:outline-none focus:border-gold"
+                      className="w-full bg-white border border-black/10 p-3 rounded-xl focus:outline-none focus:border-gold font-sans"
                       placeholder="📝"
                     />
                   </div>
-                  <div className="space-y-1">
+                  <div className="space-y-1 col-span-1 sm:col-span-3">
                     <label className="text-xs font-bold uppercase tracking-widest text-ink3">Cover Image URL (Optional)</label>
                     <input 
                       value={editData.imageUrl}
                       onChange={(e) => setEditData({...editData, imageUrl: e.target.value})}
-                      className="w-full bg-white border border-black/10 p-3 rounded-xl text-sm focus:outline-none focus:border-gold"
+                      className="w-full bg-white border border-black/10 p-3 rounded-xl text-sm focus:outline-none focus:border-gold font-sans"
                       placeholder="https://images.unsplash.com/photo-..."
                     />
+                  </div>
+                </div>
+
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                  <div className="space-y-1">
+                    <label className="text-xs font-bold uppercase tracking-widest text-ink3">Event Month (Optional)</label>
+                    <select 
+                      value={editData.eventMonth || 0}
+                      onChange={(e) => setEditData({...editData, eventMonth: parseInt(e.target.value)})}
+                      className="w-full bg-white border border-black/10 p-3 rounded-xl text-sm focus:outline-none focus:border-gold font-sans"
+                    >
+                      <option value={0}>None (Any)</option>
+                      {Array.from({ length: 12 }, (_, i) => (
+                        <option key={i + 1} value={i + 1}>
+                          {new Date(2000, i, 1).toLocaleString('en-US', { month: 'long' })}
+                        </option>
+                      ))}
+                    </select>
+                  </div>
+                  <div className="space-y-1">
+                    <label className="text-xs font-bold uppercase tracking-widest text-ink3">Event Day (Optional)</label>
+                    <select 
+                      value={editData.eventDay || 0}
+                      onChange={(e) => setEditData({...editData, eventDay: parseInt(e.target.value)})}
+                      className="w-full bg-white border border-black/10 p-3 rounded-xl text-sm focus:outline-none focus:border-gold font-sans"
+                    >
+                      <option value={0}>None (Any)</option>
+                      {Array.from({ length: 31 }, (_, i) => (
+                        <option key={i + 1} value={i + 1}>{i + 1}</option>
+                      ))}
+                    </select>
                   </div>
                 </div>
               </div>
@@ -314,7 +438,7 @@ export const Article = () => {
                 className="w-full h-[500px] bg-white border border-black/10 p-6 rounded-2xl font-serif text-lg leading-relaxed focus:outline-none focus:border-gold"
               />
             ) : (
-              <ReactMarkdown>{fact.full}</ReactMarkdown>
+              <ReactMarkdown components={renderers}>{fact.full}</ReactMarkdown>
             )}
           </div>
 
@@ -352,6 +476,17 @@ export const Article = () => {
                   <Copy size={16} /> Copy Link
                 </button>
              </div>
+          </div>
+
+          <div className="mt-8 flex items-center justify-between bg-white border border-black/10 p-5 rounded-2xl shadow-sm">
+            <span className="text-xs sm:text-sm text-ink3 font-serif italic">Finished reading this story?</span>
+            <Link 
+              to="/" 
+              className="flex items-center gap-2 px-5 py-2.5 bg-ink text-white rounded-xl text-xs sm:text-sm font-bold hover:bg-gold focus:scale-95 hover:text-ink transition-all shadow shadow-black/5 group"
+            >
+              <ArrowLeft size={16} className="group-hover:-translate-x-1 transition-transform" />
+              <span>Back to Home</span>
+            </Link>
           </div>
         </div>
 

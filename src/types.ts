@@ -11,6 +11,8 @@ export interface Fact {
   featured: boolean;
   createdAt?: string;
   imageUrl?: string;
+  eventMonth?: number;
+  eventDay?: number;
 }
 
 export interface Birthday {
