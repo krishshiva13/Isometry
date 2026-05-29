@@ -98,6 +98,31 @@ const renderers = {
       return child;
     });
     return <li className="text-ink2 mb-2">{formattedChildren}</li>;
+  },
+  img: ({ src, alt }: any) => {
+    const parts = alt ? alt.split('|') : [];
+    const altText = parts[0] ? parts[0].trim() : '';
+    const credit = parts[1] ? parts[1].trim() : '';
+
+    return (
+      <span className="block my-8 space-y-2">
+        <span className="block w-full rounded-2xl overflow-hidden shadow-md border border-black/5 bg-paper2">
+          <img 
+            src={src} 
+            alt={altText || 'Article media'} 
+            className="w-full h-auto object-cover max-h-[500px]" 
+            referrerPolicy="no-referrer"
+          />
+        </span>
+        {(altText || credit) && (
+          <span className="block text-center font-sans text-xs text-ink3 leading-normal px-4">
+            {altText && <span className="text-ink2 font-medium">{altText}</span>}
+            {altText && credit && <span className="mx-1.5 opacity-30">|</span>}
+            {credit && <span className="italic">{credit}</span>}
+          </span>
+        )}
+      </span>
+    );
   }
 };
 
@@ -462,11 +487,29 @@ export const Article = () => {
 
           <div className="prose prose-lg max-w-none prose-headings:font-serif prose-headings:font-black prose-p:leading-relaxed prose-p:text-ink2 prose-blockquote:border-gold prose-blockquote:bg-paper2 prose-blockquote:py-1 prose-blockquote:px-6 prose-blockquote:italic">
              {isEditing ? (
-              <textarea 
-                value={editData.full}
-                onChange={(e) => setEditData({...editData, full: e.target.value})}
-                className="w-full h-[500px] bg-white border border-black/10 p-6 rounded-2xl font-serif text-lg leading-relaxed focus:outline-none focus:border-gold"
-              />
+              <div className="space-y-4">
+                <div className="p-5 rounded-2xl bg-amber-50 border border-gold/30 text-xs sm:text-sm text-ink2 leading-relaxed space-y-3 font-sans shadow-sm">
+                  <div className="font-bold flex items-center gap-2 text-ink uppercase tracking-wider text-[11px]">
+                    💡 Adding Mid-Article Images with Alt Text & Credits
+                  </div>
+                  <p className="m-0 text-ink2">
+                    To place images directly inside your story, write standard Markdown image tags. Use a vertical bar <code className="bg-black/5 px-1 py-0.5 rounded text-coral font-bold font-mono">|</code> to include both the **Alt Text** and **Credit/Source**:
+                  </p>
+                  <div className="bg-white border border-black/10 rounded-xl p-3 font-mono text-xs sm:text-sm text-ink select-all overflow-x-auto shadow-inner">
+                    ![Your Alt Text / Caption | Credit: Creator Name](IMAGE_URL)
+                  </div>
+                  <p className="m-0 text-ink3 text-xs">
+                    <strong>Example:</strong> <code className="bg-black/5 px-1 py-0.5 rounded text-ink2">![The Great Pyramid of Giza | Credit: John Doe / Wikimedia Commons](https://images.unsplash.com/photo-1539650116574-8efeb43e2750)</code>
+                  </p>
+                </div>
+                
+                <textarea 
+                  value={editData.full}
+                  onChange={(e) => setEditData({...editData, full: e.target.value})}
+                  className="w-full h-[500px] bg-white border border-black/10 p-6 rounded-2xl font-serif text-lg leading-relaxed focus:outline-none focus:border-gold"
+                  placeholder="Write full article here..."
+                />
+              </div>
             ) : (
               <ReactMarkdown components={renderers}>{fact.full}</ReactMarkdown>
             )}

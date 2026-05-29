@@ -188,6 +188,22 @@ export const CreateFactModal = ({ isOpen, onClose, onSuccess, initialCat }: Crea
 
             <div className="space-y-2">
               <label className="text-xs font-bold uppercase tracking-widest text-ink3">Full Article Content (Markdown)</label>
+              
+              <div className="p-4 rounded-xl bg-amber-50 border border-gold/30 text-xs text-ink2 leading-relaxed space-y-2 font-sans shadow-sm">
+                <div className="font-bold flex items-center gap-1.5 text-ink uppercase tracking-wider text-[10px]">
+                  💡 MID-ARTICLE IMAGE & CREDITS GUIDE
+                </div>
+                <p className="m-0 text-ink2">
+                  To place images directly inside your story, use the standard Markdown format and a vertical bar <code className="bg-black/5 px-1 py-0.5 rounded text-coral font-bold font-mono">|</code> to include both **Alt Text** and **Credit/Source**:
+                </p>
+                <div className="bg-white border border-black/10 rounded-lg p-2 font-mono text-[11px] text-ink select-all overflow-x-auto shadow-inner">
+                  ![Your Alt Text / Caption | Credit: Creator Name](IMAGE_URL)
+                </div>
+                <p className="m-0 text-ink3 text-[10px]">
+                  <strong>Example:</strong> <code className="bg-black/5 px-1 py-0.5 rounded text-ink2">![The Great Pyramid of Giza | Credit: John Doe / Wikimedia Commons](https://images.unsplash.com/photo-1539650116574-8efeb43e2750)</code>
+                </p>
+              </div>
+
               <textarea 
                 value={formData.full}
                 onChange={(e) => setFormData({...formData, full: e.target.value})}
