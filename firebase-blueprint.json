@@ -13,6 +13,11 @@
         "excerpt": { "type": "string" },
         "full": { "type": "string" },
         "featured": { "type": "boolean" },
+        "imageUrl": { "type": "string" },
+        "imageAlt": { "type": "string" },
+        "imageCredit": { "type": "string" },
+        "eventMonth": { "type": "number" },
+        "eventDay": { "type": "number" },
         "createdAt": { "type": "string", "format": "date-time" }
       },
       "required": ["cat", "title", "year", "full"]

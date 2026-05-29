@@ -40,16 +40,25 @@ service cloud.firestore {
     // ═══════════════════════════════════════════
 
     function isValidFact(data) {
-      let requiredFields = ['cat', 'emoji', 'title', 'year', 'excerpt', 'full', 'featured', 'createdAt'];
+      let requiredFields = ['id', 'cat', 'emoji', 'title', 'year', 'excerpt', 'full', 'featured', 'createdAt'];
+      let allAllowedFields = ['id', 'cat', 'emoji', 'title', 'year', 'excerpt', 'full', 'featured', 'createdAt', 'updatedAt', 'imageUrl', 'imageAlt', 'imageCredit', 'eventMonth', 'eventDay'];
       return data.keys().hasAll(requiredFields)
-        && data.keys().size() == requiredFields.size()
+        && data.keys().size() <= allAllowedFields.size()
         && data.cat in ['history', 'science', 'inventions', 'discoveries', 'birthdays']
+        && data.id is string && data.id.size() <= 128
         && data.title is string && data.title.size() <= 200
+        && data.emoji is string && data.emoji.size() <= 10
         && data.excerpt is string && data.excerpt.size() <= 500
-        && data.full is string && data.full.size() <= 10000
+        && data.full is string && data.full.size() <= 100000
         && data.year is number
         && data.featured is bool
-        && data.createdAt == request.time;
+        && data.createdAt == (resource == null ? request.time : resource.data.createdAt)
+        && (!('updatedAt' in data) || data.updatedAt == request.time)
+        && (!('imageUrl' in data) || data.imageUrl is string)
+        && (!('imageAlt' in data) || data.imageAlt is string)
+        && (!('imageCredit' in data) || data.imageCredit is string)
+        && (!('eventMonth' in data) || data.eventMonth is number)
+        && (!('eventDay' in data) || data.eventDay is number);
     }
 
     function isValidBirthday(data) {
