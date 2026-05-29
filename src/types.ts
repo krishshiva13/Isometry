@@ -11,6 +11,8 @@ export interface Fact {
   featured: boolean;
   createdAt?: string;
   imageUrl?: string;
+  imageAlt?: string;
+  imageCredit?: string;
   eventMonth?: number;
   eventDay?: number;
 }

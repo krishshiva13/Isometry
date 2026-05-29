@@ -182,6 +182,8 @@ export const Article = () => {
       year: fact.year,
       emoji: fact.emoji || '📝',
       imageUrl: fact.imageUrl || '',
+      imageAlt: fact.imageAlt || '',
+      imageCredit: fact.imageCredit || '',
       eventMonth: fact.eventMonth || 0,
       eventDay: fact.eventDay || 0
     });
@@ -341,6 +343,29 @@ export const Article = () => {
                   </div>
                 </div>
 
+                {editData.imageUrl && (
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 bg-paper3 p-4 rounded-xl border border-black/5">
+                    <div className="space-y-1">
+                      <label className="text-xs font-bold uppercase tracking-widest text-ink3">Cover Image Alt Text (SEO)</label>
+                      <input 
+                        value={editData.imageAlt || ''}
+                        onChange={(e) => setEditData({...editData, imageAlt: e.target.value})}
+                        className="w-full bg-white border border-black/10 p-3 rounded-xl text-sm focus:outline-none focus:border-gold font-sans"
+                        placeholder="Describe what is in the image..."
+                      />
+                    </div>
+                    <div className="space-y-1">
+                      <label className="text-xs font-bold uppercase tracking-widest text-ink3">Cover Image Credit / Source</label>
+                      <input 
+                        value={editData.imageCredit || ''}
+                        onChange={(e) => setEditData({...editData, imageCredit: e.target.value})}
+                        className="w-full bg-white border border-black/10 p-3 rounded-xl text-sm focus:outline-none focus:border-gold font-sans"
+                        placeholder="e.g., Wikimedia Commons"
+                      />
+                    </div>
+                  </div>
+                )}
+
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                   <div className="space-y-1">
                     <label className="text-xs font-bold uppercase tracking-widest text-ink3">Event Month (Optional)</label>
@@ -397,23 +422,30 @@ export const Article = () => {
             </div>
 
             {fact.imageUrl ? (
-              <div className="w-full aspect-video rounded-2xl overflow-hidden relative shadow-lg group border border-black/5 bg-paper2">
-                <img 
-                  src={fact.imageUrl} 
-                  alt={fact.title} 
-                  className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-500" 
-                  referrerPolicy="no-referrer"
-                  onError={(e) => {
-                    // fall back gracefully if invalid link
-                    (e.target as any).style.display = 'none';
-                  }}
-                />
-                <div className="absolute top-4 left-4 bg-black/50 backdrop-blur-md text-white font-mono text-[10px] uppercase font-bold px-3 py-1 rounded-full">
-                  Verified Media Accent
+              <div className="space-y-2">
+                <div className="w-full aspect-video rounded-2xl overflow-hidden relative shadow-lg group border border-black/5 bg-paper2">
+                  <img 
+                    src={fact.imageUrl} 
+                    alt={fact.imageAlt || fact.title} 
+                    className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-500" 
+                    referrerPolicy="no-referrer"
+                    onError={(e) => {
+                      // fall back gracefully if invalid link
+                      (e.target as any).style.display = 'none';
+                    }}
+                  />
+                  <div className="absolute top-4 left-4 bg-black/50 backdrop-blur-md text-white font-mono text-[10px] uppercase font-bold px-3 py-1 rounded-full">
+                    Verified Media Accent
+                  </div>
+                  <div className="absolute bottom-0 right-0 p-4 opacity-50">
+                    <div className="bg-paper2 px-3 py-1 rounded border border-black/5 text-[0.6rem] font-mono">AD-ZONE 300x60</div>
+                  </div>
                 </div>
-                <div className="absolute bottom-0 right-0 p-4 opacity-50">
-                  <div className="bg-paper2 px-3 py-1 rounded border border-black/5 text-[0.6rem] font-mono">AD-ZONE 300x60</div>
-                </div>
+                {fact.imageCredit && (
+                  <p className="text-right text-[11px] text-ink3 font-sans italic tracking-wide">
+                    Image Source: {fact.imageCredit}
+                  </p>
+                )}
               </div>
             ) : (
               <div className={cn("w-full aspect-video rounded-2xl flex items-center justify-center text-[6rem] relative overflow-hidden border border-black/5", {

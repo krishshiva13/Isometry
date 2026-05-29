@@ -22,6 +22,8 @@ export const CreateFactModal = ({ isOpen, onClose, onSuccess, initialCat }: Crea
     featured: false,
     emoji: '📝',
     imageUrl: '',
+    imageAlt: '',
+    imageCredit: '',
     eventMonth: 0,
     eventDay: 0
   });
@@ -151,6 +153,29 @@ export const CreateFactModal = ({ isOpen, onClose, onSuccess, initialCat }: Crea
                 />
               </div>
             </div>
+
+            {formData.imageUrl && (
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-6 bg-paper2 p-4 rounded-2xl border border-black/5">
+                <div className="space-y-2">
+                  <label className="text-xs font-bold uppercase tracking-widest text-ink3">Cover Image Alt Text (SEO)</label>
+                  <input 
+                    value={formData.imageAlt || ''}
+                    onChange={(e) => setFormData({...formData, imageAlt: e.target.value})}
+                    className="w-full bg-white border border-black/10 rounded-xl px-4 py-3 focus:border-gold outline-none transition-all text-sm"
+                    placeholder="Describe what is in the image..."
+                  />
+                </div>
+                <div className="space-y-2">
+                  <label className="text-xs font-bold uppercase tracking-widest text-ink3">Cover Image Credit / Source</label>
+                  <input 
+                    value={formData.imageCredit || ''}
+                    onChange={(e) => setFormData({...formData, imageCredit: e.target.value})}
+                    className="w-full bg-white border border-black/10 rounded-xl px-4 py-3 focus:border-gold outline-none transition-all text-sm"
+                    placeholder="e.g., Jane Smith via Wikimedia Commons"
+                  />
+                </div>
+              </div>
+            )}
 
             <div className="space-y-2">
               <label className="text-xs font-bold uppercase tracking-widest text-ink3">Excerpt (Short Summary)</label>
