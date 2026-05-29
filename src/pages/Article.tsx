@@ -343,28 +343,26 @@ export const Article = () => {
                   </div>
                 </div>
 
-                {editData.imageUrl && (
-                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 bg-paper3 p-4 rounded-xl border border-black/5">
-                    <div className="space-y-1">
-                      <label className="text-xs font-bold uppercase tracking-widest text-ink3">Cover Image Alt Text (SEO)</label>
-                      <input 
-                        value={editData.imageAlt || ''}
-                        onChange={(e) => setEditData({...editData, imageAlt: e.target.value})}
-                        className="w-full bg-white border border-black/10 p-3 rounded-xl text-sm focus:outline-none focus:border-gold font-sans"
-                        placeholder="Describe what is in the image..."
-                      />
-                    </div>
-                    <div className="space-y-1">
-                      <label className="text-xs font-bold uppercase tracking-widest text-ink3">Cover Image Credit / Source</label>
-                      <input 
-                        value={editData.imageCredit || ''}
-                        onChange={(e) => setEditData({...editData, imageCredit: e.target.value})}
-                        className="w-full bg-white border border-black/10 p-3 rounded-xl text-sm focus:outline-none focus:border-gold font-sans"
-                        placeholder="e.g., Wikimedia Commons"
-                      />
-                    </div>
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 bg-paper3 p-4 rounded-xl border border-black/5">
+                  <div className="space-y-1">
+                    <label className="text-xs font-bold uppercase tracking-widest text-ink3">Cover Image Alt Text (SEO)</label>
+                    <input 
+                      value={editData.imageAlt || ''}
+                      onChange={(e) => setEditData({...editData, imageAlt: e.target.value})}
+                      className="w-full bg-white border border-black/10 p-3 rounded-xl text-sm focus:outline-none focus:border-gold font-sans"
+                      placeholder="Describe what is in the image..."
+                    />
                   </div>
-                )}
+                  <div className="space-y-1">
+                    <label className="text-xs font-bold uppercase tracking-widest text-ink3">Cover Image Credit / Source</label>
+                    <input 
+                      value={editData.imageCredit || ''}
+                      onChange={(e) => setEditData({...editData, imageCredit: e.target.value})}
+                      className="w-full bg-white border border-black/10 p-3 rounded-xl text-sm focus:outline-none focus:border-gold font-sans"
+                      placeholder="e.g., Wikimedia Commons"
+                    />
+                  </div>
+                </div>
 
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                   <div className="space-y-1">
