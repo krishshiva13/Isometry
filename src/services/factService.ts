@@ -131,6 +131,7 @@ export const factService = {
   },
 
   async updateFact(id: string, updates: Partial<Fact>) {
+    const path = `facts/${id}`;
     try {
       const docRef = doc(db, "facts", id);
       await updateDoc(docRef, {
@@ -138,12 +139,12 @@ export const factService = {
         updatedAt: serverTimestamp()
       });
     } catch (error) {
-      console.error("Failed to update fact", error);
-      throw error;
+      handleFirestoreError(error, OperationType.UPDATE, path);
     }
   },
 
   async createFact(fact: Fact) {
+    const path = `facts/${fact.id}`;
     try {
       const docRef = doc(db, "facts", fact.id);
       await setDoc(docRef, {
@@ -152,8 +153,7 @@ export const factService = {
         updatedAt: serverTimestamp()
       });
     } catch (error) {
-      console.error("Failed to create fact", error);
-      throw error;
+      handleFirestoreError(error, OperationType.CREATE, path);
     }
   },
 

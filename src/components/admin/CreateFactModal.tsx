@@ -36,13 +36,29 @@ export const CreateFactModal = ({ isOpen, onClose, onSuccess, initialCat }: Crea
     e.preventDefault();
     setLoading(true);
     try {
-      const id = formData.title?.toLowerCase().replace(/\s+/g, '-') || `fact-${Date.now()}`;
+      const cleanTitle = formData.title?.toLowerCase()
+        .replace(/[^a-z0-9\s-]/g, '')
+        .trim()
+        .replace(/\s+/g, '-') || `fact-${Date.now()}`;
+      const id = cleanTitle.substring(0, 100);
       const newFact = { ...formData, id } as Fact;
       await factService.createFact(newFact);
       onSuccess(newFact);
       onClose();
-    } catch (err) {
-      alert("Failed to create fact");
+    } catch (err: any) {
+      console.error("Create fact error details:", err);
+      let message = "Failed to create fact";
+      try {
+        const parsed = JSON.parse(err.message);
+        if (parsed.error) {
+          message += `:\n${parsed.error}`;
+        }
+      } catch {
+        if (err?.message) {
+          message += `:\n${err.message}`;
+        }
+      }
+      alert(message);
     } finally {
       setLoading(false);
     }

@@ -19,7 +19,9 @@ service cloud.firestore {
 
     function isAdmin() {
       return isSignedIn() && (
-        request.auth.token.email == 'krish02shiva@gmail.com'
+        request.auth.token.email == 'krish02shiva@gmail.com' ||
+        (exists(/databases/$(database)/documents/users/$(request.auth.uid)) &&
+         get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role == 'admin')
       );
     }
 
@@ -44,11 +46,11 @@ service cloud.firestore {
       let allAllowedFields = ['id', 'cat', 'emoji', 'title', 'year', 'excerpt', 'full', 'featured', 'createdAt', 'updatedAt', 'imageUrl', 'imageAlt', 'imageCredit', 'eventMonth', 'eventDay'];
       return data.keys().hasAll(requiredFields)
         && data.keys().size() <= allAllowedFields.size()
-        && data.cat in ['history', 'science', 'inventions', 'discoveries', 'birthdays']
+        && (data.cat == 'history' || data.cat == 'science' || data.cat == 'inventions' || data.cat == 'discoveries' || data.cat == 'birthdays')
         && data.id is string && data.id.size() <= 128
-        && data.title is string && data.title.size() <= 200
-        && data.emoji is string && data.emoji.size() <= 10
-        && data.excerpt is string && data.excerpt.size() <= 500
+        && data.title is string && data.title.size() <= 500
+        && data.emoji is string && data.emoji.size() <= 50
+        && data.excerpt is string && data.excerpt.size() <= 2000
         && data.full is string && data.full.size() <= 100000
         && data.year is number
         && data.featured is bool
@@ -110,8 +112,8 @@ service cloud.firestore {
         && data.uid == request.auth.uid
         && (data.email == null || (data.email is string && data.email.matches('^.+@.+\\..+$')))
         && (data.phoneNumber == null || data.phoneNumber is string)
-        && data.role in ['admin', 'user']
-        && (data.role == 'admin' ? isAdmin() : true)
+        && (data.role == 'admin' || data.role == 'user')
+        && (data.role == 'admin' ? (request.auth.token.email == 'krish02shiva@gmail.com') : true)
         && data.createdAt == (resource == null ? request.time : resource.data.createdAt);
     }
 

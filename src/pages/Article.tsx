@@ -226,8 +226,20 @@ export const Article = () => {
       setFact({ ...fact, ...editData } as Fact);
       setIsEditing(false);
       alert("Article updated successfully!");
-    } catch (err) {
-      alert("Failed to update article.");
+    } catch (err: any) {
+      console.error("Update fact error details:", err);
+      let message = "Failed to update article.";
+      try {
+        const parsed = JSON.parse(err.message);
+        if (parsed.error) {
+          message += `:\n${parsed.error}`;
+        }
+      } catch {
+        if (err?.message) {
+          message += `:\n${err.message}`;
+        }
+      }
+      alert(message);
     }
   };
 
