@@ -26,6 +26,78 @@ app.get("/api/health", (req, res) => {
   res.json({ status: "ok" });
 });
 
+// Robots.txt SEO Endpoint
+app.get("/robots.txt", (req, res) => {
+  res.type("text/plain");
+  res.send(`User-agent: *
+Allow: /
+
+Sitemap: https://facthub.in/sitemap.xml`);
+});
+
+// Sitemap.xml SEO Endpoint
+app.get("/sitemap.xml", (req, res) => {
+  res.type("application/xml");
+  res.send(`<?xml version="1.0" encoding="UTF-8"?>
+<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">
+  <url>
+    <loc>https://facthub.in/</loc>
+    <changefreq>daily</changefreq>
+    <priority>1.0</priority>
+  </url>
+  <url>
+    <loc>https://facthub.in/quiz</loc>
+    <changefreq>daily</changefreq>
+    <priority>0.8</priority>
+  </url>
+  <url>
+    <loc>https://facthub.in/birthdays</loc>
+    <changefreq>daily</changefreq>
+    <priority>0.8</priority>
+  </url>
+  <url>
+    <loc>https://facthub.in/category/history</loc>
+    <changefreq>weekly</changefreq>
+    <priority>0.7</priority>
+  </url>
+  <url>
+    <loc>https://facthub.in/category/science</loc>
+    <changefreq>weekly</changefreq>
+    <priority>0.7</priority>
+  </url>
+  <url>
+    <loc>https://facthub.in/category/inventions</loc>
+    <changefreq>weekly</changefreq>
+    <priority>0.7</priority>
+  </url>
+  <url>
+    <loc>https://facthub.in/category/discoveries</loc>
+    <changefreq>weekly</changefreq>
+    <priority>0.7</priority>
+  </url>
+  <url>
+    <loc>https://facthub.in/about</loc>
+    <changefreq>monthly</changefreq>
+    <priority>0.5</priority>
+  </url>
+  <url>
+    <loc>https://facthub.in/contact</loc>
+    <changefreq>monthly</changefreq>
+    <priority>0.5</priority>
+  </url>
+  <url>
+    <loc>https://facthub.in/privacy</loc>
+    <changefreq>monthly</changefreq>
+    <priority>0.3</priority>
+  </url>
+  <url>
+    <loc>https://facthub.in/advertise</loc>
+    <changefreq>monthly</changefreq>
+    <priority>0.3</priority>
+  </url>
+</urlset>`);
+});
+
 app.post("/api/quiz/generate", async (req, res) => {
   const { prompt } = req.body;
   if (!prompt) {
