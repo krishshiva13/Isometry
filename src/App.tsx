@@ -4,6 +4,7 @@ import { Header } from './components/Header';
 import { Footer } from './components/Footer';
 import { AuthProvider } from './contexts/AuthContext';
 import { HelmetProvider } from 'react-helmet-async';
+import { AnalyticsTracker } from './components/AnalyticsTracker';
 
 const Home = lazy(() => import('./pages/Home').then(m => ({ default: m.Home })));
 const Article = lazy(() => import('./pages/Article').then(m => ({ default: m.Article })));
@@ -26,6 +27,7 @@ export default function App() {
   return (
     <HelmetProvider>
       <Router>
+        <AnalyticsTracker />
         <AuthProvider>
           <div className="flex flex-col min-h-screen">
             <Header />
