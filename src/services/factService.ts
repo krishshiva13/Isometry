@@ -157,6 +157,16 @@ export const factService = {
     }
   },
 
+  async deleteFact(id: string) {
+    const path = `facts/${id}`;
+    try {
+      const docRef = doc(db, "facts", id);
+      await deleteDoc(docRef);
+    } catch (error) {
+      handleFirestoreError(error, OperationType.DELETE, path);
+    }
+  },
+
   async getBirthdays(limitCount: number = 20) {
     const path = "birthdays";
     try {

@@ -2,7 +2,7 @@ import React, { useEffect, useState } from 'react';
 import { useParams, Link, useNavigate } from 'react-router-dom';
 import ReactMarkdown from 'react-markdown';
 import { motion } from 'motion/react';
-import { ArrowLeft, Calendar, BookOpen, Share2, Copy, Send, Twitter, Facebook, Edit2, Save, X as CloseIcon } from 'lucide-react';
+import { ArrowLeft, Calendar, BookOpen, Share2, Copy, Send, Twitter, Facebook, Edit2, Save, X as CloseIcon, Trash2 } from 'lucide-react';
 import { Helmet } from 'react-helmet-async';
 import { factService } from '../services/factService';
 import { Fact } from '../types';
@@ -135,6 +135,7 @@ export const Article = () => {
   const { isAdmin } = useAuth();
   const [isEditing, setIsEditing] = useState(false);
   const [editData, setEditData] = useState<Partial<Fact>>({});
+  const [isDeletingConfirm, setIsDeletingConfirm] = useState(false);
   const navigate = useNavigate();
 
   useEffect(() => {
@@ -243,6 +244,29 @@ export const Article = () => {
     }
   };
 
+  const handleDeletePost = async () => {
+    if (!fact || !id) return;
+    try {
+      await factService.deleteFact(id);
+      alert("Article deleted successfully.");
+      navigate("/");
+    } catch (err: any) {
+      console.error("Delete fact error details:", err);
+      let message = "Failed to delete article.";
+      try {
+        const parsed = JSON.parse(err.message);
+        if (parsed.error) {
+          message += `:\n${parsed.error}`;
+        }
+      } catch {
+        if (err?.message) {
+          message += `:\n${err.message}`;
+        }
+      }
+      alert(message);
+    }
+  };
+
   if (loading) {
     return (
       <div className="min-h-screen flex items-center justify-center bg-paper">
@@ -310,27 +334,55 @@ export const Article = () => {
               </div>
               
               {isAdmin && (
-                <div className="flex gap-2">
+                <div className="flex gap-2 items-center">
                   {!isEditing ? (
-                    <button 
-                      onClick={startEditing}
-                      className="flex items-center gap-2 px-4 py-1.5 bg-ink text-white rounded-lg text-xs font-bold hover:bg-gold transition-all"
-                    >
-                      <Edit2 size={14} /> Edit Article
-                    </button>
+                    <>
+                      {isDeletingConfirm ? (
+                        <div className="flex items-center gap-2 bg-rose-50 dark:bg-rose-950/20 border border-rose-200 dark:border-rose-800/30 p-1 rounded-lg text-xs animate-pulse">
+                          <span className="font-bold text-rose-600 dark:text-rose-400 px-1.5">Delete this article?</span>
+                          <button
+                            onClick={handleDeletePost}
+                            className="bg-rose-600 text-white px-2.5 py-1 rounded font-bold hover:bg-rose-700 transition-colors"
+                          >
+                            Yes, delete
+                          </button>
+                          <button
+                            onClick={() => setIsDeletingConfirm(false)}
+                            className="bg-slate-200 dark:bg-slate-800 text-slate-700 dark:text-slate-300 px-2.5 py-1 rounded font-bold hover:bg-slate-300 dark:hover:bg-slate-700 transition-colors"
+                          >
+                            Cancel
+                          </button>
+                        </div>
+                      ) : (
+                        <>
+                          <button 
+                            onClick={startEditing}
+                            className="flex items-center gap-2 px-2.5 sm:px-4 py-1.5 bg-ink text-white rounded-lg text-xs font-bold hover:bg-gold hover:text-ink transition-all"
+                          >
+                            <Edit2 size={13} /> Edit Article
+                          </button>
+                          <button 
+                            onClick={() => setIsDeletingConfirm(true)}
+                            className="flex items-center gap-2 px-2.5 sm:px-4 py-1.5 bg-rose-600 text-white rounded-lg text-xs font-bold hover:bg-rose-700 transition-all"
+                          >
+                            <Trash2 size={13} /> Delete
+                          </button>
+                        </>
+                      )}
+                    </>
                   ) : (
                     <>
                       <button 
                         onClick={saveEdit}
                         className="flex items-center gap-2 px-4 py-1.5 bg-sage text-white rounded-lg text-xs font-bold hover:bg-sage/80 transition-all"
                       >
-                        <Save size={14} /> Save
+                        <Save size={13} /> Save
                       </button>
                       <button 
                         onClick={cancelEditing}
                         className="flex items-center gap-2 px-4 py-1.5 bg-paper3 text-ink3 rounded-lg text-xs font-bold hover:bg-paper3/80 transition-all"
                       >
-                        <CloseIcon size={14} /> Cancel
+                        <CloseIcon size={13} /> Cancel
                       </button>
                     </>
                   )}
