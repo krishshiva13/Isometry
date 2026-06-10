@@ -3,6 +3,9 @@ import path from "path";
 import { createServer as createViteServer } from "vite";
 import { GoogleGenAI, Type } from "@google/genai";
 import dotenv from "dotenv";
+import { initializeApp } from "firebase/app";
+import { getFirestore, collection, getDocs, query, orderBy } from "firebase/firestore";
+import fs from "fs";
 
 dotenv.config();
 
@@ -36,65 +39,67 @@ Sitemap: https://facthub.in/sitemap.xml`);
 });
 
 // Sitemap.xml SEO Endpoint
-app.get("/sitemap.xml", (req, res) => {
+app.get("/sitemap.xml", async (req, res) => {
   res.type("application/xml");
+
+  // Base paths
+  const baseUrls = [
+    { loc: "https://facthub.in/", changefreq: "daily", priority: "1.0" },
+    { loc: "https://facthub.in/quiz", changefreq: "daily", priority: "0.8" },
+    { loc: "https://facthub.in/birthdays", changefreq: "daily", priority: "0.8" },
+    { loc: "https://facthub.in/category/history", changefreq: "weekly", priority: "0.7" },
+    { loc: "https://facthub.in/category/science", changefreq: "weekly", priority: "0.7" },
+    { loc: "https://facthub.in/category/inventions", changefreq: "weekly", priority: "0.7" },
+    { loc: "https://facthub.in/category/discoveries", changefreq: "weekly", priority: "0.7" },
+    { loc: "https://facthub.in/about", changefreq: "monthly", priority: "0.5" },
+    { loc: "https://facthub.in/contact", changefreq: "monthly", priority: "0.5" },
+    { loc: "https://facthub.in/privacy", changefreq: "monthly", priority: "0.3" },
+    { loc: "https://facthub.in/advertise", changefreq: "monthly", priority: "0.3" },
+  ];
+
+  let dynamicUrls: { loc: string; changefreq: string; priority: string }[] = [];
+
+  try {
+    const configPath = path.join(process.cwd(), "firebase-applet-config.json");
+    if (fs.existsSync(configPath)) {
+      const firebaseConfig = JSON.parse(fs.readFileSync(configPath, "utf-8"));
+      // Initialize a distinct app for sitemap generation to avoid conflicts
+      const firebaseApp = initializeApp(firebaseConfig, "sitemap-app");
+      const db = getFirestore(firebaseApp);
+      
+      const factsQuery = query(collection(db, "facts"), orderBy("createdAt", "desc"));
+      const snapshot = await getDocs(factsQuery);
+      
+      snapshot.forEach((doc) => {
+        const id = doc.id;
+        if (id) {
+          dynamicUrls.push({
+            loc: `https://facthub.in/article/${id}`,
+            changefreq: "weekly",
+            priority: "0.6"
+          });
+        }
+      });
+    }
+  } catch (error) {
+    console.error("Error generating dynamic sitemap from Firestore:", error);
+  }
+
+  const allUrls = [...baseUrls, ...dynamicUrls];
+
+  const urlElements = allUrls
+    .map(
+      (url) => `  <url>
+    <loc>${url.loc}</loc>
+    <changefreq>${url.changefreq}</changefreq>
+    <priority>${url.priority}</priority>
+  </url>`
+    )
+    .join("\n");
+
   res.send(`<?xml version="1.0" encoding="UTF-8"?>
 <urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">
-  <url>
-    <loc>https://facthub.in/</loc>
-    <changefreq>daily</changefreq>
-    <priority>1.0</priority>
-  </url>
-  <url>
-    <loc>https://facthub.in/quiz</loc>
-    <changefreq>daily</changefreq>
-    <priority>0.8</priority>
-  </url>
-  <url>
-    <loc>https://facthub.in/birthdays</loc>
-    <changefreq>daily</changefreq>
-    <priority>0.8</priority>
-  </url>
-  <url>
-    <loc>https://facthub.in/category/history</loc>
-    <changefreq>weekly</changefreq>
-    <priority>0.7</priority>
-  </url>
-  <url>
-    <loc>https://facthub.in/category/science</loc>
-    <changefreq>weekly</changefreq>
-    <priority>0.7</priority>
-  </url>
-  <url>
-    <loc>https://facthub.in/category/inventions</loc>
-    <changefreq>weekly</changefreq>
-    <priority>0.7</priority>
-  </url>
-  <url>
-    <loc>https://facthub.in/category/discoveries</loc>
-    <changefreq>weekly</changefreq>
-    <priority>0.7</priority>
-  </url>
-  <url>
-    <loc>https://facthub.in/about</loc>
-    <changefreq>monthly</changefreq>
-    <priority>0.5</priority>
-  </url>
-  <url>
-    <loc>https://facthub.in/contact</loc>
-    <changefreq>monthly</changefreq>
-    <priority>0.5</priority>
-  </url>
-  <url>
-    <loc>https://facthub.in/privacy</loc>
-    <changefreq>monthly</changefreq>
-    <priority>0.3</priority>
-  </url>
-  <url>
-    <loc>https://facthub.in/advertise</loc>
-    <changefreq>monthly</changefreq>
-    <priority>0.3</priority>
-  </url>
+${urlElements}
 </urlset>`);
 });
 
