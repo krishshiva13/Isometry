@@ -15,6 +15,7 @@ export interface Fact {
   imageCredit?: string;
   eventMonth?: number;
   eventDay?: number;
+  publishAt?: string;
 }
 
 export interface Birthday {

@@ -25,7 +25,7 @@ export const Section = () => {
     const loadCat = async () => {
       setLoading(true);
       try {
-        const { facts: data, totalPages: total } = await factService.getFactsPaginated(cat, currentPage, pageSize);
+        const { facts: data, totalPages: total } = await factService.getFactsPaginated(cat, currentPage, pageSize, isAdmin);
         
         if (data && data.length > 0) {
           setFacts(data);

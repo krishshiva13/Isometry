@@ -146,9 +146,14 @@ export const Article = () => {
       try {
         const data = await factService.getFactById(id);
         if (data) {
-          setFact(data);
-          const allFromCat = await factService.getFacts(data.cat);
-          setRelated(allFromCat?.filter(f => f.id !== id).slice(0, 4) || []);
+          const nowISO = new Date().toISOString();
+          if (data.publishAt && data.publishAt > nowISO && !isAdmin) {
+            setError("This interesting fact is scheduled for a future release! Please check back later.");
+          } else {
+            setFact(data);
+            const allFromCat = await factService.getFacts(data.cat, false, 20, isAdmin);
+            setRelated(allFromCat?.filter(f => f.id !== id).slice(0, 4) || []);
+          }
         } else {
           // Fallback to seed data if not found in Firestore
           const localFact = INITIAL_FACTS.find(f => f.id === id);
@@ -176,7 +181,7 @@ export const Article = () => {
 
     loadArticle();
     window.scrollTo(0, 0);
-  }, [id]);
+  }, [id, isAdmin]);
 
   const handleShare = (platform: string) => {
     const url = window.location.href;
@@ -211,7 +216,8 @@ export const Article = () => {
       imageAlt: fact.imageAlt || '',
       imageCredit: fact.imageCredit || '',
       eventMonth: fact.eventMonth || 0,
-      eventDay: fact.eventDay || 0
+      eventDay: fact.eventDay || 0,
+      publishAt: fact.publishAt || ''
     });
     setIsEditing(true);
   };
@@ -481,6 +487,31 @@ export const Article = () => {
                         <option key={i + 1} value={i + 1}>{i + 1}</option>
                       ))}
                     </select>
+                  </div>
+                </div>
+
+                <div className="bg-paper3 p-4 rounded-xl border border-black/5 space-y-2 mt-2 col-span-2">
+                  <label className="text-xs font-bold uppercase tracking-widest text-ink3 block">
+                    Publication Schedule (Optional)
+                  </label>
+                  <div className="flex flex-col sm:flex-row sm:items-center gap-3">
+                    <input 
+                      type="datetime-local"
+                      value={editData.publishAt || ''}
+                      onChange={(e) => setEditData({...editData, publishAt: e.target.value})}
+                      className="bg-white border border-black/10 p-2 rounded-xl text-sm focus:outline-none focus:border-gold font-sans font-medium"
+                    />
+                    {editData.publishAt ? (
+                      <button 
+                        type="button"
+                        onClick={() => setEditData({...editData, publishAt: ''})}
+                        className="text-xs text-rose-600 hover:text-rose-800 font-bold transition-colors"
+                      >
+                        Publish Immediately
+                      </button>
+                    ) : (
+                      <span className="text-xs text-ink3 italic">Currently published immediately (live)</span>
+                    )}
                   </div>
                 </div>
               </div>

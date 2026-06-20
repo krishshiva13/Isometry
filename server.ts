@@ -72,7 +72,14 @@ app.get("/sitemap.xml", async (req, res) => {
       
       snapshot.forEach((doc) => {
         const id = doc.id;
+        const data = doc.data() as any;
         if (id) {
+          // If scheduled for the future, don't include in sitemap.xml
+          const nowISO = new Date().toISOString();
+          if (data && data.publishAt && data.publishAt > nowISO) {
+            return;
+          }
+
           dynamicUrls.push({
             loc: `https://facthub.in/article/${id}`,
             changefreq: "weekly",

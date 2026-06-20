@@ -56,7 +56,7 @@ function handleFirestoreError(error: unknown, operationType: OperationType, path
 }
 
 export const factService = {
-  async getFacts(cat?: string, featuredOnly: boolean = false, limitCount: number = 20) {
+  async getFacts(cat?: string, featuredOnly: boolean = false, limitCount: number = 20, isAdmin: boolean = false) {
     const path = "facts";
     try {
       let q = query(collection(db, path), orderBy("createdAt", "desc"), limit(limitCount));
@@ -67,27 +67,37 @@ export const factService = {
         q = query(q, where("featured", "==", true));
       }
       const snapshot = await getDocs(q);
-      return snapshot.docs.map(doc => ({ ...doc.data(), id: doc.id } as Fact));
+      let list = snapshot.docs.map(doc => ({ ...doc.data(), id: doc.id } as Fact));
+      if (!isAdmin) {
+        const nowISO = new Date().toISOString();
+        list = list.filter(f => !f.publishAt || f.publishAt <= nowISO);
+      }
+      return list;
     } catch (error) {
       handleFirestoreError(error, OperationType.LIST, path);
     }
   },
 
-  async getFactCount(cat?: string) {
+  async getFactCount(cat?: string, isAdmin: boolean = false) {
     try {
       let q = query(collection(db, "facts"));
       if (cat && cat !== 'all') {
         q = query(q, where("cat", "==", cat));
       }
       const snapshot = await getDocs(q);
-      return snapshot.size;
+      let list = snapshot.docs.map(doc => doc.data() as Fact);
+      if (!isAdmin) {
+        const nowISO = new Date().toISOString();
+        list = list.filter(f => !f.publishAt || f.publishAt <= nowISO);
+      }
+      return list.length;
     } catch (error) {
       console.error("Failed to get count", error);
       return 0;
     }
   },
 
-  async getFactsPaginated(cat: string | undefined, page: number, pageSize: number = 9) {
+  async getFactsPaginated(cat: string | undefined, page: number, pageSize: number = 9, isAdmin: boolean = false) {
     try {
       let q = query(
         collection(db, "facts"), 
@@ -98,10 +108,13 @@ export const factService = {
         q = query(q, where("cat", "==", cat));
       }
 
-      // Note: For true large-scale pagination, we'd use startAfter cursor.
-      // For dozens of posts, fetching and slicing is acceptable for speed.
       const snapshot = await getDocs(q);
-      const allFacts = snapshot.docs.map(doc => ({ ...doc.data(), id: doc.id } as Fact));
+      let allFacts = snapshot.docs.map(doc => ({ ...doc.data(), id: doc.id } as Fact));
+      
+      if (!isAdmin) {
+        const nowISO = new Date().toISOString();
+        allFacts = allFacts.filter(f => !f.publishAt || f.publishAt <= nowISO);
+      }
       
       const start = (page - 1) * pageSize;
       const end = start + pageSize;

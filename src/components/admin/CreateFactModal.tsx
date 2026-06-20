@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
-import { X, Save, Plus } from 'lucide-react';
+import { X, Save, Plus, Calendar, Clock } from 'lucide-react';
 import { factService } from '../../services/factService';
 import { Fact, Category } from '../../types';
 
@@ -13,6 +13,19 @@ interface CreateFactModalProps {
 
 export const CreateFactModal = ({ isOpen, onClose, onSuccess, initialCat }: CreateFactModalProps) => {
   const [loading, setLoading] = useState(false);
+  const [pubType, setPubType] = useState<'immediate' | 'schedule'>('immediate');
+  const [scheduleTime, setScheduleTime] = useState(() => {
+    const d = new Date();
+    d.setHours(d.getHours() + 1);
+    d.setMinutes(0);
+    const year = d.getFullYear();
+    const month = String(d.getMonth() + 1).padStart(2, '0');
+    const day = String(d.getDate()).padStart(2, '0');
+    const hours = String(d.getHours()).padStart(2, '0');
+    const minutes = String(d.getMinutes()).padStart(2, '0');
+    return `${year}-${month}-${day}T${hours}:${minutes}`;
+  });
+
   const [formData, setFormData] = useState<Partial<Fact>>({
     cat: initialCat || 'history',
     title: '',
@@ -41,7 +54,11 @@ export const CreateFactModal = ({ isOpen, onClose, onSuccess, initialCat }: Crea
         .trim()
         .replace(/\s+/g, '-') || `fact-${Date.now()}`;
       const id = cleanTitle.substring(0, 100);
-      const newFact = { ...formData, id } as Fact;
+      const newFact = { 
+        ...formData, 
+        id,
+        publishAt: pubType === 'schedule' ? scheduleTime : undefined
+      } as Fact;
       await factService.createFact(newFact);
       onSuccess(newFact);
       onClose();
@@ -227,6 +244,60 @@ export const CreateFactModal = ({ isOpen, onClose, onSuccess, initialCat }: Crea
                 placeholder="Write the full story here... Use Markdown."
                 required
               />
+            </div>
+
+            {/* Scheduling and Publish section */}
+            <div className="bg-paper2 p-6 rounded-2xl border border-black/5 space-y-4">
+              <div className="flex items-center gap-2 text-gold font-serif font-bold text-sm">
+                <Calendar size={18} />
+                <span>Publication Schedule</span>
+              </div>
+              <div className="flex flex-wrap gap-6">
+                <label className="flex items-center gap-2 cursor-pointer group">
+                  <input
+                    type="radio"
+                    name="pubType"
+                    value="immediate"
+                    checked={pubType === 'immediate'}
+                    onChange={() => setPubType('immediate')}
+                    className="w-4 h-4 accent-gold cursor-pointer"
+                  />
+                  <span className="text-sm font-bold text-ink2 group-hover:text-ink transition-colors">Publish Immediately</span>
+                </label>
+                <label className="flex items-center gap-2 cursor-pointer group">
+                  <input
+                    type="radio"
+                    name="pubType"
+                    value="schedule"
+                    checked={pubType === 'schedule'}
+                    onChange={() => setPubType('schedule')}
+                    className="w-4 h-4 accent-gold cursor-pointer"
+                  />
+                  <span className="text-sm font-bold text-ink2 group-hover:text-ink transition-colors">Schedule for Later</span>
+                </label>
+              </div>
+              
+              {pubType === 'schedule' && (
+                <div className="p-4 bg-white border border-black/10 rounded-xl space-y-3 animate-in fade-in slide-in-from-top-2 duration-200">
+                  <div className="space-y-1.5 max-w-sm">
+                    <label className="text-xs font-bold uppercase tracking-widest text-ink3 flex items-center gap-1.5">
+                      <Clock size={14} className="text-gold" />
+                      Release Date & Time
+                    </label>
+                    <input
+                      type="datetime-local"
+                      value={scheduleTime}
+                      onChange={(e) => setScheduleTime(e.target.value)}
+                      className="w-full bg-paper border border-black/10 rounded-lg px-3 py-2.5 focus:border-gold outline-none transition-all text-sm font-sans font-medium"
+                      required
+                      min={new Date().toISOString().substring(0, 16)}
+                    />
+                    <p className="text-[10px] text-ink3 leading-relaxed">
+                      * Scheduled blogs are hidden from search engines and visitors until the selected release time is reached.
+                    </p>
+                  </div>
+                </div>
+              )}
             </div>
 
             <div className="flex items-center gap-4 py-2">

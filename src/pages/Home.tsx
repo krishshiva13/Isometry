@@ -25,7 +25,7 @@ export const Home = () => {
           await factService.seedData(INITIAL_FACTS, INITIAL_BIRTHDAYS, INITIAL_QUIZ);
         }
         
-        const fetchedFacts = await factService.getFacts();
+        const fetchedFacts = await factService.getFacts(undefined, false, 20, isAdmin);
         const fetchedBDays = await factService.getBirthdays(6);
 
         if (fetchedFacts && fetchedFacts.length > 0) setFacts(fetchedFacts);
