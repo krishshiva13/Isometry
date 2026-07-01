@@ -59,20 +59,24 @@ export const factService = {
   async getFacts(cat?: string, featuredOnly: boolean = false, limitCount: number = 20, isAdmin: boolean = false) {
     const path = "facts";
     try {
-      let q = query(collection(db, path), orderBy("createdAt", "desc"), limit(limitCount));
-      if (cat && cat !== 'all') {
-        q = query(q, where("cat", "==", cat));
-      }
-      if (featuredOnly) {
-        q = query(q, where("featured", "==", true));
-      }
+      // Fetch list ordered by createdAt. Filter in memory to avoid requiring complex composite indexes in Firestore.
+      let q = query(collection(db, path), orderBy("createdAt", "desc"));
       const snapshot = await getDocs(q);
       let list = snapshot.docs.map(doc => ({ ...doc.data(), id: doc.id } as Fact));
+      
+      if (cat && cat !== 'all') {
+        list = list.filter(f => f.cat === cat);
+      }
+      
+      if (featuredOnly) {
+        list = list.filter(f => f.featured === true);
+      }
+
       if (!isAdmin) {
         const nowISO = new Date().toISOString();
         list = list.filter(f => !f.publishAt || f.publishAt <= nowISO);
       }
-      return list;
+      return list.slice(0, limitCount);
     } catch (error) {
       handleFirestoreError(error, OperationType.LIST, path);
     }
@@ -81,11 +85,11 @@ export const factService = {
   async getFactCount(cat?: string, isAdmin: boolean = false) {
     try {
       let q = query(collection(db, "facts"));
-      if (cat && cat !== 'all') {
-        q = query(q, where("cat", "==", cat));
-      }
       const snapshot = await getDocs(q);
       let list = snapshot.docs.map(doc => doc.data() as Fact);
+      if (cat && cat !== 'all') {
+        list = list.filter(f => f.cat === cat);
+      }
       if (!isAdmin) {
         const nowISO = new Date().toISOString();
         list = list.filter(f => !f.publishAt || f.publishAt <= nowISO);
@@ -104,12 +108,12 @@ export const factService = {
         orderBy("createdAt", "desc")
       );
       
-      if (cat && cat !== 'all') {
-        q = query(q, where("cat", "==", cat));
-      }
-
       const snapshot = await getDocs(q);
       let allFacts = snapshot.docs.map(doc => ({ ...doc.data(), id: doc.id } as Fact));
+      
+      if (cat && cat !== 'all') {
+        allFacts = allFacts.filter(f => f.cat === cat);
+      }
       
       if (!isAdmin) {
         const nowISO = new Date().toISOString();
