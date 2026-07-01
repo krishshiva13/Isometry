@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useState, useRef } from 'react';
 import { useParams, Link, useNavigate } from 'react-router-dom';
 import ReactMarkdown from 'react-markdown';
 import { motion } from 'motion/react';
@@ -9,6 +9,18 @@ import { Fact } from '../types';
 import { cn } from '../lib/utils';
 import { INITIAL_FACTS } from '../seed';
 import { useAuth } from '../contexts/AuthContext';
+
+const COLOR_OPTIONS = [
+  { name: 'gold', label: 'Gold', bg: 'bg-[#d9ad42]', text: 'text-[#d9ad42]' },
+  { name: 'coral', label: 'Coral', bg: 'bg-[#ff6b6b]', text: 'text-[#ff6b6b]' },
+  { name: 'teal', label: 'Teal', bg: 'bg-[#2ec4b6]', text: 'text-[#2ec4b6]' },
+  { name: 'indigo', label: 'Indigo', bg: 'bg-[#4f46e5]', text: 'text-[#4f46e5]' },
+  { name: 'red', label: 'Red', bg: 'bg-rose-600', text: 'text-rose-600' },
+  { name: 'green', label: 'Green', bg: 'bg-emerald-600', text: 'text-emerald-600' },
+  { name: 'blue', label: 'Blue', bg: 'bg-blue-600', text: 'text-blue-600' },
+  { name: 'slate', label: 'Slate', bg: 'bg-slate-600', text: 'text-slate-600' },
+  { name: 'purple', label: 'Purple', bg: 'bg-purple-600', text: 'text-purple-600' }
+];
 
 const renderHighlightedText = (text: string) => {
   if (!text) return null;
@@ -137,6 +149,28 @@ export const Article = () => {
   const [editData, setEditData] = useState<Partial<Fact>>({});
   const [isDeletingConfirm, setIsDeletingConfirm] = useState(false);
   const navigate = useNavigate();
+  const textareaRef = useRef<HTMLTextAreaElement>(null);
+
+  const handleInsertColor = (colorName: string) => {
+    const textarea = textareaRef.current;
+    if (!textarea) return;
+
+    const start = textarea.selectionStart;
+    const end = textarea.selectionEnd;
+    const currentText = editData.full || '';
+    const selectedText = currentText.substring(start, end);
+    const replacement = `[${colorName}]${selectedText || 'important text'}[/${colorName}]`;
+
+    const newValue = currentText.substring(0, start) + replacement + currentText.substring(end);
+    setEditData({ ...editData, full: newValue });
+
+    // Re-focus and set selection back
+    setTimeout(() => {
+      textarea.focus();
+      const newCursorPos = start + replacement.length;
+      textarea.setSelectionRange(newCursorPos, newCursorPos);
+    }, 50);
+  };
 
   useEffect(() => {
     const loadArticle = async () => {
@@ -597,8 +631,36 @@ export const Article = () => {
                     <strong>Example:</strong> <code className="bg-black/5 px-1 py-0.5 rounded text-ink2">![The Great Pyramid of Giza | Credit: John Doe / Wikimedia Commons](https://images.unsplash.com/photo-1539650116574-8efeb43e2750)</code>
                   </p>
                 </div>
+
+                {/* Interactive Easy Text Color Injector */}
+                <div className="p-5 rounded-2xl bg-white border border-black/10 space-y-3 font-sans shadow-sm">
+                  <div className="text-xs font-bold uppercase tracking-widest text-ink flex items-center gap-1.5">
+                    <span className="w-2 h-2 rounded-full bg-gold animate-pulse"></span>
+                    🎨 Click to Add Color to Heading or Important Words
+                  </div>
+                  <p className="text-xs text-ink3 leading-normal">
+                    Select a word or a sentence in the editor below, and click a color to highlight it instantly:
+                  </p>
+                  <div className="flex flex-wrap gap-2 pt-1">
+                    {COLOR_OPTIONS.map((c) => (
+                      <button
+                        key={c.name}
+                        type="button"
+                        onClick={() => handleInsertColor(c.name)}
+                        className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl border border-black/5 hover:border-black/10 hover:bg-black/5 transition-all text-xs font-bold cursor-pointer"
+                      >
+                        <span className={cn("w-3 h-3 rounded-full shadow-inner", c.bg)} />
+                        <span className={c.text}>{c.label}</span>
+                      </button>
+                    ))}
+                  </div>
+                  <p className="text-[10px] text-ink3 leading-relaxed border-t border-black/5 pt-2">
+                    * Highlights work on any text, headings (e.g. <code className="font-mono"># Heading</code>), lists, and paragraphs without requiring any HTML coding.
+                  </p>
+                </div>
                 
                 <textarea 
+                  ref={textareaRef}
                   value={editData.full}
                   onChange={(e) => setEditData({...editData, full: e.target.value})}
                   className="w-full h-[500px] bg-white border border-black/10 p-6 rounded-2xl font-serif text-lg leading-relaxed focus:outline-none focus:border-gold"
