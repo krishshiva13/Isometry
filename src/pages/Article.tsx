@@ -263,8 +263,15 @@ export const Article = () => {
   const saveEdit = async () => {
     if (!fact || !id) return;
     try {
-      await factService.updateFact(id, editData);
-      setFact({ ...fact, ...editData } as Fact);
+      const cleanedUpdates = Object.entries(editData).reduce((acc, [key, val]) => {
+        if (val !== undefined) {
+          acc[key] = val;
+        }
+        return acc;
+      }, {} as Record<string, any>);
+
+      await factService.updateFact(id, cleanedUpdates);
+      setFact({ ...fact, ...cleanedUpdates } as Fact);
       setIsEditing(false);
       alert("Article updated successfully!");
     } catch (err: any) {

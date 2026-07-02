@@ -89,12 +89,14 @@ export const CreateFactModal = ({ isOpen, onClose, onSuccess, initialCat }: Crea
         .trim()
         .replace(/\s+/g, '-') || `fact-${Date.now()}`;
       const id = cleanTitle.substring(0, 100);
-      const newFact = { 
+      const newFact: any = { 
         ...formData, 
-        id,
-        publishAt: pubType === 'schedule' ? scheduleTime : undefined
-      } as Fact;
-      await factService.createFact(newFact);
+        id
+      };
+      if (pubType === 'schedule') {
+        newFact.publishAt = scheduleTime;
+      }
+      await factService.createFact(newFact as Fact);
       onSuccess(newFact);
       onClose();
     } catch (err: any) {
