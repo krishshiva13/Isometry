@@ -215,11 +215,21 @@ export const factService = {
   async createQuizQuestion(question: Omit<QuizQuestion, 'id'>) {
     const path = "quiz_questions";
     try {
-      const docRef = await addDoc(collection(db, path), {
-        ...question,
-        createdAt: serverTimestamp(),
-        updatedAt: serverTimestamp()
-      });
+      const cleanData: any = {
+        q: question.q,
+        opts: question.opts,
+        correct: Number(question.correct),
+        cat: question.cat || 'General',
+        createdAt: serverTimestamp()
+      };
+      if (question.explanation && question.explanation.trim()) {
+        cleanData.explanation = question.explanation.trim();
+      }
+      if (question.date && question.date.trim()) {
+        cleanData.date = question.date.trim();
+      }
+
+      const docRef = await addDoc(collection(db, path), cleanData);
       return docRef.id;
     } catch (error) {
       handleFirestoreError(error, OperationType.CREATE, path);
@@ -230,10 +240,17 @@ export const factService = {
     const path = `quiz_questions/${id}`;
     try {
       const docRef = doc(db, "quiz_questions", id);
-      await updateDoc(docRef, {
-        ...updates,
+      const cleanUpdates: any = {
         updatedAt: serverTimestamp()
-      });
+      };
+      if (updates.q !== undefined) cleanUpdates.q = updates.q;
+      if (updates.opts !== undefined) cleanUpdates.opts = updates.opts;
+      if (updates.correct !== undefined) cleanUpdates.correct = Number(updates.correct);
+      if (updates.cat !== undefined) cleanUpdates.cat = updates.cat;
+      if (updates.explanation !== undefined) cleanUpdates.explanation = updates.explanation.trim();
+      if (updates.date !== undefined) cleanUpdates.date = updates.date.trim();
+
+      await updateDoc(docRef, cleanUpdates);
     } catch (error) {
       handleFirestoreError(error, OperationType.UPDATE, path);
     }

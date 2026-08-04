@@ -99,8 +99,8 @@ export const Quiz = () => {
   };
 
   // Save manual question
-  const handleSaveManualQuestion = async (e: React.FormEvent) => {
-    e.preventDefault();
+  const handleSaveManualQuestion = async (e?: React.FormEvent, isNextQuestion: boolean = false) => {
+    if (e) e.preventDefault();
     if (!manualQuestion.trim()) {
       setManualStatus("❌ Please write a question.");
       return;
@@ -111,7 +111,7 @@ export const Quiz = () => {
     }
 
     setIsSavingManual(true);
-    setManualStatus("💾 Saving question...");
+    setManualStatus("💾 Saving question to database...");
 
     const questionData: Omit<QuizQuestion, 'id'> = {
       q: manualQuestion.trim(),
@@ -125,19 +125,35 @@ export const Quiz = () => {
     try {
       if (editingQuestionId) {
         await factService.updateQuizQuestion(editingQuestionId, questionData);
-        setManualStatus("✅ Question updated successfully!");
       } else {
         await factService.createQuizQuestion(questionData);
-        setManualStatus("✅ Question added successfully!");
       }
 
-      // Clear form
-      resetManualForm();
-      // Reload current date questions
-      await loadQuizForDate(selectedDate);
-    } catch (err) {
-      console.error(err);
-      setManualStatus("❌ Failed to save question. Please try again.");
+      // Reload current date questions to get accurate count
+      await loadQuizForDate(manualDate);
+      // Also update selected date to match manual date if different
+      if (selectedDate !== manualDate && selectedDate !== 'all') {
+        setSelectedDate(manualDate);
+      }
+
+      if (isNextQuestion) {
+        // Reset inputs but keep date and category for fast entry of next question
+        setEditingQuestionId(null);
+        setManualQuestion('');
+        setManualOptions(['', '', '', '']);
+        setManualCorrect(0);
+        setManualExplanation('');
+        
+        const count = questions.length + 1;
+        setManualStatus(`✅ Question saved! Enter Question #${count + 1} below:`);
+      } else {
+        setManualStatus("✅ Question saved successfully!");
+        resetManualForm();
+      }
+    } catch (err: any) {
+      console.error("Save Quiz Question Error:", err);
+      const errMsg = err?.message || String(err);
+      setManualStatus(`❌ Failed to save: ${errMsg}`);
     } finally {
       setIsSavingManual(false);
     }
@@ -503,20 +519,57 @@ export const Quiz = () => {
               {/* MANUAL QUIZ WRITING TAB */}
               {adminTab === 'manual' && (
                 <div className="space-y-6">
-                  <form onSubmit={handleSaveManualQuestion} className="space-y-5 bg-white p-6 rounded-2xl border border-black/10 shadow-sm">
+                  {/* Step Progress / Questions count banner */}
+                  <div className="bg-indigo/5 border border-indigo/20 rounded-2xl p-4 flex flex-col sm:flex-row items-center justify-between gap-3">
+                    <div className="space-y-0.5">
+                      <div className="font-serif font-bold text-ink text-sm flex items-center gap-2">
+                        <span>📅 Quiz Date: <strong className="text-indigo">{manualDate}</strong></span>
+                        <span className="bg-indigo text-white px-2 py-0.5 rounded-md text-[11px] font-mono font-bold">
+                          {questions.length} Saved {questions.length === 1 ? 'Question' : 'Questions'}
+                        </span>
+                      </div>
+                      <p className="text-xs text-ink3">
+                        Write 3 to 5 questions per quiz. Click <strong>"Save & Add Next Question"</strong> to continuously add questions!
+                      </p>
+                    </div>
+
+                    <div className="flex items-center gap-1.5 flex-wrap">
+                      {[1, 2, 3, 4, 5].map((num) => {
+                        const isSaved = num <= questions.length;
+                        return (
+                          <div 
+                            key={num}
+                            className={cn("w-7 h-7 rounded-lg font-mono text-xs font-bold flex items-center justify-center transition-all border", {
+                              "bg-sage text-white border-sage shadow": isSaved,
+                              "bg-white text-ink3 border-black/10": !isSaved
+                            })}
+                            title={isSaved ? `Question ${num} Saved` : `Question ${num}`}
+                          >
+                            {isSaved ? '✓' : `Q${num}`}
+                          </div>
+                        );
+                      })}
+                    </div>
+                  </div>
+
+                  <form onSubmit={(e) => handleSaveManualQuestion(e, false)} className="space-y-5 bg-white p-6 rounded-2xl border border-black/10 shadow-sm">
                     <div className="flex items-center justify-between border-b border-black/5 pb-3">
-                      <h3 className="font-serif font-bold text-lg text-ink">
-                        {editingQuestionId ? '✏️ Edit Question' : '➕ Add New Manual Question'}
-                      </h3>
-                      {editingQuestionId && (
+                      <div className="space-y-0.5">
+                        <h3 className="font-serif font-bold text-lg text-ink flex items-center gap-2">
+                          {editingQuestionId ? '✏️ Edit Question' : `➕ Write Question #${questions.length + 1}`}
+                        </h3>
+                        <p className="text-xs text-ink3">Fill in question text, 4 choices, and select the correct answer.</p>
+                      </div>
+
+                      <div className="flex items-center gap-2">
                         <button 
                           type="button"
                           onClick={resetManualForm}
-                          className="text-xs text-coral hover:underline font-bold"
+                          className="text-xs text-ink3 hover:text-ink font-bold px-3 py-1.5 rounded-lg bg-paper2 hover:bg-black/5 transition-colors"
                         >
-                          Cancel Editing
+                          Clear Form
                         </button>
-                      )}
+                      </div>
                     </div>
 
                     <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
@@ -557,7 +610,7 @@ export const Quiz = () => {
                     {/* 4 Options */}
                     <div className="space-y-3">
                       <label className="text-xs font-bold uppercase tracking-wider text-ink3 block">
-                        4 Options (Select the Radio Button next to the Correct Answer)
+                        4 Options (Click the letter badge next to the option that is Correct)
                       </label>
 
                       {['Option A', 'Option B', 'Option C', 'Option D'].map((label, idx) => (
@@ -565,11 +618,11 @@ export const Quiz = () => {
                           <button
                             type="button"
                             onClick={() => setManualCorrect(idx)}
-                            className={cn("w-9 h-9 rounded-xl flex items-center justify-center font-mono text-xs font-bold transition-all border flex-shrink-0", {
-                              "bg-sage text-white border-sage shadow": manualCorrect === idx,
+                            className={cn("w-9 h-9 rounded-xl flex items-center justify-center font-mono text-xs font-bold transition-all border flex-shrink-0 cursor-pointer", {
+                              "bg-sage text-white border-sage shadow-md scale-105": manualCorrect === idx,
                               "bg-paper2 text-ink3 border-black/10 hover:border-black/30": manualCorrect !== idx
                             })}
-                            title="Set as Correct Answer"
+                            title="Click to set as Correct Answer"
                           >
                             {manualCorrect === idx ? <Check size={16} /> : String.fromCharCode(65 + idx)}
                           </button>
@@ -582,8 +635,8 @@ export const Quiz = () => {
                               setManualOptions(newOpts);
                             }}
                             placeholder={`Enter ${label}...`}
-                            className={cn("w-full bg-paper2 border p-2.5 rounded-xl text-sm focus:outline-none", {
-                              "border-sage ring-1 ring-sage/30": manualCorrect === idx,
+                            className={cn("w-full bg-paper2 border p-2.5 rounded-xl text-sm focus:outline-none transition-all", {
+                              "border-sage ring-2 ring-sage/20 font-bold text-ink": manualCorrect === idx,
                               "border-black/10 focus:border-indigo": manualCorrect !== idx
                             })}
                           />
@@ -602,35 +655,44 @@ export const Quiz = () => {
                       />
                     </div>
 
-                    {/* Action Button */}
-                    <div className="flex items-center gap-4 pt-2">
+                    {/* Action Buttons */}
+                    <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-3 pt-2">
+                      <button 
+                        type="button"
+                        disabled={isSavingManual}
+                        onClick={(e) => handleSaveManualQuestion(e, true)}
+                        className="bg-indigo text-white px-6 py-3.5 rounded-xl font-bold hover:bg-indigo/90 disabled:opacity-50 transition-all text-sm flex items-center justify-center gap-2 shadow-md hover:shadow-lg"
+                      >
+                        {isSavingManual ? 'Saving...' : '➡️ Save & Add Next Question'}
+                      </button>
+
                       <button 
                         type="submit"
                         disabled={isSavingManual}
-                        className="bg-indigo text-white px-8 py-3 rounded-xl font-bold hover:bg-indigo/90 disabled:opacity-50 transition-all text-sm flex items-center gap-2 shadow"
+                        className="bg-sage text-white px-6 py-3.5 rounded-xl font-bold hover:bg-sage/90 disabled:opacity-50 transition-all text-sm flex items-center justify-center gap-2 shadow"
                       >
-                        {isSavingManual ? 'Saving...' : editingQuestionId ? '💾 Update Question' : '➕ Save & Publish Question'}
+                        {isSavingManual ? 'Saving...' : editingQuestionId ? '💾 Update Question' : '✓ Save & Finish'}
                       </button>
 
                       {editingQuestionId && (
                         <button 
                           type="button"
                           onClick={resetManualForm}
-                          className="bg-paper3 text-ink3 px-6 py-3 rounded-xl font-bold hover:bg-black/5 transition-all text-sm"
+                          className="bg-paper3 text-ink3 px-5 py-3 rounded-xl font-bold hover:bg-black/5 transition-all text-sm text-center"
                         >
-                          Cancel
+                          Cancel Editing
                         </button>
                       )}
                     </div>
 
                     {manualStatus && (
-                      <p className={cn("text-xs font-bold pt-1", {
-                        "text-sage": manualStatus.startsWith('✅'),
-                        "text-coral": manualStatus.startsWith('❌'),
-                        "text-indigo": manualStatus.startsWith('💾')
+                      <div className={cn("text-xs font-bold p-3 rounded-xl border flex items-center gap-2", {
+                        "bg-sage/10 text-sage border-sage/30": manualStatus.startsWith('✅'),
+                        "bg-coral/10 text-coral border-coral/30": manualStatus.startsWith('❌'),
+                        "bg-indigo/10 text-indigo border-indigo/30": manualStatus.startsWith('💾')
                       })}>
-                        {manualStatus}
-                      </p>
+                        <span>{manualStatus}</span>
+                      </div>
                     )}
                   </form>
 

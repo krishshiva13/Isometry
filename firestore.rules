@@ -77,14 +77,18 @@ service cloud.firestore {
 
     function isValidQuizQuestion(data) {
       let requiredFields = ['q', 'opts', 'correct', 'cat', 'createdAt'];
+      let allAllowedFields = ['q', 'opts', 'correct', 'cat', 'createdAt', 'updatedAt', 'explanation', 'date'];
       return data.keys().hasAll(requiredFields)
-        && data.keys().size() == requiredFields.size()
+        && data.keys().size() <= allAllowedFields.size()
         && data.q is string && data.q.size() <= 500
         && data.opts is list && data.opts.size() == 4
         && data.opts[0] is string
         && data.correct is int && data.correct >= 0 && data.correct < 4
         && data.cat is string
-        && data.createdAt == request.time;
+        && data.createdAt == (resource == null ? request.time : resource.data.createdAt)
+        && (!('updatedAt' in data) || data.updatedAt == request.time)
+        && (!('explanation' in data) || data.explanation is string)
+        && (!('date' in data) || data.date is string);
     }
 
     function isValidSubscriber(data) {
