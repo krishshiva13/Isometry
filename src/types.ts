@@ -35,6 +35,8 @@ export interface QuizQuestion {
   opts: string[];
   correct: number;
   cat: string;
+  explanation?: string;
+  date?: string;
   createdAt?: string;
 }
 

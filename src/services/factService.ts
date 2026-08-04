@@ -195,30 +195,86 @@ export const factService = {
     }
   },
 
-  async getQuizQuestions() {
+  async getQuizQuestions(selectedDate?: string) {
     const path = "quiz_questions";
     try {
-      const q = query(collection(db, path), orderBy("createdAt", "desc"), limit(10));
+      const q = query(collection(db, path), orderBy("createdAt", "desc"), limit(100));
       const snapshot = await getDocs(q);
-      return snapshot.docs.map(doc => ({ ...doc.data(), id: doc.id } as QuizQuestion));
+      const allQuestions = snapshot.docs.map(doc => ({ ...doc.data(), id: doc.id } as QuizQuestion));
+      
+      if (selectedDate && selectedDate !== 'all') {
+        const dateFiltered = allQuestions.filter(q => q.date === selectedDate);
+        return dateFiltered;
+      }
+      return allQuestions;
     } catch (error) {
       handleFirestoreError(error, OperationType.LIST, path);
     }
   },
 
-  async updateQuiz(questions: Omit<QuizQuestion, 'id'>[]) {
+  async createQuizQuestion(question: Omit<QuizQuestion, 'id'>) {
+    const path = "quiz_questions";
     try {
-      // 1. Get old questions to delete (clean up)
-      const q = query(collection(db, "quiz_questions"));
-      const snapshot = await getDocs(q);
-      for (const d of snapshot.docs) {
-        await deleteDoc(doc(db, "quiz_questions", d.id));
+      const docRef = await addDoc(collection(db, path), {
+        ...question,
+        createdAt: serverTimestamp(),
+        updatedAt: serverTimestamp()
+      });
+      return docRef.id;
+    } catch (error) {
+      handleFirestoreError(error, OperationType.CREATE, path);
+    }
+  },
+
+  async updateQuizQuestion(id: string, updates: Partial<QuizQuestion>) {
+    const path = `quiz_questions/${id}`;
+    try {
+      const docRef = doc(db, "quiz_questions", id);
+      await updateDoc(docRef, {
+        ...updates,
+        updatedAt: serverTimestamp()
+      });
+    } catch (error) {
+      handleFirestoreError(error, OperationType.UPDATE, path);
+    }
+  },
+
+  async deleteQuizQuestion(id: string) {
+    const path = `quiz_questions/${id}`;
+    try {
+      const docRef = doc(db, "quiz_questions", id);
+      await deleteDoc(docRef);
+    } catch (error) {
+      handleFirestoreError(error, OperationType.DELETE, path);
+    }
+  },
+
+  async updateQuiz(questions: Omit<QuizQuestion, 'id'>[], targetDate?: string) {
+    try {
+      if (targetDate) {
+        // Only delete existing questions for that specific date
+        const q = query(collection(db, "quiz_questions"));
+        const snapshot = await getDocs(q);
+        for (const d of snapshot.docs) {
+          const data = d.data();
+          if (data.date === targetDate) {
+            await deleteDoc(doc(db, "quiz_questions", d.id));
+          }
+        }
+      } else {
+        // Clean up all old questions if no date specified
+        const q = query(collection(db, "quiz_questions"));
+        const snapshot = await getDocs(q);
+        for (const d of snapshot.docs) {
+          await deleteDoc(doc(db, "quiz_questions", d.id));
+        }
       }
       
-      // 2. Add new ones
+      // Add new ones
       for (const question of questions) {
         await addDoc(collection(db, "quiz_questions"), {
           ...question,
+          date: targetDate || question.date || '',
           createdAt: serverTimestamp()
         });
       }

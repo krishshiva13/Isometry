@@ -121,7 +121,7 @@ app.post("/api/quiz/generate", async (req, res) => {
       model: "gemini-3-flash-preview",
       contents: prompt,
       config: {
-        systemInstruction: "You are a quiz generator for FActHub — a facts website about history, science, inventions, discoveries, and famous people. Generate quiz questions based on the user's request. RESPOND ONLY with a valid JSON array of quiz question objects (no markdown, no explanation, just the JSON array). Each object must have: q (question string), opts (array of 4 answer strings), correct (0-indexed number of correct option), cat (category string).",
+        systemInstruction: "You are a quiz generator for FActHub — a facts website about history, science, inventions, discoveries, and famous people. Generate quiz questions based on the user's request. RESPOND ONLY with a valid JSON array of quiz question objects (no markdown, just the JSON array). Each object must have: q (question string), opts (array of 4 answer strings), correct (0-indexed number of correct option), cat (category string), explanation (short explanation why the answer is correct).",
         responseMimeType: "application/json",
         responseSchema: {
           type: Type.ARRAY,
@@ -131,7 +131,8 @@ app.post("/api/quiz/generate", async (req, res) => {
               q: { type: Type.STRING },
               opts: { type: Type.ARRAY, items: { type: Type.STRING } },
               correct: { type: Type.NUMBER },
-              cat: { type: Type.STRING }
+              cat: { type: Type.STRING },
+              explanation: { type: Type.STRING }
             },
             required: ["q", "opts", "correct", "cat"]
           }
