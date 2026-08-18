@@ -1,8 +1,8 @@
 import React, { useState, useRef } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
-import { X, Save, Plus, Calendar, Clock } from 'lucide-react';
+import { X, Save, Plus, Calendar, Clock, ShoppingBag, Trash2, ExternalLink, BookCheck, ShieldAlert } from 'lucide-react';
 import { factService } from '../../services/factService';
-import { Fact, Category } from '../../types';
+import { Fact, Category, AffiliateProduct } from '../../types';
 
 const COLOR_OPTIONS = [
   { name: 'gold', label: 'Gold', bg: 'bg-[#d9ad42]', text: 'text-[#d9ad42]' },
@@ -53,6 +53,42 @@ export const CreateFactModal = ({ isOpen, onClose, onSuccess, initialCat }: Crea
     eventDay: 0
   });
 
+  const [products, setProducts] = useState<AffiliateProduct[]>([]);
+  const [showProductForm, setShowProductForm] = useState(false);
+  const [currentProduct, setCurrentProduct] = useState<AffiliateProduct>({
+    title: '',
+    authorOrBrand: '',
+    url: '',
+    imageUrl: '',
+    badge: 'Recommended Book',
+    note: '',
+    price: 'View on Amazon',
+    platform: 'Amazon'
+  });
+
+  const handleAddProduct = () => {
+    if (!currentProduct.title.trim() || !currentProduct.url.trim()) {
+      alert("Please provide at least a Product/Book Title and an Affiliate URL.");
+      return;
+    }
+    setProducts([...products, { ...currentProduct }]);
+    setCurrentProduct({
+      title: '',
+      authorOrBrand: '',
+      url: '',
+      imageUrl: '',
+      badge: 'Recommended Book',
+      note: '',
+      price: 'View on Amazon',
+      platform: 'Amazon'
+    });
+    setShowProductForm(false);
+  };
+
+  const handleRemoveProduct = (index: number) => {
+    setProducts(products.filter((_, i) => i !== index));
+  };
+
   const textareaRef = useRef<HTMLTextAreaElement>(null);
 
   const handleInsertColor = (colorName: string) => {
@@ -93,6 +129,9 @@ export const CreateFactModal = ({ isOpen, onClose, onSuccess, initialCat }: Crea
         ...formData, 
         id
       };
+      if (products.length > 0) {
+        newFact.affiliateProducts = products;
+      }
       if (pubType === 'schedule') {
         newFact.publishAt = scheduleTime;
       }
@@ -309,6 +348,201 @@ export const CreateFactModal = ({ isOpen, onClose, onSuccess, initialCat }: Crea
                 placeholder="Write the full story here... Use Markdown."
                 required
               />
+            </div>
+
+            {/* Recommended Products & Affiliate Books Section */}
+            <div className="bg-white p-6 rounded-2xl border border-black/10 shadow-sm space-y-4 font-sans">
+              <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 border-b border-black/5 pb-3">
+                <div className="space-y-0.5">
+                  <div className="flex items-center gap-2 text-ink font-serif font-bold text-base">
+                    <ShoppingBag size={18} className="text-gold" />
+                    <span>Recommended Books & Products (Affiliate Links)</span>
+                  </div>
+                  <p className="text-xs text-ink3">
+                    Add relevant books or tools for this article. Links will automatically follow Google SEO and Amazon compliance rules.
+                  </p>
+                </div>
+                {!showProductForm && (
+                  <button
+                    type="button"
+                    onClick={() => setShowProductForm(true)}
+                    className="flex items-center gap-1.5 px-3 py-1.5 bg-paper2 hover:bg-gold/20 hover:text-ink text-xs font-bold rounded-xl border border-black/5 transition-all w-fit"
+                  >
+                    <Plus size={14} /> Add Product / Book
+                  </button>
+                )}
+              </div>
+
+              {/* Compliance note */}
+              <div className="p-3 bg-emerald-50/60 border border-emerald-200/50 rounded-xl flex items-start gap-2 text-xs text-emerald-950">
+                <ShieldAlert size={16} className="text-emerald-700 flex-shrink-0 mt-0.5" />
+                <span>
+                  <strong>Google & FTC Safeguard Enabled:</strong> Links automatically include <code className="bg-emerald-100/60 px-1 py-0.5 rounded font-mono text-[11px]">rel="nofollow sponsored"</code> and reader-disclosure badges to keep your SEO score 100% safe.
+                </span>
+              </div>
+
+              {/* Added Products List */}
+              {products.length > 0 ? (
+                <div className="space-y-2">
+                  <div className="text-xs font-bold uppercase tracking-wider text-ink3">
+                    Attached Products ({products.length}):
+                  </div>
+                  <div className="grid gap-2">
+                    {products.map((p, idx) => (
+                      <div key={idx} className="p-3 bg-paper2 rounded-xl border border-black/5 flex items-center justify-between gap-3 text-sm">
+                        <div className="flex items-center gap-3 overflow-hidden">
+                          {p.imageUrl ? (
+                            <img src={p.imageUrl} alt={p.title} className="w-10 h-10 object-cover rounded-lg border border-black/10 flex-shrink-0 bg-white" />
+                          ) : (
+                            <div className="w-10 h-10 rounded-lg bg-gold/20 flex items-center justify-center text-xs flex-shrink-0 font-serif">📖</div>
+                          )}
+                          <div className="truncate">
+                            <div className="font-bold text-ink truncate flex items-center gap-1.5">
+                              <span>{p.title}</span>
+                              {p.authorOrBrand && <span className="text-xs text-ink3 font-normal">by {p.authorOrBrand}</span>}
+                            </div>
+                            <div className="text-xs text-ink3 truncate font-mono flex items-center gap-2">
+                              <span className="text-gold font-bold">{p.badge || 'Recommended'}</span>
+                              <span>•</span>
+                              <span className="truncate">{p.url}</span>
+                            </div>
+                          </div>
+                        </div>
+                        <button
+                          type="button"
+                          onClick={() => handleRemoveProduct(idx)}
+                          className="p-1.5 text-rose-600 hover:bg-rose-50 rounded-lg transition-colors flex-shrink-0"
+                          title="Remove product"
+                        >
+                          <Trash2 size={15} />
+                        </button>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              ) : (
+                !showProductForm && (
+                  <p className="text-xs text-ink3 italic py-1">
+                    No affiliate products attached yet. Click "+ Add Product / Book" to recommend resources for this post.
+                  </p>
+                )
+              )}
+
+              {/* Inline Product Creator Form */}
+              {showProductForm && (
+                <div className="p-4 bg-paper2 rounded-2xl border border-black/10 space-y-3 animate-in fade-in slide-in-from-top-1">
+                  <div className="flex items-center justify-between border-b border-black/5 pb-2">
+                    <span className="font-bold text-xs uppercase tracking-wider text-ink flex items-center gap-1.5">
+                      <BookCheck size={14} className="text-gold" />
+                      Add Product Details
+                    </span>
+                    <button
+                      type="button"
+                      onClick={() => setShowProductForm(false)}
+                      className="text-xs text-ink3 hover:text-ink font-medium"
+                    >
+                      Cancel
+                    </button>
+                  </div>
+
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                    <div className="space-y-1">
+                      <label className="text-[11px] font-bold uppercase tracking-wider text-ink3">Book / Product Title *</label>
+                      <input
+                        type="text"
+                        value={currentProduct.title}
+                        onChange={(e) => setCurrentProduct({ ...currentProduct, title: e.target.value })}
+                        placeholder="e.g., A Brief History of Time"
+                        className="w-full bg-white border border-black/10 rounded-xl p-2.5 text-xs text-ink focus:outline-none focus:border-gold"
+                      />
+                    </div>
+                    <div className="space-y-1">
+                      <label className="text-[11px] font-bold uppercase tracking-wider text-ink3">Author / Brand</label>
+                      <input
+                        type="text"
+                        value={currentProduct.authorOrBrand}
+                        onChange={(e) => setCurrentProduct({ ...currentProduct, authorOrBrand: e.target.value })}
+                        placeholder="e.g., Stephen Hawking"
+                        className="w-full bg-white border border-black/10 rounded-xl p-2.5 text-xs text-ink focus:outline-none focus:border-gold"
+                      />
+                    </div>
+                  </div>
+
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                    <div className="space-y-1">
+                      <label className="text-[11px] font-bold uppercase tracking-wider text-ink3">Affiliate Link URL (Amazon / Bookshop) *</label>
+                      <input
+                        type="url"
+                        value={currentProduct.url}
+                        onChange={(e) => setCurrentProduct({ ...currentProduct, url: e.target.value })}
+                        placeholder="https://amzn.to/... or https://amazon.com/dp/..."
+                        className="w-full bg-white border border-black/10 rounded-xl p-2.5 text-xs text-ink focus:outline-none focus:border-gold font-mono"
+                      />
+                    </div>
+                    <div className="space-y-1">
+                      <label className="text-[11px] font-bold uppercase tracking-wider text-ink3">Product Image URL (Optional)</label>
+                      <input
+                        type="url"
+                        value={currentProduct.imageUrl}
+                        onChange={(e) => setCurrentProduct({ ...currentProduct, imageUrl: e.target.value })}
+                        placeholder="https://images-na.ssl-images-amazon.com/..."
+                        className="w-full bg-white border border-black/10 rounded-xl p-2.5 text-xs text-ink focus:outline-none focus:border-gold font-mono"
+                      />
+                    </div>
+                  </div>
+
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                    <div className="space-y-1">
+                      <label className="text-[11px] font-bold uppercase tracking-wider text-ink3">Badge / Tag</label>
+                      <input
+                        type="text"
+                        value={currentProduct.badge}
+                        onChange={(e) => setCurrentProduct({ ...currentProduct, badge: e.target.value })}
+                        placeholder="e.g., Recommended Book, Editor's Pick"
+                        className="w-full bg-white border border-black/10 rounded-xl p-2.5 text-xs text-ink focus:outline-none focus:border-gold"
+                      />
+                    </div>
+                    <div className="space-y-1">
+                      <label className="text-[11px] font-bold uppercase tracking-wider text-ink3">Button CTA Text</label>
+                      <input
+                        type="text"
+                        value={currentProduct.price}
+                        onChange={(e) => setCurrentProduct({ ...currentProduct, price: e.target.value })}
+                        placeholder="e.g., View on Amazon, Buy Book"
+                        className="w-full bg-white border border-black/10 rounded-xl p-2.5 text-xs text-ink focus:outline-none focus:border-gold"
+                      />
+                    </div>
+                  </div>
+
+                  <div className="space-y-1">
+                    <label className="text-[11px] font-bold uppercase tracking-wider text-ink3">Why We Recommend This (Note for Readers)</label>
+                    <input
+                      type="text"
+                      value={currentProduct.note}
+                      onChange={(e) => setCurrentProduct({ ...currentProduct, note: e.target.value })}
+                      placeholder="e.g., The definitive guide explaining quantum theory and relativity for beginners."
+                      className="w-full bg-white border border-black/10 rounded-xl p-2.5 text-xs text-ink focus:outline-none focus:border-gold"
+                    />
+                  </div>
+
+                  <div className="flex justify-end gap-2 pt-2">
+                    <button
+                      type="button"
+                      onClick={() => setShowProductForm(false)}
+                      className="px-4 py-2 rounded-xl text-xs font-bold text-ink3 hover:bg-black/5"
+                    >
+                      Cancel
+                    </button>
+                    <button
+                      type="button"
+                      onClick={handleAddProduct}
+                      className="px-5 py-2 bg-ink text-white rounded-xl text-xs font-bold hover:bg-gold hover:text-ink transition-all shadow"
+                    >
+                      Add to Article
+                    </button>
+                  </div>
+                </div>
+              )}
             </div>
 
             {/* Scheduling and Publish section */}

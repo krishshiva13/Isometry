@@ -1,5 +1,16 @@
 export type Category = 'history' | 'science' | 'inventions' | 'discoveries' | 'birthdays';
 
+export interface AffiliateProduct {
+  title: string;
+  authorOrBrand?: string;
+  url: string;
+  imageUrl?: string;
+  badge?: string;
+  note?: string;
+  price?: string;
+  platform?: string;
+}
+
 export interface Fact {
   id: string;
   cat: Category;
@@ -16,6 +27,7 @@ export interface Fact {
   eventMonth?: number;
   eventDay?: number;
   publishAt?: string;
+  affiliateProducts?: AffiliateProduct[];
 }
 
 export interface Birthday {

@@ -59,7 +59,17 @@ export const Privacy = () => {
           FActHub does not knowingly collect any Personal Identifiable Information from children under the age of 13.
         </p>
 
-        <h2 className="text-2xl font-serif font-bold text-ink mt-12 mb-4">7. Contact Us</h2>
+        <h2 className="text-2xl font-serif font-bold text-ink mt-12 mb-4">7. Affiliate & Commercial Disclosure (Google & FTC Compliance)</h2>
+        <div className="bg-emerald-50/50 p-6 rounded-2xl border border-emerald-200/60 space-y-3">
+          <p className="text-ink2 leading-relaxed m-0 text-sm">
+            FActHub participates in affiliate marketing programs, including the <strong>Amazon Services LLC Associates Program</strong> and related educational publisher affiliate programs. This means we may earn a small referral commission on qualifying purchases made through our external links, at <strong>absolutely zero additional cost to you</strong>.
+          </p>
+          <p className="text-ink2 leading-relaxed m-0 text-sm">
+            In compliance with Google Webmaster Guidelines and Federal Trade Commission (FTC) requirements, all affiliate and commercial partner links on our website are explicitly tagged with <code className="bg-white px-1.5 py-0.5 rounded text-ink font-mono text-xs border border-black/10">rel="nofollow sponsored"</code> attributes. We maintain editorial independence and only recommend books, scientific literature, and historical resources that enrich our readers' educational experience.
+          </p>
+        </div>
+
+        <h2 className="text-2xl font-serif font-bold text-ink mt-12 mb-4">8. Contact Us</h2>
         <div className="bg-paper2 p-8 rounded-2xl border border-black/5 mt-8">
           <p className="text-ink2 leading-relaxed mb-0">
             If you have additional questions or require more information about our Privacy Policy, do not hesitate to contact us at <span className="font-bold text-gold">admin@facthub.in</span>.

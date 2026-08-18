@@ -2,13 +2,64 @@ import React, { useEffect, useState, useRef } from 'react';
 import { useParams, Link, useNavigate } from 'react-router-dom';
 import ReactMarkdown from 'react-markdown';
 import { motion } from 'motion/react';
-import { ArrowLeft, Calendar, BookOpen, Share2, Copy, Send, Twitter, Facebook, Edit2, Save, X as CloseIcon, Trash2 } from 'lucide-react';
+import { ArrowLeft, Calendar, BookOpen, Share2, Copy, Send, Twitter, Facebook, Edit2, Save, X as CloseIcon, Trash2, ShoppingBag, ExternalLink, ShieldCheck, Plus, BookCheck } from 'lucide-react';
 import { Helmet } from 'react-helmet-async';
 import { factService } from '../services/factService';
-import { Fact } from '../types';
+import { Fact, AffiliateProduct } from '../types';
 import { cn } from '../lib/utils';
 import { INITIAL_FACTS } from '../seed';
 import { useAuth } from '../contexts/AuthContext';
+
+const DEFAULT_CATEGORY_BOOKS: Record<string, AffiliateProduct[]> = {
+  history: [
+    {
+      title: "Sapiens: A Brief History of Humankind",
+      authorOrBrand: "Yuval Noah Harari",
+      url: "https://www.amazon.com/dp/0062316095",
+      imageUrl: "https://images.unsplash.com/photo-1544716278-ca5e3f4abd8c?auto=format&fit=crop&q=80&w=400",
+      badge: "⭐ Essential History",
+      note: "An international bestseller exploring 70,000 years of human evolution, cognition, and civilizations.",
+      price: "View on Amazon",
+      platform: "Amazon"
+    }
+  ],
+  science: [
+    {
+      title: "A Short History of Nearly Everything",
+      authorOrBrand: "Bill Bryson",
+      url: "https://www.amazon.com/dp/076790818X",
+      imageUrl: "https://images.unsplash.com/photo-1532012164546-f432f2e3777a?auto=format&fit=crop&q=80&w=400",
+      badge: "🔬 Top Science Read",
+      note: "A journey through physical sciences, geology, and biology explained in an engaging and accessible narrative.",
+      price: "View on Amazon",
+      platform: "Amazon"
+    }
+  ],
+  inventions: [
+    {
+      title: "The Innovators: How a Group of Hackers and Geeks Created the Digital Revolution",
+      authorOrBrand: "Walter Isaacson",
+      url: "https://www.amazon.com/dp/1476708703",
+      imageUrl: "https://images.unsplash.com/photo-1512820790803-83ca734da794?auto=format&fit=crop&q=80&w=400",
+      badge: "💡 Tech & Inventions",
+      note: "The story of the pioneering minds behind the computer, internet, and digital age innovations.",
+      price: "View on Amazon",
+      platform: "Amazon"
+    }
+  ],
+  discoveries: [
+    {
+      title: "Cosmos",
+      authorOrBrand: "Carl Sagan",
+      url: "https://www.amazon.com/dp/0345539435",
+      imageUrl: "https://images.unsplash.com/photo-1451187580459-43490279c0fa?auto=format&fit=crop&q=80&w=400",
+      badge: "🔭 Astronomy Classic",
+      note: "The landmark masterwork on astrophysics, cosmic exploration, and humanity's place in the universe.",
+      price: "View on Amazon",
+      platform: "Amazon"
+    }
+  ]
+};
 
 const COLOR_OPTIONS = [
   { name: 'gold', label: 'Gold', bg: 'bg-[#d9ad42]', text: 'text-[#d9ad42]' },
@@ -148,6 +199,17 @@ export const Article = () => {
   const [isEditing, setIsEditing] = useState(false);
   const [editData, setEditData] = useState<Partial<Fact>>({});
   const [isDeletingConfirm, setIsDeletingConfirm] = useState(false);
+  const [showProductFormInEdit, setShowProductFormInEdit] = useState(false);
+  const [newProductInEdit, setNewProductInEdit] = useState<AffiliateProduct>({
+    title: '',
+    authorOrBrand: '',
+    url: '',
+    imageUrl: '',
+    badge: 'Recommended Book',
+    note: '',
+    price: 'View on Amazon',
+    platform: 'Amazon'
+  });
   const navigate = useNavigate();
   const textareaRef = useRef<HTMLTextAreaElement>(null);
 
@@ -251,7 +313,8 @@ export const Article = () => {
       imageCredit: fact.imageCredit || '',
       eventMonth: fact.eventMonth || 0,
       eventDay: fact.eventDay || 0,
-      publishAt: fact.publishAt || ''
+      publishAt: fact.publishAt || '',
+      affiliateProducts: fact.affiliateProducts ? [...fact.affiliateProducts] : []
     });
     setIsEditing(true);
   };
@@ -673,9 +736,319 @@ export const Article = () => {
                   className="w-full h-[500px] bg-white border border-black/10 p-6 rounded-2xl font-serif text-lg leading-relaxed focus:outline-none focus:border-gold"
                   placeholder="Write full article here..."
                 />
+
+                {/* Affiliate Products Management in Edit Mode */}
+                <div className="bg-paper2 p-6 rounded-2xl border border-black/10 space-y-4 font-sans mt-6">
+                  <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 border-b border-black/5 pb-3">
+                    <div>
+                      <h4 className="font-serif font-bold text-base text-ink flex items-center gap-2">
+                        <ShoppingBag size={18} className="text-gold" />
+                        <span>Recommended Books & Products (Affiliate Links)</span>
+                      </h4>
+                      <p className="text-xs text-ink3 mt-0.5">
+                        Add curated books or gear to display at the bottom of this article.
+                      </p>
+                    </div>
+                    {!showProductFormInEdit && (
+                      <button
+                        type="button"
+                        onClick={() => setShowProductFormInEdit(true)}
+                        className="flex items-center gap-1.5 px-3 py-1.5 bg-white hover:bg-gold/20 text-xs font-bold text-ink rounded-xl border border-black/10 transition-all w-fit"
+                      >
+                        <Plus size={14} /> Add Book / Product
+                      </button>
+                    )}
+                  </div>
+
+                  {/* List of Attached Products */}
+                  {editData.affiliateProducts && editData.affiliateProducts.length > 0 ? (
+                    <div className="space-y-2">
+                      {editData.affiliateProducts.map((prod, pIdx) => (
+                        <div key={pIdx} className="bg-white p-3 rounded-xl border border-black/5 flex items-center justify-between gap-3 text-sm">
+                          <div className="flex items-center gap-3 overflow-hidden">
+                            {prod.imageUrl ? (
+                              <img src={prod.imageUrl} alt={prod.title} className="w-10 h-10 object-cover rounded-lg border border-black/10 flex-shrink-0" />
+                            ) : (
+                              <div className="w-10 h-10 rounded-lg bg-gold/20 flex items-center justify-center text-xs flex-shrink-0 font-serif">📖</div>
+                            )}
+                            <div className="truncate">
+                              <div className="font-bold text-ink truncate flex items-center gap-1.5">
+                                <span>{prod.title}</span>
+                                {prod.authorOrBrand && <span className="text-xs text-ink3 font-normal">by {prod.authorOrBrand}</span>}
+                              </div>
+                              <div className="text-xs text-ink3 truncate font-mono flex items-center gap-2">
+                                <span className="text-gold font-bold">{prod.badge || 'Recommended'}</span>
+                                <span>•</span>
+                                <span className="truncate">{prod.url}</span>
+                              </div>
+                            </div>
+                          </div>
+                          <button
+                            type="button"
+                            onClick={() => {
+                              const updated = (editData.affiliateProducts || []).filter((_, i) => i !== pIdx);
+                              setEditData({ ...editData, affiliateProducts: updated });
+                            }}
+                            className="p-1.5 text-rose-600 hover:bg-rose-50 rounded-lg transition-colors flex-shrink-0"
+                            title="Remove product"
+                          >
+                            <Trash2 size={15} />
+                          </button>
+                        </div>
+                      ))}
+                    </div>
+                  ) : (
+                    !showProductFormInEdit && (
+                      <p className="text-xs text-ink3 italic">
+                        No specific products attached to this article yet. (Default category recommendations will show automatically if empty).
+                      </p>
+                    )
+                  )}
+
+                  {/* Inline Add Product Form */}
+                  {showProductFormInEdit && (
+                    <div className="p-4 bg-white rounded-xl border border-black/10 space-y-3">
+                      <div className="flex items-center justify-between border-b border-black/5 pb-2">
+                        <span className="font-bold text-xs uppercase tracking-wider text-ink flex items-center gap-1.5">
+                          <BookCheck size={14} className="text-gold" />
+                          New Product Information
+                        </span>
+                        <button
+                          type="button"
+                          onClick={() => setShowProductFormInEdit(false)}
+                          className="text-xs text-ink3 hover:text-ink font-medium"
+                        >
+                          Cancel
+                        </button>
+                      </div>
+
+                      <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                        <div className="space-y-1">
+                          <label className="text-[11px] font-bold uppercase tracking-wider text-ink3">Book / Product Title *</label>
+                          <input
+                            type="text"
+                            value={newProductInEdit.title}
+                            onChange={(e) => setNewProductInEdit({ ...newProductInEdit, title: e.target.value })}
+                            placeholder="e.g., Sapiens: A Brief History"
+                            className="w-full bg-paper2 border border-black/10 rounded-xl p-2.5 text-xs text-ink focus:outline-none focus:border-gold"
+                          />
+                        </div>
+                        <div className="space-y-1">
+                          <label className="text-[11px] font-bold uppercase tracking-wider text-ink3">Author / Brand</label>
+                          <input
+                            type="text"
+                            value={newProductInEdit.authorOrBrand}
+                            onChange={(e) => setNewProductInEdit({ ...newProductInEdit, authorOrBrand: e.target.value })}
+                            placeholder="e.g., Yuval Noah Harari"
+                            className="w-full bg-paper2 border border-black/10 rounded-xl p-2.5 text-xs text-ink focus:outline-none focus:border-gold"
+                          />
+                        </div>
+                      </div>
+
+                      <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                        <div className="space-y-1">
+                          <label className="text-[11px] font-bold uppercase tracking-wider text-ink3">Affiliate Link URL *</label>
+                          <input
+                            type="url"
+                            value={newProductInEdit.url}
+                            onChange={(e) => setNewProductInEdit({ ...newProductInEdit, url: e.target.value })}
+                            placeholder="https://amzn.to/..."
+                            className="w-full bg-paper2 border border-black/10 rounded-xl p-2.5 text-xs text-ink focus:outline-none focus:border-gold font-mono"
+                          />
+                        </div>
+                        <div className="space-y-1">
+                          <label className="text-[11px] font-bold uppercase tracking-wider text-ink3">Image URL (Optional)</label>
+                          <input
+                            type="url"
+                            value={newProductInEdit.imageUrl}
+                            onChange={(e) => setNewProductInEdit({ ...newProductInEdit, imageUrl: e.target.value })}
+                            placeholder="https://images-na.ssl-images-amazon.com/..."
+                            className="w-full bg-paper2 border border-black/10 rounded-xl p-2.5 text-xs text-ink focus:outline-none focus:border-gold font-mono"
+                          />
+                        </div>
+                      </div>
+
+                      <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                        <div className="space-y-1">
+                          <label className="text-[11px] font-bold uppercase tracking-wider text-ink3">Badge / Tag</label>
+                          <input
+                            type="text"
+                            value={newProductInEdit.badge}
+                            onChange={(e) => setNewProductInEdit({ ...newProductInEdit, badge: e.target.value })}
+                            placeholder="e.g., Recommended Book, Bestseller"
+                            className="w-full bg-paper2 border border-black/10 rounded-xl p-2.5 text-xs text-ink focus:outline-none focus:border-gold"
+                          />
+                        </div>
+                        <div className="space-y-1">
+                          <label className="text-[11px] font-bold uppercase tracking-wider text-ink3">Button CTA Text</label>
+                          <input
+                            type="text"
+                            value={newProductInEdit.price}
+                            onChange={(e) => setNewProductInEdit({ ...newProductInEdit, price: e.target.value })}
+                            placeholder="e.g., View on Amazon"
+                            className="w-full bg-paper2 border border-black/10 rounded-xl p-2.5 text-xs text-ink focus:outline-none focus:border-gold"
+                          />
+                        </div>
+                      </div>
+
+                      <div className="space-y-1">
+                        <label className="text-[11px] font-bold uppercase tracking-wider text-ink3">Why We Recommend This</label>
+                        <input
+                          type="text"
+                          value={newProductInEdit.note}
+                          onChange={(e) => setNewProductInEdit({ ...newProductInEdit, note: e.target.value })}
+                          placeholder="e.g., An essential companion book to understand ancient human societies."
+                          className="w-full bg-paper2 border border-black/10 rounded-xl p-2.5 text-xs text-ink focus:outline-none focus:border-gold"
+                        />
+                      </div>
+
+                      <div className="flex justify-end gap-2 pt-1">
+                        <button
+                          type="button"
+                          onClick={() => setShowProductFormInEdit(false)}
+                          className="px-4 py-2 rounded-xl text-xs font-bold text-ink3 hover:bg-black/5"
+                        >
+                          Cancel
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => {
+                            if (!newProductInEdit.title.trim() || !newProductInEdit.url.trim()) {
+                              alert("Please provide at least a Product Title and an Affiliate URL.");
+                              return;
+                            }
+                            const existing = editData.affiliateProducts || [];
+                            setEditData({ ...editData, affiliateProducts: [...existing, { ...newProductInEdit }] });
+                            setNewProductInEdit({
+                              title: '',
+                              authorOrBrand: '',
+                              url: '',
+                              imageUrl: '',
+                              badge: 'Recommended Book',
+                              note: '',
+                              price: 'View on Amazon',
+                              platform: 'Amazon'
+                            });
+                            setShowProductFormInEdit(false);
+                          }}
+                          className="px-5 py-2 bg-ink text-white rounded-xl text-xs font-bold hover:bg-gold hover:text-ink transition-all shadow"
+                        >
+                          Attach Product
+                        </button>
+                      </div>
+                    </div>
+                  )}
+                </div>
               </div>
             ) : (
-              <ReactMarkdown components={renderers}>{fact.full}</ReactMarkdown>
+              <>
+                <ReactMarkdown components={renderers}>{fact.full}</ReactMarkdown>
+
+                {/* 📚 SAFEGUARDED RECOMMENDED READING & AFFILIATE PRODUCTS SHOWCASE */}
+                {(() => {
+                  const productsToShow = (fact.affiliateProducts && fact.affiliateProducts.length > 0)
+                    ? fact.affiliateProducts
+                    : (DEFAULT_CATEGORY_BOOKS[fact.cat] || []);
+
+                  if (!productsToShow || productsToShow.length === 0) return null;
+
+                  return (
+                    <div className="mt-12 bg-white rounded-3xl border border-black/10 p-6 sm:p-8 shadow-sm space-y-6 not-prose">
+                      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 border-b border-black/5 pb-4">
+                        <div className="space-y-1">
+                          <div className="flex items-center gap-2">
+                            <span className="w-2.5 h-2.5 rounded-full bg-gold animate-pulse"></span>
+                            <span className="text-[11px] font-mono font-bold uppercase tracking-widest text-gold">Further Learning & Deep Dive</span>
+                          </div>
+                          <h3 className="text-xl sm:text-2xl font-serif font-black text-ink">
+                            📚 Recommended Reading & Resources
+                          </h3>
+                        </div>
+                        <div className="text-xs text-ink3 font-medium bg-paper2 px-3 py-1.5 rounded-xl border border-black/5 w-fit">
+                          Curated by FActHub Editorial
+                        </div>
+                      </div>
+
+                      <div className="grid grid-cols-1 gap-4">
+                        {productsToShow.map((item, idx) => (
+                          <div 
+                            key={idx}
+                            className="group bg-paper rounded-2xl border border-black/5 p-5 hover:border-gold/40 hover:shadow-md transition-all flex flex-col sm:flex-row items-start sm:items-center gap-5"
+                          >
+                            <div className="w-20 h-28 sm:w-24 sm:h-32 rounded-xl overflow-hidden bg-paper2 border border-black/10 flex-shrink-0 flex items-center justify-center relative shadow-sm">
+                              {item.imageUrl ? (
+                                <img 
+                                  src={item.imageUrl} 
+                                  alt={item.title} 
+                                  className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300"
+                                  referrerPolicy="no-referrer"
+                                  onError={(e) => {
+                                    (e.target as any).style.display = 'none';
+                                  }}
+                                />
+                              ) : (
+                                <span className="text-3xl">📖</span>
+                              )}
+                              <span className="absolute top-1 left-1 bg-black/70 text-white text-[9px] font-mono uppercase px-1.5 py-0.5 rounded backdrop-blur-sm">
+                                Book
+                              </span>
+                            </div>
+
+                            <div className="flex-1 min-w-0 space-y-2">
+                              <div className="flex flex-wrap items-center gap-2">
+                                <span className="bg-gold/15 text-ink font-bold text-[10px] uppercase tracking-wider px-2.5 py-0.5 rounded-md border border-gold/20">
+                                  {item.badge || 'Recommended Reading'}
+                                </span>
+                                {item.authorOrBrand && (
+                                  <span className="text-xs text-ink3 font-medium">
+                                    by <strong className="text-ink2">{item.authorOrBrand}</strong>
+                                  </span>
+                                )}
+                              </div>
+
+                              <h4 className="text-lg font-serif font-black text-ink group-hover:text-gold transition-colors leading-snug">
+                                {item.title}
+                              </h4>
+
+                              {item.note && (
+                                <p className="text-xs text-ink2 leading-relaxed bg-white/70 p-3 rounded-xl border border-black/5">
+                                  {item.note}
+                                </p>
+                              )}
+
+                              <div className="pt-1 flex items-center justify-between flex-wrap gap-3">
+                                <a
+                                  href={item.url}
+                                  target="_blank"
+                                  rel="nofollow sponsored noopener noreferrer"
+                                  className="inline-flex items-center gap-2 px-5 py-2.5 bg-ink text-white hover:bg-gold hover:text-ink text-xs font-bold rounded-xl transition-all shadow-sm hover:shadow group/btn"
+                                >
+                                  <span>{item.price || 'View on Amazon'}</span>
+                                  <ExternalLink size={13} className="group-hover/btn:translate-x-0.5 transition-transform" />
+                                </a>
+
+                                <span className="text-[11px] text-ink3 font-mono flex items-center gap-1">
+                                  <span>🛒</span>
+                                  <span>{item.platform || 'Amazon'} Verified Link</span>
+                                </span>
+                              </div>
+                            </div>
+                          </div>
+                        ))}
+                      </div>
+
+                      {/* FTC / Google Safeguard Reader Disclosure */}
+                      <div className="p-4 bg-paper2 rounded-2xl border border-black/5 flex items-start gap-3 text-xs text-ink3 leading-relaxed">
+                        <ShieldCheck size={18} className="text-emerald-700 flex-shrink-0 mt-0.5" />
+                        <div>
+                          <strong className="text-ink font-bold block mb-0.5">Trust & Transparency Disclosure:</strong>
+                          FActHub is reader-supported. When you purchase through links on our site, we may earn an affiliate commission at no extra cost to you. We strictly curate books and educational materials relevant to the topic. Outbound links are secured with <code className="bg-white px-1 py-0.5 rounded text-ink2 border border-black/5 font-mono text-[10px]">rel="nofollow sponsored"</code> to comply with Google Search and webmaster guidelines.
+                        </div>
+                      </div>
+                    </div>
+                  );
+                })()}
+              </>
             )}
           </div>
 
