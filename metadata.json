@@ -1,6 +1,6 @@
 {
   "name": "FActHub",
-  "description": "Explore fascinating facts about history, science, inventions, discoveries, and famous birthdays with a daily quiz and AI-powered updates.",
+  "description": "Daily facts, origin stories, government exam prep portal for India (UPSC, SSC, TNPSC, Railway, Banking), and weekly Sunday digital magazine series.",
   "requestFramePermissions": [],
   "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
 }

@@ -2,13 +2,17 @@ import React, { useEffect, useState, useRef } from 'react';
 import { useParams, Link, useNavigate } from 'react-router-dom';
 import ReactMarkdown from 'react-markdown';
 import { motion } from 'motion/react';
-import { ArrowLeft, Calendar, BookOpen, Share2, Copy, Send, Twitter, Facebook, Edit2, Save, X as CloseIcon, Trash2, ShoppingBag, ExternalLink, ShieldCheck, Plus, BookCheck } from 'lucide-react';
+import { ArrowLeft, Calendar, BookOpen, Share2, Copy, Send, Twitter, Facebook, Edit2, Save, X as CloseIcon, Trash2, ShoppingBag, ExternalLink, ShieldCheck, Plus, BookCheck, Bookmark, Sparkles, Image, Volume2, Award } from 'lucide-react';
 import { Helmet } from 'react-helmet-async';
 import { factService } from '../services/factService';
 import { Fact, AffiliateProduct } from '../types';
 import { cn } from '../lib/utils';
 import { INITIAL_FACTS } from '../seed';
 import { useAuth } from '../contexts/AuthContext';
+import { AudioNarrationPlayer } from '../components/AudioNarrationPlayer';
+import { ShareCardModal } from '../components/ShareCardModal';
+import { SaveToNotebookModal } from '../components/SaveToNotebookModal';
+import { notebookService } from '../services/notebookService';
 
 const DEFAULT_CATEGORY_BOOKS: Record<string, AffiliateProduct[]> = {
   history: [
@@ -199,6 +203,9 @@ export const Article = () => {
   const [isEditing, setIsEditing] = useState(false);
   const [editData, setEditData] = useState<Partial<Fact>>({});
   const [isDeletingConfirm, setIsDeletingConfirm] = useState(false);
+  const [showShareCardModal, setShowShareCardModal] = useState(false);
+  const [showSaveNotebookModal, setShowSaveNotebookModal] = useState(false);
+  const [showTelegramCapsuleToast, setShowTelegramCapsuleToast] = useState(false);
   const [showProductFormInEdit, setShowProductFormInEdit] = useState(false);
   const [newProductInEdit, setNewProductInEdit] = useState<AffiliateProduct>({
     title: '',
@@ -642,6 +649,71 @@ export const Article = () => {
               <span className="flex items-center gap-2"><BookOpen size={16} /> 5 min read</span>
               <span>FActHub Verified</span>
             </div>
+
+            {/* 🎓 Exam Relevance & PYQ Tagger Strip */}
+            {fact.examRelevance && (
+              <div className="p-4 bg-gold/10 border border-gold/25 rounded-2xl flex items-start gap-3 text-xs not-prose">
+                <Award size={18} className="text-gold flex-shrink-0 mt-0.5" />
+                <div>
+                  <div className="font-bold text-ink flex items-center gap-1.5 uppercase tracking-wider text-[10px]">
+                    <span>Target Competitive Exams & PYQs:</span>
+                  </div>
+                  <p className="text-ink2 mt-0.5 leading-relaxed font-medium">
+                    {fact.examRelevance}
+                  </p>
+                </div>
+              </div>
+            )}
+
+            {/* 🛠️ Student Toolkit Action Bar */}
+            <div className="flex flex-wrap items-center gap-2.5 pt-2 pb-2 not-prose">
+              <button
+                onClick={() => setShowSaveNotebookModal(true)}
+                className="flex items-center gap-1.5 px-3.5 py-2 rounded-2xl bg-paper2 hover:bg-gold/15 text-ink font-bold text-xs border border-black/10 transition-all shadow-xs"
+              >
+                <Bookmark size={14} className="text-gold" />
+                <span>Save to Notebook</span>
+              </button>
+
+              <button
+                onClick={() => setShowShareCardModal(true)}
+                className="flex items-center gap-1.5 px-3.5 py-2 rounded-2xl bg-paper2 hover:bg-paper3 text-ink font-bold text-xs border border-black/10 transition-all shadow-xs"
+              >
+                <Image size={14} className="text-blue-600" />
+                <span>Generate Social Card</span>
+              </button>
+
+              <button
+                onClick={() => {
+                  const capsuleText = `💡 *FACTHUB STUDY CAPSULE*\n\n📌 *${fact.title}*\n🗓️ Year: ${fact.year || 'Milestone'} | ${fact.cat.toUpperCase()}\n\n📖 *Key Takeaways:*\n${fact.excerpt}\n\n🎯 *Exam Focus:* ${fact.examRelevance || 'General Awareness'}\n\n🔗 Read verified story: https://facthub.app/article/${fact.id}`;
+                  if (navigator.clipboard) {
+                    navigator.clipboard.writeText(capsuleText);
+                    setShowTelegramCapsuleToast(true);
+                    setTimeout(() => setShowTelegramCapsuleToast(false), 2500);
+                  }
+                }}
+                className="flex items-center gap-1.5 px-3.5 py-2 rounded-2xl bg-paper2 hover:bg-paper3 text-ink font-bold text-xs border border-black/10 transition-all shadow-xs"
+              >
+                <Send size={14} className="text-emerald-600" />
+                <span>{showTelegramCapsuleToast ? 'Capsule Copied!' : 'Copy Study Capsule'}</span>
+              </button>
+
+              <Link
+                to="/daily-streak"
+                className="flex items-center gap-1.5 px-3.5 py-2 rounded-2xl bg-ink hover:bg-black text-paper font-bold text-xs transition-all shadow-xs"
+              >
+                <Sparkles size={14} className="text-gold" />
+                <span>Practice Daily Streak Quiz</span>
+              </Link>
+            </div>
+
+            {/* 🎧 High Quality Web Speech Audio Narration Player */}
+            <AudioNarrationPlayer
+              title={fact.title}
+              content={fact.full || fact.excerpt}
+              excerpt={fact.excerpt}
+              category={fact.cat}
+            />
 
             {fact.imageUrl ? (
               <div className="space-y-2">
@@ -1143,6 +1215,24 @@ export const Article = () => {
           </div>
         </aside>
       </div>
+
+      {/* 🖼️ Social Media Share Card Generator Modal */}
+      <ShareCardModal
+        isOpen={showShareCardModal}
+        onClose={() => setShowShareCardModal(false)}
+        title={fact.title}
+        year={fact.year}
+        category={fact.cat}
+        excerpt={fact.excerpt || fact.full.substring(0, 160)}
+        emoji={fact.emoji}
+      />
+
+      {/* 📓 Student Revision Notebook Modal */}
+      <SaveToNotebookModal
+        isOpen={showSaveNotebookModal}
+        onClose={() => setShowSaveNotebookModal(false)}
+        fact={fact}
+      />
     </div>
   );
 };

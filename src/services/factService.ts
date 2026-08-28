@@ -16,7 +16,7 @@ import {
   getDoc
 } from "firebase/firestore";
 import { db, auth } from "../lib/firebase";
-import { Fact, Birthday, QuizQuestion, Subscriber, ContactMessage } from "../types";
+import { Fact, Birthday, QuizQuestion, Subscriber, ContactMessage, AIDraft } from "../types";
 
 enum OperationType {
   CREATE = 'create',
@@ -322,6 +322,66 @@ export const factService = {
       });
     } catch (error) {
       handleFirestoreError(error, OperationType.CREATE, path);
+    }
+  },
+
+  async getAIDrafts() {
+    const path = "ai_drafts";
+    try {
+      const q = query(collection(db, path), orderBy("createdAt", "desc"), limit(50));
+      const snapshot = await getDocs(q);
+      return snapshot.docs.map(doc => {
+        const data = doc.data();
+        return {
+          id: doc.id,
+          ...data,
+          createdAt: data.createdAt?.toDate ? data.createdAt.toDate().toISOString() : (data.createdAt || new Date().toISOString())
+        } as AIDraft;
+      });
+    } catch (error) {
+      console.warn("Could not fetch AI drafts from firestore, returning empty list", error);
+      return [];
+    }
+  },
+
+  async createAIDraft(draft: Partial<AIDraft>) {
+    const path = "ai_drafts";
+    try {
+      const id = draft.id || `draft-${Date.now()}`;
+      const docRef = doc(db, path, id);
+      await setDoc(docRef, {
+        ...draft,
+        id,
+        status: draft.status || 'pending',
+        createdAt: serverTimestamp(),
+        updatedAt: serverTimestamp()
+      });
+      return id;
+    } catch (error) {
+      handleFirestoreError(error, OperationType.CREATE, path);
+    }
+  },
+
+  async updateAIDraft(id: string, updates: Partial<AIDraft>) {
+    const path = `ai_drafts/${id}`;
+    try {
+      const docRef = doc(db, "ai_drafts", id);
+      await updateDoc(docRef, {
+        ...updates,
+        updatedAt: serverTimestamp()
+      });
+    } catch (error) {
+      handleFirestoreError(error, OperationType.UPDATE, path);
+    }
+  },
+
+  async deleteAIDraft(id: string) {
+    const path = `ai_drafts/${id}`;
+    try {
+      const docRef = doc(db, "ai_drafts", id);
+      await deleteDoc(docRef);
+    } catch (error) {
+      handleFirestoreError(error, OperationType.DELETE, path);
     }
   },
 

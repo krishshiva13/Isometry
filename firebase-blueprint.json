@@ -87,9 +87,36 @@
         "createdAt": { "type": "string", "format": "date-time" }
       },
       "required": ["uid"]
+    },
+    "AIDraft": {
+      "title": "AIDraft",
+      "description": "AI-generated educational drafts for admin review.",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "title": { "type": "string" },
+        "cat": { "type": "string" },
+        "emoji": { "type": "string" },
+        "year": { "type": "number" },
+        "excerpt": { "type": "string" },
+        "full": { "type": "string" },
+        "sourceTrend": { "type": "string" },
+        "verificationStatus": { "type": "string" },
+        "trustedSources": { "type": "array", "items": { "type": "string" } },
+        "factCheckSummary": { "type": "string" },
+        "examRelevance": { "type": "string" },
+        "status": { "type": "string" },
+        "imageUrl": { "type": "string" },
+        "createdAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["title", "cat", "excerpt", "full", "status"]
     }
   },
   "firestore": {
+    "/ai_drafts/{draftId}": {
+      "schema": "AIDraft",
+      "description": "AI generated educational content drafts for admin approval."
+    },
     "/facts/{factId}": {
       "schema": "Fact",
       "description": "Collection of interesting facts."

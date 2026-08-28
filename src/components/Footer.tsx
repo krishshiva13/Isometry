@@ -27,13 +27,16 @@ export const Footer = () => {
         </div>
 
         <div className="space-y-6">
-          <h4 className="text-white font-bold text-xs uppercase tracking-widest">Explore</h4>
+          <h4 className="text-white font-bold text-xs uppercase tracking-widest">Study Tools & GK Hub</h4>
           <ul className="space-y-3 text-sm">
-            <li><Link to="/category/history" className="hover:text-gold-l transition-colors">This Day in History</Link></li>
-            <li><Link to="/birthdays" className="hover:text-gold-l transition-colors">Today's Birthdays</Link></li>
-            <li><Link to="/quiz" className="hover:text-gold-l transition-colors">Daily Quiz</Link></li>
-            <li><Link to="/" className="hover:text-gold-l transition-colors">Fact of the Day</Link></li>
-            <li><Link to="/category/science" className="hover:text-gold-l transition-colors">Random Fact</Link></li>
+            <li><Link to="/daily-streak" className="hover:text-gold-l text-gold font-bold transition-colors">🔥 Daily 5-Q Streak Challenge</Link></li>
+            <li><Link to="/notebook" className="hover:text-gold-l transition-colors">📓 Student Study Notebook</Link></li>
+            <li><Link to="/flashcards" className="hover:text-gold-l transition-colors">🧠 Smart Flashcards (Spaced Repetition)</Link></li>
+            <li><Link to="/calendar" className="hover:text-gold-l transition-colors">📅 "On This Exact Date" Explorer</Link></li>
+            <li><Link to="/timeline" className="hover:text-gold-l transition-colors">⏳ Chronological History Timelines</Link></li>
+            <li><Link to="/compare" className="hover:text-gold-l transition-colors">⚖️ Topic Comparison Matrix</Link></li>
+            <li><Link to="/daily-study-sheet" className="hover:text-gold-l transition-colors">📄 1-Click PDF Study Sheet</Link></li>
+            <li><Link to="/submit-fact" className="hover:text-gold-l transition-colors">✍️ Submit a Verified Fact</Link></li>
           </ul>
         </div>
 

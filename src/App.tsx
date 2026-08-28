@@ -16,6 +16,17 @@ const Contact = lazy(() => import('./pages/StaticPages').then(m => ({ default: m
 const Privacy = lazy(() => import('./pages/Privacy').then(m => ({ default: m.Privacy })));
 const Advertise = lazy(() => import('./pages/Advertise').then(m => ({ default: m.Advertise })));
 const Sitemap = lazy(() => import('./pages/Sitemap').then(m => ({ default: m.Sitemap })));
+const ExamPrep = lazy(() => import('./pages/ExamPrep').then(m => ({ default: m.ExamPrep })));
+const Magazine = lazy(() => import('./pages/Magazine').then(m => ({ default: m.Magazine })));
+const AdminAIPanel = lazy(() => import('./pages/AdminAIPanel').then(m => ({ default: m.AdminAIPanel })));
+const DailyStreakChallenge = lazy(() => import('./pages/DailyStreakChallenge').then(m => ({ default: m.DailyStreakChallenge })));
+const StudentNotebook = lazy(() => import('./pages/StudentNotebook').then(m => ({ default: m.StudentNotebook })));
+const Flashcards = lazy(() => import('./pages/Flashcards').then(m => ({ default: m.Flashcards })));
+const CalendarExplorer = lazy(() => import('./pages/CalendarExplorer').then(m => ({ default: m.CalendarExplorer })));
+const InteractiveTimeline = lazy(() => import('./pages/InteractiveTimeline').then(m => ({ default: m.InteractiveTimeline })));
+const TopicComparison = lazy(() => import('./pages/TopicComparison').then(m => ({ default: m.TopicComparison })));
+const DailyStudySheet = lazy(() => import('./pages/DailyStudySheet').then(m => ({ default: m.DailyStudySheet })));
+const CommunitySubmit = lazy(() => import('./pages/CommunitySubmit').then(m => ({ default: m.CommunitySubmit })));
 
 const LoadingSpinner = () => (
   <div className="min-h-[60vh] flex items-center justify-center">
@@ -44,6 +55,17 @@ export default function App() {
                   <Route path="/privacy" element={<Privacy />} />
                   <Route path="/advertise" element={<Advertise />} />
                   <Route path="/sitemap" element={<Sitemap />} />
+                  <Route path="/exam-prep" element={<ExamPrep />} />
+                  <Route path="/magazine" element={<Magazine />} />
+                  <Route path="/admin/ai-creator" element={<AdminAIPanel />} />
+                  <Route path="/daily-streak" element={<DailyStreakChallenge />} />
+                  <Route path="/notebook" element={<StudentNotebook />} />
+                  <Route path="/flashcards" element={<Flashcards />} />
+                  <Route path="/calendar" element={<CalendarExplorer />} />
+                  <Route path="/timeline" element={<InteractiveTimeline />} />
+                  <Route path="/compare" element={<TopicComparison />} />
+                  <Route path="/daily-study-sheet" element={<DailyStudySheet />} />
+                  <Route path="/submit-fact" element={<CommunitySubmit />} />
                 </Routes>
               </Suspense>
             </main>

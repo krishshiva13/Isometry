@@ -127,6 +127,10 @@ service cloud.firestore {
     //  RULES
     // ═══════════════════════════════════════════
 
+    match /ai_drafts/{draftId} {
+      allow read, write: if isAdmin();
+    }
+
     match /facts/{factId} {
       allow read: if true;
       allow create: if isAdmin() && isValidFact(incoming());
