@@ -20,6 +20,7 @@ service cloud.firestore {
     function isAdmin() {
       return isSignedIn() && (
         request.auth.token.email == 'krish02shiva@gmail.com' ||
+        exists(/databases/$(database)/documents/admins/$(request.auth.uid)) ||
         (exists(/databases/$(database)/documents/users/$(request.auth.uid)) &&
          get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role == 'admin')
       );
@@ -112,15 +113,13 @@ service cloud.firestore {
     }
 
     function isValidUserProfile(data) {
-      let requiredFields = ['uid', 'name', 'email', 'phoneNumber', 'photoURL', 'role', 'createdAt'];
-      return data.keys().hasAll(requiredFields)
-        && data.keys().size() == requiredFields.size()
-        && data.uid == request.auth.uid
-        && (data.email == null || (data.email is string && data.email.matches('^.+@.+\\..+$')))
-        && (data.phoneNumber == null || data.phoneNumber is string)
-        && (data.role == 'admin' || data.role == 'user')
-        && (data.role == 'admin' ? (request.auth.token.email == 'krish02shiva@gmail.com') : true)
-        && data.createdAt == (resource == null ? request.time : resource.data.createdAt);
+      return data.uid == request.auth.uid
+        && (!('name' in data) || data.name is string)
+        && (!('email' in data) || data.email == null || (data.email is string && data.email.matches('^.+@.+\\..+$')))
+        && (!('phoneNumber' in data) || data.phoneNumber == null || data.phoneNumber is string)
+        && (!('photoURL' in data) || data.photoURL == null || data.photoURL is string)
+        && (!('role' in data) || data.role == 'admin' || data.role == 'user')
+        && (('role' in data && data.role == 'admin') ? (request.auth.token.email == 'krish02shiva@gmail.com') : true);
     }
 
     // ═══════════════════════════════════════════

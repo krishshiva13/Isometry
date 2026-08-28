@@ -28,6 +28,7 @@ import {
 import { AIDraft, Category, Fact, AIScannerStatus, AffiliateProduct } from '../../types';
 import { factService } from '../../services/factService';
 import { useAuth } from '../../contexts/AuthContext';
+import { auth } from '../../lib/firebase';
 import ReactMarkdown from 'react-markdown';
 
 const COLOR_OPTIONS = [
@@ -111,7 +112,12 @@ export const AIContentCreatorModal: React.FC<AIContentCreatorModalProps> = ({ is
 
   const fetchScannerStatus = async () => {
     try {
-      const res = await fetch('/api/admin/ai/status');
+      const token = await auth.currentUser?.getIdToken();
+      const res = await fetch('/api/admin/ai/status', {
+        headers: {
+          ...(token ? { 'Authorization': `Bearer ${token}` } : {})
+        }
+      });
       if (res.ok) {
         const data = await res.json();
         setScannerStatus(data);
@@ -125,9 +131,13 @@ export const AIContentCreatorModal: React.FC<AIContentCreatorModalProps> = ({ is
     setScanning(true);
     setNotification(null);
     try {
+      const token = await auth.currentUser?.getIdToken();
       const res = await fetch('/api/admin/ai/scan', {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' }
+        headers: { 
+          'Content-Type': 'application/json',
+          ...(token ? { 'Authorization': `Bearer ${token}` } : {})
+        }
       });
       const data = await res.json();
       if (data.success) {
@@ -159,9 +169,13 @@ export const AIContentCreatorModal: React.FC<AIContentCreatorModalProps> = ({ is
     setGenerating(true);
     setNotification(null);
     try {
+      const token = await auth.currentUser?.getIdToken();
       const res = await fetch('/api/admin/ai/generate-single', {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers: { 
+          'Content-Type': 'application/json',
+          ...(token ? { 'Authorization': `Bearer ${token}` } : {})
+        },
         body: JSON.stringify({
           topic: customTopic,
           category: customCategory,
@@ -354,7 +368,7 @@ export const AIContentCreatorModal: React.FC<AIContentCreatorModalProps> = ({ is
           <AlertCircle className="w-12 h-12 text-rose-500 mx-auto" />
           <h2 className="text-xl font-bold text-ink">Access Restricted</h2>
           <p className="text-sm text-ink3">
-            The AI Content Creator is strictly restricted to administrator <strong className="text-ink">krish02shiva@gmail.com</strong>.
+            The AI Content Creator is strictly restricted to verified FactHub administrators.
           </p>
           <button 
             onClick={onClose}

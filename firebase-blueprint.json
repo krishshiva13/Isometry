@@ -88,6 +88,16 @@
       },
       "required": ["uid"]
     },
+    "AdminRecord": {
+      "title": "AdminRecord",
+      "description": "Server-provisioned administrator authorization marker.",
+      "type": "object",
+      "properties": {
+        "uid": { "type": "string" },
+        "assignedAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["uid"]
+    },
     "AIDraft": {
       "title": "AIDraft",
       "description": "AI-generated educational drafts for admin review.",
@@ -140,6 +150,10 @@
     "/users/{uid}": {
       "schema": "UserProfile",
       "description": "User profile documents."
+    },
+    "/admins/{adminId}": {
+      "schema": "AdminRecord",
+      "description": "Admin authorization marker documents."
     }
   }
 }

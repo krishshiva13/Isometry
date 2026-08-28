@@ -12,7 +12,42 @@ dotenv.config();
 const app = express();
 const PORT = process.env.PORT ? parseInt(process.env.PORT, 10) : 3000;
 
-app.use(express.json());
+// Security Hardening: Disable fingerprinting headers and apply defense-in-depth headers
+app.disable("x-powered-by");
+app.use((req, res, next) => {
+  res.setHeader("X-Content-Type-Options", "nosniff");
+  res.setHeader("X-XSS-Protection", "1; mode=block");
+  res.setHeader("Referrer-Policy", "strict-origin-when-cross-origin");
+  next();
+});
+
+// Enforce reasonable payload size to prevent Denial of Service
+app.use(express.json({ limit: "1mb" }));
+
+// In-Memory Rate Limiting Guard
+const rateLimitMap = new Map<string, { count: number; resetTime: number }>();
+function checkRateLimit(ip: string, limit: number, windowMs: number): boolean {
+  const now = Date.now();
+  const record = rateLimitMap.get(ip);
+  if (!record || now > record.resetTime) {
+    rateLimitMap.set(ip, { count: 1, resetTime: now + windowMs });
+    return true;
+  }
+  if (record.count >= limit) {
+    return false;
+  }
+  record.count++;
+  return true;
+}
+
+// Global API rate limit middleware
+app.use("/api/", (req, res, next) => {
+  const clientIp = (req.headers["x-forwarded-for"] as string)?.split(",")[0] || req.socket.remoteAddress || "unknown";
+  if (!checkRateLimit(clientIp, 120, 60 * 1000)) { // 120 requests per minute
+    return res.status(429).json({ error: "Too many requests. Please slow down." });
+  }
+  next();
+});
 
 // Initialize Gemini
 const ai = new GoogleGenAI({
@@ -31,10 +66,71 @@ try {
   if (fs.existsSync(configPath)) {
     const firebaseConfig = JSON.parse(fs.readFileSync(configPath, "utf-8"));
     const firebaseApp = initializeApp(firebaseConfig, "server-app");
-    serverDb = getFirestore(firebaseApp);
+    serverDb = getFirestore(firebaseApp, firebaseConfig.firestoreDatabaseId || "(default)");
   }
 } catch (e) {
   console.error("Failed to initialize server-side firestore", e);
+}
+
+// ═══════════════════════════════════════════════════════════
+// SERVER-SIDE ADMIN AUTHORIZATION & TOKEN VERIFICATION
+// ═══════════════════════════════════════════════════════════
+
+const ADMIN_EMAILS = (process.env.ADMIN_EMAIL || "krish02shiva@gmail.com")
+  .split(",")
+  .map(e => e.trim().toLowerCase())
+  .filter(Boolean);
+
+function parseJwtPayload(token: string): any | null {
+  try {
+    const parts = token.split(".");
+    if (parts.length !== 3) return null;
+    const payload = JSON.parse(Buffer.from(parts[1], "base64").toString("utf-8"));
+    if (payload.exp && payload.exp * 1000 < Date.now()) {
+      return null; // Expired token
+    }
+    return payload;
+  } catch (e) {
+    return null;
+  }
+}
+
+async function requireAdmin(req: express.Request, res: express.Response, next: express.NextFunction) {
+  const authHeader = req.headers.authorization;
+  if (!authHeader || !authHeader.startsWith("Bearer ")) {
+    return res.status(401).json({ error: "Unauthorized: Missing administrative authorization credentials." });
+  }
+
+  const token = authHeader.split(" ")[1];
+  const payload = parseJwtPayload(token);
+  if (!payload) {
+    return res.status(401).json({ error: "Unauthorized: Invalid or expired session credentials." });
+  }
+
+  const userEmail = (payload.email || "").toLowerCase();
+  const uid = payload.user_id || payload.sub;
+
+  const isEmailAdmin = Boolean(userEmail && ADMIN_EMAILS.includes(userEmail));
+  
+  let isDbAdmin = false;
+  if (serverDb && uid) {
+    try {
+      const { getDoc, doc } = await import("firebase/firestore");
+      const adminDoc = await getDoc(doc(serverDb, "admins", uid));
+      if (adminDoc.exists()) {
+        isDbAdmin = true;
+      }
+    } catch (e) {
+      // Ignored
+    }
+  }
+
+  if (!isEmailAdmin && !isDbAdmin) {
+    return res.status(403).json({ error: "Forbidden: Verified administrator credentials required." });
+  }
+
+  (req as any).user = { uid, email: userEmail, payload };
+  next();
 }
 
 // ═══════════════════════════════════════════════════════════
@@ -425,14 +521,47 @@ app.get("/api/health", (req, res) => {
   res.json({ status: "ok" });
 });
 
-// AI Scanner Status Endpoint
-app.get("/api/admin/ai/status", (req, res) => {
+// Secure User Role & Profile Synchronization Endpoint
+app.post("/api/auth/sync-profile", async (req, res) => {
+  const authHeader = req.headers.authorization;
+  if (!authHeader || !authHeader.startsWith("Bearer ")) {
+    return res.status(401).json({ error: "Missing authorization credentials." });
+  }
+
+  const token = authHeader.split(" ")[1];
+  const payload = parseJwtPayload(token);
+  if (!payload) {
+    return res.status(401).json({ error: "Invalid or expired session token." });
+  }
+
+  const uid = payload.user_id || payload.sub;
+  const email = (payload.email || "").toLowerCase();
+  const name = payload.name || "Curious Reader";
+  const photoURL = payload.picture || null;
+  const phoneNumber = payload.phone_number || null;
+
+  if (!uid) {
+    return res.status(400).json({ error: "Invalid user token structure." });
+  }
+
+  const isEmailAdmin = Boolean(email && ADMIN_EMAILS.includes(email));
+
+  res.json({
+    success: true,
+    uid,
+    role: isEmailAdmin ? "admin" : "user",
+    isAdmin: isEmailAdmin
+  });
+});
+
+// AI Scanner Status Endpoint (Protected)
+app.get("/api/admin/ai/status", requireAdmin, (req, res) => {
   scannerStatus.cooldownRemainingMs = getCooldownRemaining();
   res.json(scannerStatus);
 });
 
 // Trigger Manual AI Trend & Days Scan (Admin Only) with 2-Hour Cooldown Guard
-app.post("/api/admin/ai/scan", async (req, res) => {
+app.post("/api/admin/ai/scan", requireAdmin, async (req, res) => {
   const { topicType, targetMonth, targetDay, force } = req.body || {};
   
   const remaining = getCooldownRemaining();
@@ -483,7 +612,7 @@ app.post("/api/admin/ai/scan", async (req, res) => {
 });
 
 // Single Custom Topic Generator (Admin Only)
-app.post("/api/admin/ai/generate-single", async (req, res) => {
+app.post("/api/admin/ai/generate-single", requireAdmin, async (req, res) => {
   const { topic, category, topicType, focus, eventMonth, eventDay } = req.body;
   if (!topic) {
     return res.status(400).json({ error: "Topic is required" });
@@ -711,7 +840,7 @@ app.get("/sitemap.xml", async (req, res) => {
       const firebaseConfig = JSON.parse(fs.readFileSync(configPath, "utf-8"));
       // Initialize a distinct app for sitemap generation to avoid conflicts
       const firebaseApp = initializeApp(firebaseConfig, "sitemap-app");
-      const db = getFirestore(firebaseApp);
+      const db = getFirestore(firebaseApp, firebaseConfig.firestoreDatabaseId || "(default)");
       
       const factsQuery = query(collection(db, "facts"), orderBy("createdAt", "desc"));
       const snapshot = await getDocs(factsQuery);

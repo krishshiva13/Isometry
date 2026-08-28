@@ -30,6 +30,7 @@ import {
 import { AIDraft, Category, Fact, AIScannerStatus, QuizMCQ, BilingualTerm } from '../types';
 import { factService } from '../services/factService';
 import { useAuth } from '../contexts/AuthContext';
+import { auth } from '../lib/firebase';
 import ReactMarkdown from 'react-markdown';
 
 const COLOR_OPTIONS = [
@@ -145,7 +146,12 @@ export const AdminAIPanel = () => {
 
   const fetchScannerStatus = async () => {
     try {
-      const res = await fetch('/api/admin/ai/status');
+      const token = await auth.currentUser?.getIdToken();
+      const res = await fetch('/api/admin/ai/status', {
+        headers: {
+          ...(token ? { 'Authorization': `Bearer ${token}` } : {})
+        }
+      });
       if (res.ok) {
         const data = await res.json();
         setScannerStatus(data);
@@ -184,9 +190,13 @@ export const AdminAIPanel = () => {
     setScanning(true);
     setNotification(null);
     try {
+      const token = await auth.currentUser?.getIdToken();
       const res = await fetch('/api/admin/ai/scan', {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers: { 
+          'Content-Type': 'application/json',
+          ...(token ? { 'Authorization': `Bearer ${token}` } : {})
+        },
         body: JSON.stringify({
           topicType: scanTopicType,
           targetMonth: selectedMonth,
@@ -240,9 +250,13 @@ export const AdminAIPanel = () => {
     setGenerating(true);
     setNotification(null);
     try {
+      const token = await auth.currentUser?.getIdToken();
       const res = await fetch('/api/admin/ai/generate-single', {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers: { 
+          'Content-Type': 'application/json',
+          ...(token ? { 'Authorization': `Bearer ${token}` } : {})
+        },
         body: JSON.stringify({
           topic: customTopic,
           category: customCategory,
@@ -443,7 +457,7 @@ export const AdminAIPanel = () => {
         <AlertCircle className="w-12 h-12 text-rose-500 mx-auto" />
         <h2 className="text-2xl font-serif font-black text-ink">Access Restricted</h2>
         <p className="text-sm text-ink3">
-          This AI Content Creator suite is strictly restricted to administrator <strong className="text-ink">krish02shiva@gmail.com</strong>.
+          This AI Content Creator suite is strictly restricted to verified FactHub administrators.
         </p>
         <Link to="/" className="inline-block px-6 py-2.5 bg-ink text-white font-bold rounded-xl text-sm hover:bg-gold hover:text-ink transition-all">
           Return to FactHub Home

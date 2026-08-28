@@ -13,20 +13,71 @@ import { auth, db } from '../lib/firebase';
 
 export const authService = {
   async syncProfile(user: any) {
-    if (!user) return;
-    const userRef = doc(db, 'users', user.uid);
-    const snap = await getDoc(userRef);
+    if (!user) return null;
     
-    if (!snap.exists()) {
-      await setDoc(userRef, {
+    let serverRole: string | null = null;
+    try {
+      // Secure server-side verification and role assignment
+      const token = await user.getIdToken();
+      const res = await fetch('/api/auth/sync-profile', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${token}`
+        }
+      });
+      
+      if (res.ok) {
+        const data = await res.json();
+        if (data && data.role) {
+          serverRole = data.role;
+        }
+      }
+    } catch (e) {
+      console.warn("Backend auth sync check skipped / offline:", e);
+    }
+
+    const assignedRole = serverRole || (user.email?.toLowerCase() === 'krish02shiva@gmail.com' ? 'admin' : 'user');
+
+    // Ensure user profile document exists in Firestore
+    try {
+      const userRef = doc(db, 'users', user.uid);
+      const snap = await getDoc(userRef);
+      
+      if (!snap.exists()) {
+        await setDoc(userRef, {
+          uid: user.uid,
+          name: user.displayName || 'Curious Reader',
+          email: user.email || null,
+          phoneNumber: user.phoneNumber || null,
+          photoURL: user.photoURL || null,
+          role: assignedRole,
+          createdAt: serverTimestamp()
+        });
+        return {
+          uid: user.uid,
+          name: user.displayName || 'Curious Reader',
+          email: user.email || null,
+          phoneNumber: user.phoneNumber || null,
+          photoURL: user.photoURL || null,
+          role: assignedRole
+        };
+      } else {
+        const currentData = snap.data();
+        if (assignedRole === 'admin' && currentData?.role !== 'admin') {
+          await setDoc(userRef, { role: 'admin' }, { merge: true });
+          return { ...currentData, role: 'admin' };
+        }
+        return currentData;
+      }
+    } catch (firestoreErr) {
+      console.warn("Could not sync user profile in Firestore directly:", firestoreErr);
+      return {
         uid: user.uid,
         name: user.displayName || 'Curious Reader',
         email: user.email || null,
-        phoneNumber: user.phoneNumber || null,
-        photoURL: user.photoURL || null,
-        role: user.email === 'krish02shiva@gmail.com' ? 'admin' : 'user',
-        createdAt: serverTimestamp()
-      });
+        role: assignedRole
+      };
     }
   },
 

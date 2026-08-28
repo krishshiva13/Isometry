@@ -2,6 +2,7 @@ import React, { createContext, useContext, useEffect, useState } from 'react';
 import { User, onAuthStateChanged } from 'firebase/auth';
 import { auth, db } from '../lib/firebase';
 import { doc, getDoc } from 'firebase/firestore';
+import { authService } from '../services/authService';
 
 interface AuthContextType {
   user: User | null;
@@ -28,10 +29,16 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     const unsubscribe = onAuthStateChanged(auth, async (u) => {
       setUser(u);
       if (u) {
-        const userRef = doc(db, 'users', u.uid);
-        const snap = await getDoc(userRef);
-        if (snap.exists()) {
-          setProfile(snap.data());
+        // Securely sync and fetch profile from backend & Firestore
+        const synced = await authService.syncProfile(u);
+        if (synced) {
+          setProfile(synced);
+        } else {
+          const userRef = doc(db, 'users', u.uid);
+          const snap = await getDoc(userRef);
+          if (snap.exists()) {
+            setProfile(snap.data());
+          }
         }
       } else {
         setProfile(null);
@@ -42,7 +49,11 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     return () => unsubscribe();
   }, []);
 
-  const isAdmin = user?.email === 'krish02shiva@gmail.com' || profile?.role === 'admin';
+  // Admin status derived from user email and validated profile role
+  const isAdmin = Boolean(
+    (user?.email && user.email.toLowerCase() === 'krish02shiva@gmail.com') ||
+    profile?.role === 'admin'
+  );
 
   return (
     <AuthContext.Provider value={{ user, profile, loading, isAdmin }}>

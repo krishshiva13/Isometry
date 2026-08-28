@@ -467,54 +467,37 @@ export const Quiz = () => {
           )}
         </div>
 
-        {/* ADMIN QUIZ EDITOR PANEL */}
-        <div className="bg-paper2 border border-black/10 rounded-[32px] p-6 sm:p-10 space-y-6">
-          {!isAdmin ? (
-            <div className="text-center space-y-4 py-4">
-              <div className="flex items-center justify-center gap-2 text-indigo mb-2">
-                <ShieldCheck size={24} />
-                <h2 className="text-xl font-serif font-bold text-ink">Admin Quiz Writer</h2>
+        {/* ADMIN QUIZ EDITOR PANEL - Only visible to verified administrators */}
+        {isAdmin && (
+          <div className="bg-paper2 border border-black/10 rounded-[32px] p-6 sm:p-10 space-y-6">
+            {/* Tab Selector */}
+            <div className="flex items-center justify-between border-b border-black/10 pb-4 flex-wrap gap-4">
+              <div className="flex items-center gap-2 text-indigo">
+                 <Edit2 size={22} />
+                 <h2 className="text-xl font-serif font-bold text-ink">Quiz Admin Manager</h2>
               </div>
-              <p className="text-sm text-ink3">
-                Sign in with an administrator account to write manual questions, edit options, or generate daily quizzes.
-              </p>
-              <button 
-                onClick={signIn}
-                className="bg-indigo text-white px-8 py-3 rounded-full font-bold flex items-center justify-center gap-2 hover:bg-indigo/90 mx-auto transition-all shadow-md"
-              >
-                <LogIn size={18} /> Admin Sign In
-              </button>
-            </div>
-          ) : (
-            <>
-              {/* Tab Selector */}
-              <div className="flex items-center justify-between border-b border-black/10 pb-4 flex-wrap gap-4">
-                <div className="flex items-center gap-2 text-indigo">
-                   <Edit2 size={22} />
-                   <h2 className="text-xl font-serif font-bold text-ink">Quiz Admin Manager</h2>
-                </div>
 
-                <div className="flex bg-white p-1 rounded-xl border border-black/10 font-mono text-xs">
-                  <button
-                    onClick={() => setAdminTab('manual')}
-                    className={cn("px-4 py-2 rounded-lg font-bold transition-all flex items-center gap-1.5", {
-                      "bg-indigo text-white shadow": adminTab === 'manual',
-                      "text-ink3 hover:text-ink": adminTab !== 'manual'
-                    })}
-                  >
-                    <FileText size={14} /> Write Quiz Manually
-                  </button>
-                  <button
-                    onClick={() => setAdminTab('ai')}
-                    className={cn("px-4 py-2 rounded-lg font-bold transition-all flex items-center gap-1.5", {
-                      "bg-indigo text-white shadow": adminTab === 'ai',
-                      "text-ink3 hover:text-ink": adminTab !== 'ai'
-                    })}
-                  >
-                    <Sparkles size={14} /> AI Generator
-                  </button>
-                </div>
+              <div className="flex bg-white p-1 rounded-xl border border-black/10 font-mono text-xs">
+                <button
+                  onClick={() => setAdminTab('manual')}
+                  className={cn("px-4 py-2 rounded-lg font-bold transition-all flex items-center gap-1.5", {
+                    "bg-indigo text-white shadow": adminTab === 'manual',
+                    "text-ink3 hover:text-ink": adminTab !== 'manual'
+                  })}
+                >
+                  <FileText size={14} /> Write Quiz Manually
+                </button>
+                <button
+                  onClick={() => setAdminTab('ai')}
+                  className={cn("px-4 py-2 rounded-lg font-bold transition-all flex items-center gap-1.5", {
+                    "bg-indigo text-white shadow": adminTab === 'ai',
+                    "text-ink3 hover:text-ink": adminTab !== 'ai'
+                  })}
+                >
+                  <Sparkles size={14} /> AI Generator
+                </button>
               </div>
+            </div>
 
               {/* MANUAL QUIZ WRITING TAB */}
               {adminTab === 'manual' && (
@@ -794,9 +777,8 @@ export const Quiz = () => {
                   )}
                 </div>
               )}
-            </>
+            </div>
           )}
-        </div>
 
       </div>
     </div>
