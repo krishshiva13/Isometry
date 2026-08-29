@@ -327,10 +327,11 @@ export const factService = {
 
   async getAIDrafts() {
     const path = "ai_drafts";
+    let firestoreDrafts: AIDraft[] = [];
     try {
       const q = query(collection(db, path), orderBy("createdAt", "desc"), limit(50));
       const snapshot = await getDocs(q);
-      return snapshot.docs.map(doc => {
+      firestoreDrafts = snapshot.docs.map(doc => {
         const data = doc.data();
         return {
           id: doc.id,
@@ -339,8 +340,52 @@ export const factService = {
         } as AIDraft;
       });
     } catch (error) {
-      console.warn("Could not fetch AI drafts from firestore, returning empty list", error);
-      return [];
+      console.warn("Could not fetch AI drafts from firestore, will fallback to server store if available", error);
+    }
+
+    // Also fetch server-side memory store drafts so newly scanned items are immediately available
+    try {
+      const token = await auth.currentUser?.getIdToken();
+      const res = await fetch('/api/admin/ai/drafts', {
+        headers: {
+          ...(token ? { 'Authorization': `Bearer ${token}` } : {})
+        }
+      });
+      if (res.ok) {
+        const serverDrafts: AIDraft[] = await res.json();
+        if (Array.isArray(serverDrafts) && serverDrafts.length > 0) {
+          const map = new Map<string, AIDraft>();
+          for (const d of firestoreDrafts) {
+            map.set(d.id, d);
+          }
+          for (const d of serverDrafts) {
+            if (!map.has(d.id)) {
+              map.set(d.id, d);
+              // Auto-persist new server draft to Firestore in background
+              this.createAIDraft(d).catch(() => {});
+            }
+          }
+          return Array.from(map.values()).sort((a, b) => 
+            new Date(b.createdAt || 0).getTime() - new Date(a.createdAt || 0).getTime()
+          );
+        }
+      }
+    } catch (e) {
+      // Ignored fallback
+    }
+
+    return firestoreDrafts;
+  },
+
+  async saveScannedDrafts(drafts: AIDraft[]) {
+    if (!drafts || !Array.isArray(drafts) || drafts.length === 0) return;
+    for (const draft of drafts) {
+      if (!draft.id) continue;
+      try {
+        await this.createAIDraft(draft);
+      } catch (err) {
+        console.warn("Failed to persist scanned draft to firestore:", draft.id, err);
+      }
     }
   },
 
@@ -355,7 +400,7 @@ export const factService = {
         status: draft.status || 'pending',
         createdAt: serverTimestamp(),
         updatedAt: serverTimestamp()
-      });
+      }, { merge: true });
       return id;
     } catch (error) {
       handleFirestoreError(error, OperationType.CREATE, path);
@@ -380,6 +425,14 @@ export const factService = {
     try {
       const docRef = doc(db, "ai_drafts", id);
       await deleteDoc(docRef);
+      // Clean up server-side cache as well
+      const token = await auth.currentUser?.getIdToken();
+      fetch(`/api/admin/ai/drafts/${id}`, {
+        method: 'DELETE',
+        headers: {
+          ...(token ? { 'Authorization': `Bearer ${token}` } : {})
+        }
+      }).catch(() => {});
     } catch (error) {
       handleFirestoreError(error, OperationType.DELETE, path);
     }

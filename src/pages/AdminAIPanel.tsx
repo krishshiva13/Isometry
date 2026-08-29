@@ -25,7 +25,10 @@ import {
   Check,
   Zap,
   Tag,
-  GraduationCap
+  GraduationCap,
+  Search,
+  SlidersHorizontal,
+  Globe
 } from 'lucide-react';
 import { AIDraft, Category, Fact, AIScannerStatus, QuizMCQ, BilingualTerm } from '../types';
 import { factService } from '../services/factService';
@@ -42,6 +45,24 @@ const COLOR_OPTIONS = [
   { name: 'green', label: 'Green', bg: 'bg-emerald-600', text: 'text-emerald-600' },
   { name: 'blue', label: 'Blue', bg: 'bg-blue-600', text: 'text-blue-600' },
   { name: 'slate', label: 'Slate', bg: 'bg-slate-600', text: 'text-slate-600' }
+];
+
+export const GOOGLE_SCAN_KEYWORDS = [
+  { id: "History", label: "History", emoji: "📜", category: "history", desc: "Ancient, Modern & World History, Treaties & Freedom Movement" },
+  { id: "Science", label: "Science", emoji: "🔬", category: "science", desc: "Physics, Chemistry, Biology, Quantum, Astronomy & Natural Sciences" },
+  { id: "Technology", label: "Technology", emoji: "💻", category: "science", desc: "AI, Semiconductors, Computing, Clean Energy & Digital Tech" },
+  { id: "UPSC", label: "UPSC", emoji: "🏛️", category: "history", desc: "Civil Services Prelims & Mains GS Syllabus, Polity, Environment & Economy" },
+  { id: "ISRO", label: "ISRO", emoji: "🚀", category: "science", desc: "Indian Space Missions, Chandrayaan, Gaganyaan, Aditya-L1 & Satellites" },
+  { id: "DRDO", label: "DRDO", emoji: "🛡️", category: "science", desc: "Indigenous Defense Systems, Agni/BrahMos Missiles, Radars & Defense Tech" },
+  { id: "NASA", label: "NASA", emoji: "🌌", category: "science", desc: "Deep Space Exploration, Artemis Moon Mission, Mars Rovers & Telescopes" },
+  { id: "Indian Government", label: "Indian Government", emoji: "🇮🇳", category: "history", desc: "Official PIB Releases, Cabinet Acts, National Schemes & Constitutional Policy" },
+  { id: "SSC", label: "SSC", emoji: "📚", category: "history", desc: "Staff Selection Commission CGL, CHSL, MTS General Awareness & Static GK" },
+  { id: "Railways", label: "Railways", emoji: "🚆", category: "inventions", desc: "Indian Railways Infrastructure, Vande Bharat, Freight Corridors & Rail Tech" },
+  { id: "RRB", label: "RRB", emoji: "🎯", category: "science", desc: "Railway Recruitment Board NTPC, Group D, ALP General Science & Static GK" },
+  { id: "Inventions", label: "Inventions", emoji: "💡", category: "inventions", desc: "Groundbreaking Inventions, Patents, Technological Breakthroughs & Tools" },
+  { id: "Important Days", label: "Important Days", emoji: "📅", category: "history", desc: "National & UN Observance Days, Global Themes & Historical Commemorations" },
+  { id: "Famous Birthdays", label: "Famous Birthdays", emoji: "🎂", category: "birthdays", desc: "Birth Anniversaries of Historic Pioneers, Freedom Fighters & Visionaries" },
+  { id: "Scientists", label: "Scientists", emoji: "👨‍🔬", category: "science", desc: "Nobel Laureates, Great Indian & World Scientists, Discoveries & Legacies" },
 ];
 
 const TOPIC_TYPES = [
@@ -64,11 +85,13 @@ export const AdminAIPanel = () => {
 
   const [drafts, setDrafts] = useState<AIDraft[]>([]);
   const [selectedDraft, setSelectedDraft] = useState<AIDraft | null>(null);
-  const [activeTab, setActiveTab] = useState<'queue' | 'scan_hub' | 'custom_generate' | 'scanner_info'>('queue');
+  const [activeTab, setActiveTab] = useState<'keyword_creator' | 'queue' | 'scan_hub' | 'custom_generate' | 'scanner_info'>('keyword_creator');
   const [filterStatus, setFilterStatus] = useState<string>('all');
   const [filterTopic, setFilterTopic] = useState<string>('all');
+  const [filterKeyword, setFilterKeyword] = useState<string>('all');
   const [loading, setLoading] = useState(false);
   const [scanning, setScanning] = useState(false);
+  const [keywordScanning, setKeywordScanning] = useState(false);
   const [generating, setGenerating] = useState(false);
   const [previewMode, setPreviewMode] = useState(false);
   const [copiedDigest, setCopiedDigest] = useState(false);
@@ -92,6 +115,15 @@ export const AdminAIPanel = () => {
   const [scanTopicType, setScanTopicType] = useState<string>('all_round');
   const [selectedMonth, setSelectedMonth] = useState<number>(() => new Date().getMonth() + 1);
   const [selectedDay, setSelectedDay] = useState<number>(() => new Date().getDate());
+
+  // Keyword AI Creator State (15 Core Google Keywords)
+  const [selectedKeywords, setSelectedKeywords] = useState<string[]>([
+    'UPSC', 'ISRO', 'DRDO', 'Science', 'Technology'
+  ]);
+  const [customKeywordInput, setCustomKeywordInput] = useState('');
+  const [keywordQuery, setKeywordQuery] = useState('');
+  const [keywordTargetExam, setKeywordTargetExam] = useState('UPSC Civil Services GS I/II/III, SSC CGL & Competitive Exams');
+  const [keywordTopicType, setKeywordTopicType] = useState('exam_gk');
 
   // Custom single generator input
   const [customTopic, setCustomTopic] = useState('');
@@ -190,7 +222,12 @@ export const AdminAIPanel = () => {
     setScanning(true);
     setNotification(null);
     try {
-      const token = await auth.currentUser?.getIdToken();
+      if (!auth.currentUser && auth.authStateReady) {
+        await auth.authStateReady();
+      }
+      const currentUser = auth.currentUser;
+      const token = currentUser ? await currentUser.getIdToken() : null;
+
       const res = await fetch('/api/admin/ai/scan', {
         method: 'POST',
         headers: { 
@@ -204,8 +241,29 @@ export const AdminAIPanel = () => {
           force
         })
       });
-      const data = await res.json();
-      if (data.success) {
+
+      let data: any = {};
+      const contentType = res.headers.get('content-type') || '';
+      if (contentType.includes('application/json')) {
+        data = await res.json();
+      } else {
+        const text = await res.text();
+        throw new Error(res.status === 401 || res.status === 403 
+          ? 'Admin authorization required. Please make sure you are signed in as an administrator.' 
+          : `Server communication error (${res.status}). Please try again in a few moments.`);
+      }
+
+      if (res.ok && data.success) {
+        if (data.drafts && Array.isArray(data.drafts) && data.drafts.length > 0) {
+          await factService.saveScannedDrafts(data.drafts);
+          setDrafts(prev => {
+            const map = new Map<string, AIDraft>();
+            for (const d of data.drafts) map.set(d.id, d);
+            for (const d of prev) if (!map.has(d.id)) map.set(d.id, d);
+            return Array.from(map.values());
+          });
+          selectDraftForEditing(data.drafts[0]);
+        }
         setNotification({
           type: 'success',
           message: data.count > 0 
@@ -243,6 +301,132 @@ export const AdminAIPanel = () => {
     }
   };
 
+  const handleTriggerKeywordScan = async (force: boolean = false) => {
+    if (selectedKeywords.length === 0) {
+      setNotification({
+        type: 'error',
+        message: 'Please select at least 1 keyword to scan.'
+      });
+      return;
+    }
+
+    setKeywordScanning(true);
+    setNotification({
+      type: 'info',
+      message: `Scanning Google news & factual databases for keywords: ${selectedKeywords.slice(0, 4).join(', ')}${selectedKeywords.length > 4 ? ` +${selectedKeywords.length - 4} more` : ''}...`
+    });
+
+    try {
+      const token = await auth.currentUser?.getIdToken();
+      const res = await fetch('/api/admin/ai/scan-keywords', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          ...(token ? { 'Authorization': `Bearer ${token}` } : {})
+        },
+        body: JSON.stringify({
+          keywords: selectedKeywords,
+          query: keywordQuery.trim() || undefined,
+          targetExam: keywordTargetExam,
+          topicType: keywordTopicType,
+          eventMonth: selectedMonth,
+          eventDay: selectedDay,
+          force
+        })
+      });
+
+      let data: any = {};
+      const contentType = res.headers.get('content-type') || '';
+      if (contentType.includes('application/json')) {
+        data = await res.json();
+      } else {
+        const text = await res.text();
+        throw new Error(res.status === 401 || res.status === 403 
+          ? 'Admin authorization required. Please make sure you are signed in as an administrator.' 
+          : `Server returned unexpected response (${res.status}): ${text.substring(0, 80)}...`);
+      }
+      if (res.ok && data.success) {
+        if (data.drafts && Array.isArray(data.drafts) && data.drafts.length > 0) {
+          await factService.saveScannedDrafts(data.drafts);
+          setDrafts(prev => {
+            const map = new Map<string, AIDraft>();
+            for (const d of data.drafts) map.set(d.id, d);
+            for (const d of prev) if (!map.has(d.id)) map.set(d.id, d);
+            return Array.from(map.values());
+          });
+          selectDraftForEditing(data.drafts[0]);
+        }
+        setNotification({
+          type: 'success',
+          message: data.message || `Keyword scan finished! ${data.newDraftsCount || data.count} verified drafts generated and ready for your review.`
+        });
+        await loadDrafts();
+        fetchScannerStatus();
+        setActiveTab('queue');
+      } else if (data.quotaLimited) {
+        setNotification({
+          type: 'info',
+          message: data.message || 'Gemini API temporary quota reached. Please retry in a few moments.'
+        });
+        setRemainingCooldownMs(2 * 60 * 60 * 1000);
+        fetchScannerStatus();
+      } else if (data.cooldown) {
+        setNotification({
+          type: 'info',
+          message: data.message || `2-Hour cooldown is in progress (${formatCooldown(data.cooldownRemainingMs)} remaining).`
+        });
+        if (data.cooldownRemainingMs) {
+          setRemainingCooldownMs(data.cooldownRemainingMs);
+        }
+      } else {
+        throw new Error(data.error || 'Failed keyword scan');
+      }
+    } catch (err: any) {
+      setNotification({
+        type: 'error',
+        message: `Keyword scan failed: ${err.message || 'Check network connection'}`
+      });
+    } finally {
+      setKeywordScanning(false);
+    }
+  };
+
+  const toggleKeyword = (kw: string) => {
+    setSelectedKeywords(prev => 
+      prev.includes(kw) ? prev.filter(k => k !== kw) : [...prev, kw]
+    );
+  };
+
+  const selectAllKeywords = () => {
+    setSelectedKeywords(GOOGLE_SCAN_KEYWORDS.map(k => k.id));
+  };
+
+  const clearAllKeywords = () => {
+    setSelectedKeywords([]);
+  };
+
+  const selectKeywordPreset = (presetName: 'space_defense' | 'exams' | 'history_inventions' | 'all') => {
+    if (presetName === 'all') {
+      selectAllKeywords();
+    } else if (presetName === 'space_defense') {
+      setSelectedKeywords(['ISRO', 'DRDO', 'NASA', 'Technology', 'Science', 'Scientists']);
+    } else if (presetName === 'exams') {
+      setSelectedKeywords(['UPSC', 'SSC', 'Railways', 'RRB', 'Indian Government', 'History']);
+    } else if (presetName === 'history_inventions') {
+      setSelectedKeywords(['History', 'Inventions', 'Important Days', 'Famous Birthdays', 'Scientists']);
+    }
+  };
+
+  const handleAddCustomKeyword = (e: React.FormEvent) => {
+    e.preventDefault();
+    const clean = customKeywordInput.trim();
+    if (!clean) return;
+    if (!selectedKeywords.includes(clean)) {
+      setSelectedKeywords(prev => [...prev, clean]);
+    }
+    setCustomKeywordInput('');
+  };
+
   const handleGenerateCustom = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!customTopic.trim()) return;
@@ -267,19 +451,31 @@ export const AdminAIPanel = () => {
         })
       });
 
-      if (!res.ok) {
-        const errData = await res.json();
-        throw new Error(errData.error || 'Failed to generate draft');
+      let responseData: any = null;
+      const contentType = res.headers.get('content-type') || '';
+      if (contentType.includes('application/json')) {
+        responseData = await res.json();
+      } else {
+        const text = await res.text();
+        throw new Error(res.status === 401 || res.status === 403 
+          ? 'Admin authorization required.' 
+          : `Server error (${res.status}): ${text.substring(0, 80)}`);
       }
 
-      const newDraft: AIDraft = await res.json();
+      if (!res.ok) {
+        throw new Error(responseData?.error || 'Failed to generate draft');
+      }
+
+      const newDraft: AIDraft = responseData;
+      await factService.createAIDraft(newDraft);
+      setDrafts(prev => [newDraft, ...prev.filter(d => d.id !== newDraft.id)]);
+      selectDraftForEditing(newDraft);
       setNotification({
         type: 'success',
         message: `Verified draft created for: "${newDraft.title}" with MCQs & glossary!`
       });
       setCustomTopic('');
       await loadDrafts();
-      selectDraftForEditing(newDraft);
       setActiveTab('queue');
     } catch (err: any) {
       setNotification({
@@ -469,7 +665,10 @@ export const AdminAIPanel = () => {
   const filteredDrafts = drafts.filter(d => {
     const matchStatus = filterStatus === 'all' || d.status === filterStatus;
     const matchTopic = filterTopic === 'all' || d.topicType === filterTopic;
-    return matchStatus && matchTopic;
+    const matchKeyword = filterKeyword === 'all' || 
+      (d.searchKeywords && d.searchKeywords.includes(filterKeyword)) ||
+      d.targetKeyword === filterKeyword;
+    return matchStatus && matchTopic && matchKeyword;
   });
 
   return (
@@ -545,7 +744,17 @@ export const AdminAIPanel = () => {
       {/* Navigation & Topic Control Sub-bar */}
       <div className="bg-white border-b border-black/10 px-6 py-2.5">
         <div className="max-w-7xl mx-auto flex flex-wrap items-center justify-between gap-3 text-xs">
-          <div className="flex items-center gap-1 bg-paper2 p-1 rounded-xl border border-black/5">
+          <div className="flex items-center gap-1 bg-paper2 p-1 rounded-xl border border-black/5 flex-wrap">
+            <button
+              onClick={() => setActiveTab('keyword_creator')}
+              className={`px-3.5 py-1.5 rounded-lg font-bold transition-all flex items-center gap-1.5 ${
+                activeTab === 'keyword_creator' ? 'bg-white shadow-sm text-ink text-gold' : 'text-ink3 hover:text-ink'
+              }`}
+            >
+              <Search size={14} className="text-gold" />
+              <span>Google Keywords Creator</span>
+              <span className="bg-gold/20 text-ink text-[10px] px-1.5 py-0.2 rounded-md font-mono">15</span>
+            </button>
             <button
               onClick={() => setActiveTab('queue')}
               className={`px-3.5 py-1.5 rounded-lg font-bold transition-all flex items-center gap-1.5 ${
@@ -562,7 +771,7 @@ export const AdminAIPanel = () => {
               }`}
             >
               <Zap size={14} />
-              <span>Topic Scanner & Date Hub</span>
+              <span>5-Pillar Hub</span>
             </button>
             <button
               onClick={() => setActiveTab('custom_generate')}
@@ -571,7 +780,7 @@ export const AdminAIPanel = () => {
               }`}
             >
               <Plus size={14} />
-              <span>Single Topic Creator</span>
+              <span>Single Topic</span>
             </button>
             <button
               onClick={() => setActiveTab('scanner_info')}
@@ -580,7 +789,7 @@ export const AdminAIPanel = () => {
               }`}
             >
               <ShieldCheck size={14} />
-              <span>2-Hour Anti-Noise Rules</span>
+              <span>Anti-Noise Rules</span>
             </button>
           </div>
 
@@ -621,6 +830,293 @@ export const AdminAIPanel = () => {
 
       {/* Main Container */}
       <div className="flex-1 max-w-7xl w-full mx-auto p-4 sm:p-6 flex flex-col md:flex-row gap-6">
+
+        {/* Tab 0: Google Keywords AI Content Creator */}
+        {activeTab === 'keyword_creator' && (
+          <div className="flex-1 max-w-5xl mx-auto py-2 space-y-6">
+            <div className="bg-white p-6 sm:p-8 rounded-3xl border border-black/10 shadow-sm space-y-6">
+              
+              {/* Header */}
+              <div className="flex flex-wrap items-start justify-between gap-4 border-b border-black/5 pb-5">
+                <div className="space-y-1 max-w-2xl">
+                  <div className="flex items-center gap-2">
+                    <div className="p-2 rounded-xl bg-gold/15 text-gold border border-gold/30">
+                      <Search size={20} />
+                    </div>
+                    <h2 className="text-xl font-serif font-black text-ink">
+                      Google Keywords AI Content Creator
+                    </h2>
+                    <span className="bg-gold/20 text-ink text-xs font-mono font-bold px-2.5 py-0.5 rounded-full border border-gold/40">
+                      Live Search Grounding
+                    </span>
+                  </div>
+                  <p className="text-xs text-ink3 leading-relaxed">
+                    AI scans Google News, PIB India, ISRO, DRDO, NASA and official gazettes using your selected keywords as search terms. It checks facts, extracts key news, formulates high-yield study notes with 3-5 MCQs, and delivers drafts directly into your Review Queue for admin approval, editing, and publishing.
+                  </p>
+                </div>
+
+                <div className="flex items-center gap-2">
+                  <div className="bg-paper2 px-3 py-1.5 rounded-xl border border-black/5 text-right font-mono text-[11px]">
+                    <div className="text-ink3 text-[9px] uppercase font-bold">Selected Terms</div>
+                    <div className="font-bold text-ink text-xs">{selectedKeywords.length} of {GOOGLE_SCAN_KEYWORDS.length} active</div>
+                  </div>
+                </div>
+              </div>
+
+              {/* Keyword Quick Presets Bar */}
+              <div className="space-y-2">
+                <div className="flex items-center justify-between">
+                  <label className="text-xs font-bold uppercase tracking-wider text-ink flex items-center gap-1.5">
+                    <SlidersHorizontal size={14} className="text-gold" />
+                    <span>Keyword Categories & 15 Preset Search Terms</span>
+                  </label>
+                  <div className="flex items-center gap-2">
+                    <button
+                      type="button"
+                      onClick={selectAllKeywords}
+                      className="text-[11px] font-bold text-gold hover:underline"
+                    >
+                      Select All 15
+                    </button>
+                    <span className="text-black/20">•</span>
+                    <button
+                      type="button"
+                      onClick={clearAllKeywords}
+                      className="text-[11px] font-bold text-ink3 hover:text-ink hover:underline"
+                    >
+                      Clear
+                    </button>
+                  </div>
+                </div>
+
+                {/* Preset Chips */}
+                <div className="flex flex-wrap gap-2 pt-1 pb-2">
+                  <button
+                    type="button"
+                    onClick={() => selectKeywordPreset('space_defense')}
+                    className="px-3 py-1.5 rounded-xl text-xs font-bold bg-paper2 hover:bg-gold/20 border border-black/5 hover:border-gold/40 text-ink transition-all flex items-center gap-1.5"
+                  >
+                    <span>🚀 Space & Defense (ISRO, DRDO, NASA, Tech, Science)</span>
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => selectKeywordPreset('exams')}
+                    className="px-3 py-1.5 rounded-xl text-xs font-bold bg-paper2 hover:bg-gold/20 border border-black/5 hover:border-gold/40 text-ink transition-all flex items-center gap-1.5"
+                  >
+                    <span>🏛️ Exam & Govt (UPSC, SSC, Railways, RRB, Indian Govt)</span>
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => selectKeywordPreset('history_inventions')}
+                    className="px-3 py-1.5 rounded-xl text-xs font-bold bg-paper2 hover:bg-gold/20 border border-black/5 hover:border-gold/40 text-ink transition-all flex items-center gap-1.5"
+                  >
+                    <span>📜 History & Pioneers (History, Inventions, Days, Birthdays, Scientists)</span>
+                  </button>
+                </div>
+
+                {/* 15 Interactive Keyword Cards Grid */}
+                <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-2.5">
+                  {GOOGLE_SCAN_KEYWORDS.map((item) => {
+                    const isChecked = selectedKeywords.includes(item.id);
+                    return (
+                      <div
+                        key={item.id}
+                        onClick={() => toggleKeyword(item.id)}
+                        className={`p-3 rounded-2xl cursor-pointer border transition-all flex flex-col justify-between select-none ${
+                          isChecked
+                            ? 'bg-gold/15 border-gold shadow-sm ring-1 ring-gold/40'
+                            : 'bg-paper2 border-black/5 hover:border-black/20 opacity-80 hover:opacity-100'
+                        }`}
+                      >
+                        <div className="flex items-start justify-between gap-1">
+                          <span className="text-xl">{item.emoji}</span>
+                          <div className={`w-4 h-4 rounded-md border flex items-center justify-center transition-all ${
+                            isChecked ? 'bg-gold border-gold text-ink' : 'border-black/20 bg-white'
+                          }`}>
+                            {isChecked && <Check size={12} className="stroke-[3]" />}
+                          </div>
+                        </div>
+                        <div className="mt-2">
+                          <div className="text-xs font-bold text-ink leading-tight">{item.label}</div>
+                          <p className="text-[10px] text-ink3 line-clamp-2 mt-0.5 leading-snug">{item.desc}</p>
+                        </div>
+                      </div>
+                    );
+                  })}
+                </div>
+              </div>
+
+              {/* Add Custom Term Input */}
+              <form onSubmit={handleAddCustomKeyword} className="flex gap-2 items-center bg-paper2 p-3 rounded-2xl border border-black/5">
+                <Tag size={16} className="text-gold flex-shrink-0 ml-1" />
+                <input
+                  type="text"
+                  value={customKeywordInput}
+                  onChange={(e) => setCustomKeywordInput(e.target.value)}
+                  placeholder="Add custom keyword search term (e.g. Semiconductor, Chandrayaan, GST Council, Gaganyaan)..."
+                  className="flex-1 bg-transparent text-xs text-ink placeholder:text-ink3/70 outline-none font-medium"
+                />
+                <button
+                  type="submit"
+                  disabled={!customKeywordInput.trim()}
+                  className="px-3.5 py-1.5 bg-ink text-white rounded-xl text-xs font-bold hover:bg-gold hover:text-ink disabled:opacity-30 transition-all flex items-center gap-1"
+                >
+                  <Plus size={12} />
+                  <span>Add Term</span>
+                </button>
+              </form>
+
+              {/* Custom Search Angle & Parameters */}
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4 pt-2">
+                {/* Specific News Search Term */}
+                <div className="space-y-1.5">
+                  <label className="text-[11px] font-bold uppercase tracking-wider text-ink3 flex items-center gap-1.5">
+                    <Search size={12} className="text-gold" />
+                    <span>Specific News Search / Event Angle (Optional)</span>
+                  </label>
+                  <input
+                    type="text"
+                    value={keywordQuery}
+                    onChange={(e) => setKeywordQuery(e.target.value)}
+                    placeholder="e.g. Latest breakthrough on ISRO Gaganyaan mission test or UPSC GS3 tech..."
+                    className="w-full bg-paper2 border border-black/10 rounded-xl p-3 text-xs font-medium text-ink outline-none focus:border-gold"
+                  />
+                  <p className="text-[10px] text-ink3">Leave empty for broad scan across all selected keywords.</p>
+                </div>
+
+                {/* Target Syllabus / Exam Focus */}
+                <div className="space-y-1.5">
+                  <label className="text-[11px] font-bold uppercase tracking-wider text-ink3 flex items-center gap-1.5">
+                    <GraduationCap size={12} className="text-gold" />
+                    <span>Target Exam & Content Depth</span>
+                  </label>
+                  <select
+                    value={keywordTargetExam}
+                    onChange={(e) => setKeywordTargetExam(e.target.value)}
+                    className="w-full bg-paper2 border border-black/10 rounded-xl p-3 text-xs font-bold text-ink outline-none focus:border-gold"
+                  >
+                    <option value="UPSC Civil Services GS I/II/III, SSC CGL & Competitive Exams">UPSC Prelims/Mains + SSC CGL & State PSCs (Comprehensive)</option>
+                    <option value="UPSC Civil Services Examination (GS Paper I, II, III)">UPSC Civil Services Pure Analytical Focus</option>
+                    <option value="SSC CGL, CHSL, MTS & Railways RRB NTPC">SSC CGL, CHSL & Railway RRB (High-Yield Static & Dynamic GK)</option>
+                    <option value="ISRO, DRDO & Defense NDA / CDS / AFCAT Exams">Defense & Space Science Focus (NDA, CDS, AFCAT, ISRO)</option>
+                    <option value="General Public & Daily Science Literacy">General Reader & Science Explorer Digest</option>
+                  </select>
+                </div>
+              </div>
+
+              {/* Date & Pillar Focus Options */}
+              <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 p-4 bg-paper2 rounded-2xl border border-black/5 text-xs">
+                <div>
+                  <label className="text-[10px] font-mono text-ink3 uppercase font-bold">Month Focus</label>
+                  <select
+                    value={selectedMonth}
+                    onChange={(e) => setSelectedMonth(parseInt(e.target.value))}
+                    className="w-full mt-1 bg-white border border-black/10 rounded-xl p-2 font-bold text-ink outline-none focus:border-gold"
+                  >
+                    {MONTHS.map((m, i) => (
+                      <option key={i} value={i + 1}>{m}</option>
+                    ))}
+                  </select>
+                </div>
+
+                <div>
+                  <label className="text-[10px] font-mono text-ink3 uppercase font-bold">Day Focus</label>
+                  <select
+                    value={selectedDay}
+                    onChange={(e) => setSelectedDay(parseInt(e.target.value))}
+                    className="w-full mt-1 bg-white border border-black/10 rounded-xl p-2 font-bold text-ink outline-none focus:border-gold"
+                  >
+                    {Array.from({ length: 31 }, (_, i) => i + 1).map((d) => (
+                      <option key={d} value={d}>{d}</option>
+                    ))}
+                  </select>
+                </div>
+
+                <div>
+                  <label className="text-[10px] font-mono text-ink3 uppercase font-bold">Pillar Mode</label>
+                  <select
+                    value={keywordTopicType}
+                    onChange={(e) => setKeywordTopicType(e.target.value)}
+                    className="w-full mt-1 bg-white border border-black/10 rounded-xl p-2 font-bold text-ink outline-none focus:border-gold"
+                  >
+                    <option value="exam_gk">🏛️ Exam & Current Affairs GK</option>
+                    <option value="science">🔬 Science & Inventions</option>
+                    <option value="day_in_history">📅 Day in History & Birthdays</option>
+                    <option value="national_days">🎖️ National & Important Days</option>
+                    <option value="all_round">🌐 All 5 Pillars Combined</option>
+                  </select>
+                </div>
+              </div>
+
+              {/* Action Banner with Primary Scan Button */}
+              <div className="p-6 bg-gradient-to-r from-ink via-ink2 to-ink text-white rounded-3xl space-y-4 shadow-lg">
+                <div className="flex flex-wrap items-center justify-between gap-4">
+                  <div className="space-y-1">
+                    <div className="text-sm font-bold text-gold flex items-center gap-2">
+                      <Sparkles size={16} />
+                      <span>Autonomous Google Search Grounding & Fact-Checker</span>
+                    </div>
+                    <p className="text-xs text-white/80 max-w-xl leading-relaxed">
+                      AI will scan Google with <strong className="text-white">{selectedKeywords.length} active keywords</strong>, fact-check against trusted institutional sources, and draft high-yield articles with 3-5 MCQs for your approval.
+                    </p>
+                  </div>
+
+                  <div className="flex items-center gap-3">
+                    <button
+                      type="button"
+                      onClick={() => handleTriggerKeywordScan(false)}
+                      disabled={keywordScanning || selectedKeywords.length === 0}
+                      className="px-6 py-3.5 bg-gold hover:bg-amber-400 text-ink font-bold text-sm rounded-2xl transition-all shadow-md flex items-center gap-2 disabled:opacity-40 disabled:cursor-not-allowed"
+                    >
+                      <RefreshCw size={16} className={keywordScanning ? "animate-spin" : ""} />
+                      <span>
+                        {keywordScanning
+                          ? "Scanning Google News & Creating Drafts…"
+                          : `Scan Google Keywords (${selectedKeywords.length})`}
+                      </span>
+                    </button>
+
+                    {remainingCooldownMs > 0 && (
+                      <button
+                        type="button"
+                        onClick={() => {
+                          if (confirm("Cooldown is active. Force scan keywords immediately?")) {
+                            handleTriggerKeywordScan(true);
+                          }
+                        }}
+                        className="px-3 py-3 bg-white/10 hover:bg-white/20 text-white/80 hover:text-white text-xs font-mono rounded-xl transition-all"
+                        title="Force scan without cooldown waiting"
+                      >
+                        Force Scan
+                      </button>
+                    )}
+                  </div>
+                </div>
+
+                {/* Workflow Steps Indicator */}
+                <div className="grid grid-cols-1 sm:grid-cols-4 gap-2 pt-2 border-t border-white/10 text-[11px] text-white/70">
+                  <div className="flex items-center gap-1.5">
+                    <span className="w-4 h-4 rounded-full bg-gold/30 text-gold flex items-center justify-center font-bold text-[10px]">1</span>
+                    <span>Scan Google Keywords</span>
+                  </div>
+                  <div className="flex items-center gap-1.5">
+                    <span className="w-4 h-4 rounded-full bg-emerald-500/30 text-emerald-400 flex items-center justify-center font-bold text-[10px]">2</span>
+                    <span>Fact-Check & Verify</span>
+                  </div>
+                  <div className="flex items-center gap-1.5">
+                    <span className="w-4 h-4 rounded-full bg-indigo-500/30 text-indigo-400 flex items-center justify-center font-bold text-[10px]">3</span>
+                    <span>Draft MCQs & Article</span>
+                  </div>
+                  <div className="flex items-center gap-1.5">
+                    <span className="w-4 h-4 rounded-full bg-coral/30 text-coral flex items-center justify-center font-bold text-[10px]">4</span>
+                    <span>Admin Review & Publish</span>
+                  </div>
+                </div>
+              </div>
+
+            </div>
+          </div>
+        )}
 
         {/* Tab 1: Topic Scanner & Date Hub */}
         {activeTab === 'scan_hub' && (
@@ -977,6 +1473,18 @@ export const AdminAIPanel = () => {
                   <option value="exam_gk">🏛️ Exam GK</option>
                   <option value="current_affairs">📰 Current Affairs</option>
                 </select>
+
+                {/* Filter by Google Keyword */}
+                <select
+                  value={filterKeyword}
+                  onChange={(e) => setFilterKeyword(e.target.value)}
+                  className="w-full text-[11px] bg-white border border-black/10 rounded-lg px-2 py-1 outline-none text-ink font-medium"
+                >
+                  <option value="all">All Keywords (15+)</option>
+                  {GOOGLE_SCAN_KEYWORDS.map(k => (
+                    <option key={k.id} value={k.id}>{k.emoji} {k.label}</option>
+                  ))}
+                </select>
               </div>
 
               <div className="flex-1 overflow-y-auto p-2 space-y-1.5 divide-y divide-black/5">
@@ -1025,6 +1533,15 @@ export const AdminAIPanel = () => {
                             </span>
                           )}
                         </div>
+                        {((draft.searchKeywords && draft.searchKeywords.length > 0) || draft.targetKeyword) && (
+                          <div className="flex flex-wrap gap-1 pt-0.5">
+                            {(draft.searchKeywords || [draft.targetKeyword]).filter(Boolean).slice(0, 3).map((kw, i) => (
+                              <span key={i} className="bg-gold/15 text-ink text-[9px] font-bold px-1.5 py-0.2 rounded">
+                                #{kw}
+                              </span>
+                            ))}
+                          </div>
+                        )}
                       </div>
                     );
                   })
@@ -1041,13 +1558,19 @@ export const AdminAIPanel = () => {
                     <div className="flex items-center gap-2">
                       <span className="text-2xl">{editForm.emoji || '📝'}</span>
                       <div>
-                        <div className="flex items-center gap-2">
+                        <div className="flex items-center gap-2 flex-wrap">
                           <span className="text-[10px] font-mono text-ink3 uppercase">
                             Verification: <strong className="text-emerald-700 font-bold">{editForm.verificationStatus || 'Verified'}</strong>
                           </span>
                           {editForm.topicType && (
                             <span className="text-[10px] font-bold bg-gold/20 text-ink px-2 py-0.5 rounded-full">
                               {TOPIC_TYPES.find(t => t.id === editForm.topicType)?.label || editForm.topicType}
+                            </span>
+                          )}
+                          {((editForm.searchKeywords && editForm.searchKeywords.length > 0) || editForm.targetKeyword) && (
+                            <span className="text-[10px] font-bold bg-ink text-gold px-2 py-0.5 rounded-full flex items-center gap-1 font-mono">
+                              <Search size={10} />
+                              {(editForm.searchKeywords || [editForm.targetKeyword]).filter(Boolean).join(', ')}
                             </span>
                           )}
                         </div>

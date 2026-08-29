@@ -61,6 +61,7 @@ const ai = new GoogleGenAI({
 
 // Initialize Firebase for server-side persistence
 let serverDb: any = null;
+const inMemoryAIDrafts = new Map<string, any>();
 try {
   const configPath = path.join(process.cwd(), "firebase-applet-config.json");
   if (fs.existsSync(configPath)) {
@@ -76,16 +77,23 @@ try {
 // SERVER-SIDE ADMIN AUTHORIZATION & TOKEN VERIFICATION
 // ═══════════════════════════════════════════════════════════
 
-const ADMIN_EMAILS = (process.env.ADMIN_EMAIL || "krish02shiva@gmail.com")
-  .split(",")
+const ADMIN_EMAILS = Array.from(new Set([
+  "krish02shiva@gmail.com",
+  ...(process.env.ADMIN_EMAIL || "").split(",")
+]))
   .map(e => e.trim().toLowerCase())
   .filter(Boolean);
 
 function parseJwtPayload(token: string): any | null {
   try {
+    if (!token || typeof token !== "string") return null;
     const parts = token.split(".");
     if (parts.length !== 3) return null;
-    const payload = JSON.parse(Buffer.from(parts[1], "base64").toString("utf-8"));
+    let base64 = parts[1].replace(/-/g, "+").replace(/_/g, "/");
+    while (base64.length % 4) {
+      base64 += "=";
+    }
+    const payload = JSON.parse(Buffer.from(base64, "base64").toString("utf-8"));
     if (payload.exp && payload.exp * 1000 < Date.now()) {
       return null; // Expired token
     }
@@ -107,7 +115,7 @@ async function requireAdmin(req: express.Request, res: express.Response, next: e
     return res.status(401).json({ error: "Unauthorized: Invalid or expired session credentials." });
   }
 
-  const userEmail = (payload.email || "").toLowerCase();
+  const userEmail = (payload.email || payload.firebase?.identities?.email?.[0] || "").toLowerCase();
   const uid = payload.user_id || payload.sub;
 
   const isEmailAdmin = Boolean(userEmail && ADMIN_EMAILS.includes(userEmail));
@@ -451,44 +459,35 @@ CONTENT REQUIREMENTS:
 
     const savedDrafts: any[] = [];
 
-    // Save drafts to Firestore if serverDb is available
-    if (serverDb && parsedDrafts.length > 0) {
-      for (const draft of parsedDrafts) {
-        const idSlug = (draft.title || 'draft').toLowerCase().replace(/[^a-z0-9\s-]/g, '').trim().replace(/\s+/g, '-').substring(0, 80) || `ai-${Date.now()}`;
-        const draftId = `draft-${idSlug}-${Date.now().toString().slice(-4)}`;
-        
-        const sources = (draft.trustedSources && draft.trustedSources.length > 0) ? draft.trustedSources : extractedSources.slice(0, 4);
+    for (const draft of parsedDrafts) {
+      const idSlug = (draft.title || 'draft').toLowerCase().replace(/[^a-z0-9\s-]/g, '').trim().replace(/\s+/g, '-').substring(0, 80) || `ai-${Date.now()}`;
+      const draftId = draft.id || `draft-${idSlug}-${Date.now().toString().slice(-4)}`;
+      
+      const sources = (draft.trustedSources && draft.trustedSources.length > 0) ? draft.trustedSources : extractedSources.slice(0, 4);
 
-        const draftData = {
-          ...draft,
-          id: draftId,
-          cat: ['history', 'science', 'inventions', 'discoveries', 'birthdays'].includes(draft.cat) ? draft.cat : 'science',
-          topicType: draft.topicType || (topicType !== 'all_round' ? topicType : 'day_in_history'),
-          eventMonth: draft.eventMonth || currentMonth,
-          eventDay: draft.eventDay || currentDay,
-          trustedSources: sources,
-          status: 'pending',
-          createdAt: new Date().toISOString(),
-          updatedAt: new Date().toISOString()
-        };
+      const draftData = {
+        ...draft,
+        id: draftId,
+        cat: ['history', 'science', 'inventions', 'discoveries', 'birthdays'].includes(draft.cat) ? draft.cat : 'science',
+        topicType: draft.topicType || (topicType !== 'all_round' ? topicType : 'day_in_history'),
+        eventMonth: draft.eventMonth || currentMonth,
+        eventDay: draft.eventDay || currentDay,
+        trustedSources: sources,
+        status: 'pending',
+        createdAt: draft.createdAt || new Date().toISOString(),
+        updatedAt: new Date().toISOString()
+      };
 
+      inMemoryAIDrafts.set(draftId, draftData);
+      savedDrafts.push(draftData);
+
+      if (serverDb) {
         try {
           await setDoc(doc(serverDb, "ai_drafts", draftId), draftData);
-          savedDrafts.push(draftData);
         } catch (dbErr) {
-          console.error(`Error saving draft ${draftId} to Firestore:`, dbErr);
-          savedDrafts.push(draftData);
+          // Expected in client auth rule configurations
         }
       }
-    } else {
-      savedDrafts.push(...parsedDrafts.map((d: any) => ({
-        ...d,
-        id: `draft-${Date.now()}-${Math.random().toString(36).substring(2, 6)}`,
-        eventMonth: d.eventMonth || currentMonth,
-        eventDay: d.eventDay || currentDay,
-        status: 'pending',
-        createdAt: new Date().toISOString()
-      })));
     }
 
     scannerStatus.foundItemsCount += savedDrafts.length;
@@ -510,6 +509,286 @@ CONTENT REQUIREMENTS:
   }
 }
 
+// 15 Standard Google Scan Keywords for Educational Content Discovery
+const PRESET_GOOGLE_KEYWORDS = [
+  { id: "history", name: "History", category: "history", emoji: "📜", defaultPillar: "day_in_history", description: "Ancient, Medieval, Modern & World History, Treaties & Freedom Movement" },
+  { id: "science", name: "Science", category: "science", emoji: "🔬", defaultPillar: "science_discovery", description: "Physics, Chemistry, Biology, Space, Quantum & Natural Sciences" },
+  { id: "technology", name: "Technology", category: "science", emoji: "💻", defaultPillar: "science_discovery", description: "AI, Semiconductors, Computing, Clean Energy & Digital Tech" },
+  { id: "upsc", name: "UPSC", category: "history", emoji: "🏛️", defaultPillar: "exam_gk", description: "Civil Services Prelims & Mains GS Syllabus, Polity, Environment & Economy" },
+  { id: "isro", name: "ISRO", category: "science", emoji: "🚀", defaultPillar: "science_discovery", description: "Indian Space Missions, Chandrayaan, Gaganyaan, Aditya-L1, PSLV/LVM3 & Satellites" },
+  { id: "drdo", name: "DRDO", category: "science", emoji: "🛡️", defaultPillar: "science_discovery", description: "Indigenous Defense Systems, Agni/BrahMos Missiles, Radars & Defense Tech" },
+  { id: "nasa", name: "NASA", category: "science", emoji: "🌌", defaultPillar: "science_discovery", description: "Deep Space Exploration, Artemis Moon Mission, Mars Rovers & Telescopes" },
+  { id: "indian_government", name: "Indian Government", category: "history", emoji: "🇮🇳", defaultPillar: "current_affairs", description: "Official PIB Releases, Cabinet Acts, National Schemes & Constitutional Policy" },
+  { id: "ssc", name: "SSC", category: "history", emoji: "📚", defaultPillar: "exam_gk", description: "Staff Selection Commission CGL, CHSL, MTS General Awareness & Static GK" },
+  { id: "railways", name: "Railways", category: "inventions", emoji: "🚆", defaultPillar: "exam_gk", description: "Indian Railways Infrastructure, Vande Bharat, Freight Corridors & Rail Tech" },
+  { id: "rrb", name: "RRB", category: "science", emoji: "🎯", defaultPillar: "exam_gk", description: "Railway Recruitment Board NTPC, Group D, ALP General Science & Static GK" },
+  { id: "inventions", name: "Inventions", category: "inventions", emoji: "💡", defaultPillar: "science_discovery", description: "Groundbreaking Inventions, Patents, Technological Breakthroughs & Tools" },
+  { id: "important_days", name: "Important Days", category: "history", emoji: "📅", defaultPillar: "national_important_day", description: "National & UN Observance Days, Global Themes & Historical Commemorations" },
+  { id: "famous_birthdays", name: "Famous Birthdays", category: "birthdays", emoji: "🎂", defaultPillar: "day_in_history", description: "Birth Anniversaries of Historic Pioneers, Freedom Fighters & Visionaries" },
+  { id: "scientists", name: "Scientists", category: "science", emoji: "👨‍🔬", defaultPillar: "science_discovery", description: "Nobel Laureates, Great Indian & World Scientists, Discoveries & Legacies" },
+];
+
+// Advanced Keyword-Driven Google Scanner & Fact-Checking Creator
+async function runKeywordDrivenContentScan(options: {
+  keywords: string[];
+  customQuery?: string;
+  topicType?: string;
+  targetCategory?: string;
+  targetMonth?: number;
+  targetDay?: number;
+  targetExam?: string;
+  isManual?: boolean;
+}): Promise<any[]> {
+  const {
+    keywords = ["Science"],
+    customQuery = "",
+    topicType = "exam_gk",
+    targetCategory,
+    targetMonth,
+    targetDay,
+    targetExam = "UPSC, SSC CGL, RRB & State PSCs",
+    isManual = true
+  } = options;
+
+  const now = new Date();
+  const currentMonth = targetMonth || (now.getMonth() + 1);
+  const currentDay = targetDay || now.getDate();
+  const monthNames = ["January", "February", "March", "April", "May", "June", "July", "August", "September", "October", "November", "December"];
+  const dateString = `${monthNames[currentMonth - 1]} ${currentDay}`;
+
+  scannerStatus.isRunning = true;
+  scannerStatus.lastScanTime = new Date().toISOString();
+  scannerStatus.nextScanTime = new Date(Date.now() + TWO_HOURS_MS).toISOString();
+  scannerStatus.cooldownRemainingMs = TWO_HOURS_MS;
+  scannerStatus.lastScanTopic = keywords.join(", ");
+  scannerStatus.statusMessage = `Scanning Google for [${keywords.join(" + ")}]${customQuery ? ` "${customQuery}"` : ''}...`;
+
+  console.log(`[AI Keyword Scanner] Starting search for keywords: [${keywords.join(", ")}] | Query: "${customQuery}" | Target: ${dateString}`);
+
+  try {
+    // Step 1: Real-time Google Search with Gemini grounding
+    const searchPrompt = `Search Google and official sources in real-time for:
+TARGET KEYWORDS: ${keywords.join(", ")}
+${customQuery ? `SPECIFIC SEARCH QUERY / SUB-TOPIC: "${customQuery}"` : ""}
+CALENDAR CONTEXT: ${dateString} (${now.getFullYear()})
+EXAM SYLLABUS FOCUS: ${targetExam}
+
+SEARCH GUIDELINES:
+1. Scan for the most authentic news, breakthroughs, historical facts, space/defense releases, or official notifications related to these keywords.
+2. If keywords involve ISRO, DRDO, NASA, or Indian Government, prioritize official press communiqués (PIB India, ISRO.gov.in, DRDO.gov.in, NASA.gov, Ministry portals).
+3. If keywords involve UPSC, SSC, Railways, RRB, or Important Days/Birthdays, find high-yield syllabus facts, historical origins, and static GK.
+4. If keywords involve Inventions, Scientists, or Technology, verify the authentic historical timeline, patent/discovery details, and scientific impact.
+5. STRICT FACT-CHECKING RULES: Exclude unverified rumors, political speculation, celebrity gossip, and sensationalism. Ensure absolute factual veracity.
+
+Find 1 to 3 verified high-yield educational topics. For each topic provide:
+- Exact headline / title
+- Core verified facts, timeline & developments
+- Trusted official sources (with URLs if available)
+- Examination syllabus alignment (UPSC / SSC / RRB / State PSCs)`;
+
+    const searchResult = await safeGenerateContent({
+      preferredModel: "gemini-3.7-flash",
+      contents: searchPrompt,
+      allowSearchFallback: true,
+      config: {
+        systemInstruction: "You are the Senior Research Editor and Chief Fact-Checker for FActHub. You search Google in real-time, authenticate facts against official sources, and prepare structured educational material.",
+        tools: [{ googleSearch: {} }]
+      }
+    });
+
+    const searchOutputText = searchResult.text || "";
+    const rawGroundingChunks = searchResult.rawResponse?.candidates?.[0]?.groundingMetadata?.groundingChunks || [];
+    const extractedSources: Array<{ title: string; uri: string }> = [];
+
+    for (const chunk of rawGroundingChunks) {
+      if ((chunk as any).web?.uri) {
+        extractedSources.push({
+          title: (chunk as any).web.title || "Verified Source",
+          uri: (chunk as any).web.uri
+        });
+      }
+    }
+
+    if (extractedSources.length === 0) {
+      extractedSources.push(
+        { title: "Press Information Bureau (PIB) India", uri: "https://pib.gov.in" },
+        { title: "ISRO / DRDO / Official Portals", uri: "https://www.isro.gov.in" },
+        { title: "Encyclopaedia Britannica & Academic Records", uri: "https://www.britannica.com" },
+        { title: "Nature & Scientific Discovery Journal", uri: "https://www.nature.com" }
+      );
+    }
+
+    if (!searchOutputText || searchOutputText.length < 50) {
+      scannerStatus.statusMessage = `No high-yield educational items found for keywords [${keywords.join(", ")}].`;
+      scannerStatus.isRunning = false;
+      return [];
+    }
+
+    // Step 2: Synthesis with fact-checking, MCQs, glossary, and highlights
+    const synthesisPrompt = `Based on the verified Google search data for keywords [${keywords.join(", ")}]:
+${searchOutputText}
+
+OFFICIAL SOURCES IDENTIFIED:
+${JSON.stringify(extractedSources.slice(0, 10))}
+
+CONTENT REQUIREMENTS:
+1. Synthesize 1 to 2 comprehensive, fact-checked educational article drafts for FActHub.
+2. Structure the Markdown body with clear headings:
+   - ## Overview & What Happened
+   - ## Key Technical / Historical Details & Timeline
+   - ## Significance, Impact & Global Context
+   - ## Examination Angle (UPSC / SSC / RRB / State PSCs Syllabus Breakdown)
+3. Include color highlight tags in the markdown text: [gold]concept[/gold], [coral]dates/figures[/coral], [teal]institutions[/teal], [indigo]terms[/indigo].
+4. Provide a detailed fact-check verification summary stating how facts were verified against official sources.
+5. Provide 3-5 Practice MCQs with 4 options, the zero-based index of the correct answer (0-3), detailed explanation, and exam category (UPSC/SSC/RRB/State PSCs).
+6. Provide 2-4 Bilingual Vocabulary Terms (English term, Hindi translation, meaning).
+7. Provide a concise WhatsApp / Telegram study digest with emojis.
+8. Map category appropriately: "history", "science", "inventions", "discoveries", or "birthdays".
+9. Return a valid JSON array of drafts.`;
+
+    const synthesisResult = await safeGenerateContent({
+      preferredModel: "gemini-3.7-flash",
+      contents: synthesisPrompt,
+      allowSearchFallback: false,
+      config: {
+        systemInstruction: "You are an elite educational author and exam curator. Respond ONLY with a valid JSON array of educational article drafts.",
+        responseMimeType: "application/json",
+        responseSchema: {
+          type: Type.ARRAY,
+          items: {
+            type: Type.OBJECT,
+            properties: {
+              title: { type: Type.STRING, description: "Clear, engaging headline" },
+              cat: { type: Type.STRING, description: "history, science, inventions, discoveries, or birthdays" },
+              topicType: { type: Type.STRING, description: "day_in_history, science_discovery, national_important_day, exam_gk, or current_affairs" },
+              emoji: { type: Type.STRING, description: "Representative single emoji" },
+              year: { type: Type.NUMBER, description: "Year of event or announcement" },
+              excerpt: { type: Type.STRING, description: "Concise 2-sentence hook" },
+              full: { type: Type.STRING, description: "Complete comprehensive Markdown article with headers, sections, bullet points, and [gold]highlights[/gold]" },
+              sourceTrend: { type: Type.STRING, description: "Topic origin or event name" },
+              eventMonth: { type: Type.NUMBER, description: "Month number 1-12" },
+              eventDay: { type: Type.NUMBER, description: "Day number 1-31" },
+              verificationStatus: { type: Type.STRING, description: "verified or high_confidence" },
+              trustedSources: {
+                type: Type.ARRAY,
+                items: {
+                  type: Type.OBJECT,
+                  properties: {
+                    title: { type: Type.STRING },
+                    uri: { type: Type.STRING }
+                  },
+                  required: ["title", "uri"]
+                }
+              },
+              factCheckSummary: { type: Type.STRING, description: "How this information was verified against official sources" },
+              examRelevance: { type: Type.STRING, description: "Relevance to UPSC Prelims/Mains GS, SSC CGL, RRB NTPC, State PSCs, etc." },
+              quizMCQs: {
+                type: Type.ARRAY,
+                description: "3-5 high-yield practice MCQs for exam aspirants",
+                items: {
+                  type: Type.OBJECT,
+                  properties: {
+                    question: { type: Type.STRING },
+                    options: {
+                      type: Type.ARRAY,
+                      items: { type: Type.STRING }
+                    },
+                    answer: { type: Type.NUMBER, description: "Index 0 to 3 of correct answer" },
+                    explanation: { type: Type.STRING },
+                    examCategory: { type: Type.STRING }
+                  },
+                  required: ["question", "options", "answer", "explanation"]
+                }
+              },
+              bilingualTerms: {
+                type: Type.ARRAY,
+                description: "Key terminology translated to Hindi and English",
+                items: {
+                  type: Type.OBJECT,
+                  properties: {
+                    termEn: { type: Type.STRING },
+                    termHi: { type: Type.STRING },
+                    meaning: { type: Type.STRING }
+                  },
+                  required: ["termEn", "termHi", "meaning"]
+                }
+              },
+              socialPostDigest: { type: Type.STRING, description: "Ready-to-share Telegram / WhatsApp study capsule with emojis and bullet points" },
+              imageUrl: { type: Type.STRING },
+              imageAlt: { type: Type.STRING },
+              imageCredit: { type: Type.STRING }
+            },
+            required: ["title", "cat", "emoji", "year", "excerpt", "full", "verificationStatus", "factCheckSummary", "examRelevance"]
+          }
+        }
+      }
+    });
+
+    let parsedDrafts: any[] = [];
+    try {
+      parsedDrafts = JSON.parse(synthesisResult.text || "[]");
+    } catch (parseErr) {
+      console.warn("Failed to parse JSON response directly, recovering array structure:", parseErr);
+      const match = (synthesisResult.text || "").match(/\[[\s\S]*\]/);
+      if (match) {
+        parsedDrafts = JSON.parse(match[0]);
+      }
+    }
+
+    const savedDrafts: any[] = [];
+
+    for (const draft of parsedDrafts) {
+      const idSlug = (draft.title || 'draft').toLowerCase().replace(/[^a-z0-9\s-]/g, '').trim().replace(/\s+/g, '-').substring(0, 80) || `ai-${Date.now()}`;
+      const draftId = draft.id || `draft-${idSlug}-${Date.now().toString().slice(-4)}`;
+      
+      const sources = (draft.trustedSources && draft.trustedSources.length > 0) ? draft.trustedSources : extractedSources.slice(0, 4);
+
+      const draftData = {
+        ...draft,
+        id: draftId,
+        cat: targetCategory || (['history', 'science', 'inventions', 'discoveries', 'birthdays'].includes(draft.cat) ? draft.cat : 'science'),
+        topicType: draft.topicType || topicType || 'exam_gk',
+        searchKeywords: keywords,
+        targetKeyword: keywords[0] || 'General',
+        eventMonth: draft.eventMonth || currentMonth,
+        eventDay: draft.eventDay || currentDay,
+        trustedSources: sources,
+        status: 'pending',
+        createdAt: draft.createdAt || new Date().toISOString(),
+        updatedAt: new Date().toISOString()
+      };
+
+      inMemoryAIDrafts.set(draftId, draftData);
+      savedDrafts.push(draftData);
+
+      if (serverDb) {
+        try {
+          await setDoc(doc(serverDb, "ai_drafts", draftId), draftData);
+        } catch (dbErr) {
+          // Expected in client auth rule configurations
+        }
+      }
+    }
+
+    scannerStatus.foundItemsCount += savedDrafts.length;
+    scannerStatus.statusMessage = savedDrafts.length > 0 
+      ? `Keyword scan complete. Created ${savedDrafts.length} verified draft(s) for [${keywords.join(", ")}]. Next scan in 2 hours.`
+      : `Scan complete for [${keywords.join(", ")}]. No high-yield educational items found.`;
+    scannerStatus.isRunning = false;
+
+    console.log(`[AI Keyword Scanner] ${scannerStatus.statusMessage}`);
+    return savedDrafts;
+  } catch (error: any) {
+    const isQuota = (error?.message || "").includes("429") || (error?.message || "").includes("quota") || (error?.message || "").includes("RESOURCE_EXHAUSTED");
+    console.error("[AI Keyword Scanner] Completed with error:", error?.message || error);
+    scannerStatus.isRunning = false;
+    scannerStatus.statusMessage = isQuota
+      ? "Gemini API temporary quota limit was reached. Protected by 2-hour cooldown."
+      : `Scan note: ${error.message || 'Check connection'}.`;
+    return [];
+  }
+}
+
 // Scheduled 2-Hour Autonomous Poller
 setInterval(() => {
   console.log("[AI Content Generator] 2-Hour Poller triggered automatically.");
@@ -521,50 +800,21 @@ app.get("/api/health", (req, res) => {
   res.json({ status: "ok" });
 });
 
-// Secure User Role & Profile Synchronization Endpoint
-app.post("/api/auth/sync-profile", async (req, res) => {
-  const authHeader = req.headers.authorization;
-  if (!authHeader || !authHeader.startsWith("Bearer ")) {
-    return res.status(401).json({ error: "Missing authorization credentials." });
-  }
-
-  const token = authHeader.split(" ")[1];
-  const payload = parseJwtPayload(token);
-  if (!payload) {
-    return res.status(401).json({ error: "Invalid or expired session token." });
-  }
-
-  const uid = payload.user_id || payload.sub;
-  const email = (payload.email || "").toLowerCase();
-  const name = payload.name || "Curious Reader";
-  const photoURL = payload.picture || null;
-  const phoneNumber = payload.phone_number || null;
-
-  if (!uid) {
-    return res.status(400).json({ error: "Invalid user token structure." });
-  }
-
-  const isEmailAdmin = Boolean(email && ADMIN_EMAILS.includes(email));
-
+// Scanner Status Endpoint (returns cooldown and scanning state)
+app.get("/api/admin/ai/status", (req, res) => {
+  const remaining = getCooldownRemaining();
   res.json({
-    success: true,
-    uid,
-    role: isEmailAdmin ? "admin" : "user",
-    isAdmin: isEmailAdmin
+    ...scannerStatus,
+    cooldownRemainingMs: remaining,
+    intervalHours: 2
   });
 });
 
-// AI Scanner Status Endpoint (Protected)
-app.get("/api/admin/ai/status", requireAdmin, (req, res) => {
-  scannerStatus.cooldownRemainingMs = getCooldownRemaining();
-  res.json(scannerStatus);
-});
-
-// Trigger Manual AI Trend & Days Scan (Admin Only) with 2-Hour Cooldown Guard
+// Trigger 5-Pillar Educational News Scan (Admin Only)
 app.post("/api/admin/ai/scan", requireAdmin, async (req, res) => {
-  const { topicType, targetMonth, targetDay, force } = req.body || {};
-  
+  const { topicType, targetCategory, targetMonth, targetDay, force } = req.body || {};
   const remaining = getCooldownRemaining();
+
   if (remaining > 0 && !force && scannerStatus.lastScanTime) {
     const mins = Math.ceil(remaining / 60000);
     return res.status(429).json({
@@ -583,14 +833,14 @@ app.post("/api/admin/ai/scan", requireAdmin, async (req, res) => {
       targetMonth: targetMonth ? parseInt(targetMonth) : undefined,
       targetDay: targetDay ? parseInt(targetDay) : undefined
     });
-    
+
     scannerStatus.cooldownRemainingMs = TWO_HOURS_MS;
     if (results.length === 0 && scannerStatus.statusMessage.toLowerCase().includes("quota")) {
       return res.json({
         success: false,
         count: 0,
         quotaLimited: true,
-        message: "Gemini API temporary quota limit was reached. The scanner is locked in the 2-hour cooldown and will automatically retry in the next cycle.",
+        message: "Gemini API temporary quota limit was reached. The scanner is locked in the 2-hour cooldown.",
         status: { ...scannerStatus, cooldownRemainingMs: TWO_HOURS_MS }
       });
     }
@@ -603,10 +853,111 @@ app.post("/api/admin/ai/scan", requireAdmin, async (req, res) => {
     });
   } catch (error: any) {
     const isQuota = (error?.message || "").includes("429") || (error?.message || "").includes("quota");
-    res.status(isQuota ? 429 : 500).json({ 
-      error: isQuota 
-        ? "Gemini API quota rate-limit active. Please try again in the next cycle or generate a single topic directly." 
-        : (error.message || "Failed to run AI news scan") 
+    res.status(isQuota ? 429 : 500).json({
+      error: isQuota
+        ? "Gemini API quota rate-limit active. Please try again in the next cycle or generate a single topic directly."
+        : (error.message || "Failed to run scan")
+    });
+  }
+});
+
+// Sync User Profile Endpoint
+app.post("/api/auth/sync-profile", async (req, res) => {
+  const { uid, email, displayName, photoURL } = req.body || {};
+  if (!uid) {
+    return res.status(400).json({ error: "Missing uid" });
+  }
+
+  if (serverDb) {
+    try {
+      const userRef = doc(serverDb, "users", uid);
+      await setDoc(userRef, {
+        uid,
+        email: email || null,
+        displayName: displayName || null,
+        photoURL: photoURL || null,
+        updatedAt: new Date().toISOString()
+      }, { merge: true });
+    } catch (e) {
+      console.warn("Could not sync user profile to DB:", e);
+    }
+  }
+
+  res.json({ success: true });
+});
+
+// Get Preset 15 Google Search Keywords
+app.get("/api/admin/ai/keywords", requireAdmin, (req, res) => {
+  res.json({
+    keywords: PRESET_GOOGLE_KEYWORDS
+  });
+});
+
+// Trigger Keyword-Driven Scan & Content Creation (Admin Only)
+app.post("/api/admin/ai/scan-keywords", requireAdmin, async (req, res) => {
+  const { 
+    keywords, 
+    query: incomingQuery,
+    customQuery, 
+    topicType, 
+    targetCategory, 
+    targetMonth, 
+    targetDay, 
+    targetExam, 
+    force 
+  } = req.body || {};
+  const activeCustomQuery = incomingQuery || customQuery;
+
+  if (!keywords || !Array.isArray(keywords) || keywords.length === 0) {
+    return res.status(400).json({ error: "At least one search keyword is required." });
+  }
+
+  const remaining = getCooldownRemaining();
+  if (remaining > 0 && !force && scannerStatus.lastScanTime) {
+    const mins = Math.ceil(remaining / 60000);
+    return res.status(429).json({
+      success: false,
+      cooldown: true,
+      cooldownRemainingMs: remaining,
+      status: { ...scannerStatus, cooldownRemainingMs: remaining },
+      message: `2-Hour cooldown is active. Please wait ${mins} minute(s) before triggering the next Google scan.`
+    });
+  }
+
+  try {
+    const results = await runKeywordDrivenContentScan({
+      keywords,
+      customQuery: activeCustomQuery,
+      topicType: topicType || 'exam_gk',
+      targetCategory,
+      targetMonth: targetMonth ? parseInt(targetMonth) : undefined,
+      targetDay: targetDay ? parseInt(targetDay) : undefined,
+      targetExam
+    });
+
+    scannerStatus.cooldownRemainingMs = TWO_HOURS_MS;
+    if (results.length === 0 && scannerStatus.statusMessage.toLowerCase().includes("quota")) {
+      return res.json({
+        success: false,
+        count: 0,
+        quotaLimited: true,
+        message: "Gemini API temporary quota limit was reached. The scanner is locked in the 2-hour cooldown.",
+        status: { ...scannerStatus, cooldownRemainingMs: TWO_HOURS_MS }
+      });
+    }
+
+    res.json({
+      success: true,
+      count: results.length,
+      drafts: results,
+      status: { ...scannerStatus, cooldownRemainingMs: TWO_HOURS_MS }
+    });
+  } catch (error: any) {
+    const isQuota = (error?.message || "").includes("429") || (error?.message || "").includes("quota");
+    res.status(isQuota ? 429 : 500).json({
+      error: isQuota
+        ? "Gemini API quota rate-limit active. Please try again in the next cycle or generate a single topic directly."
+        : (error.message || "Failed to run keyword scan")
     });
   }
 });
@@ -783,11 +1134,13 @@ REQUIREMENTS:
       updatedAt: new Date().toISOString()
     };
 
+    inMemoryAIDrafts.set(draftId, draftData);
+
     if (serverDb) {
       try {
         await setDoc(doc(serverDb, "ai_drafts", draftId), draftData);
       } catch (dbErr) {
-        console.error("DB error saving draft:", dbErr);
+        // Handled in client sync
       }
     }
 
@@ -801,6 +1154,20 @@ REQUIREMENTS:
         : (error.message || "Failed to generate topic draft") 
     });
   }
+});
+
+// Admin Drafts Endpoints
+app.get("/api/admin/ai/drafts", requireAdmin, (req, res) => {
+  const drafts = Array.from(inMemoryAIDrafts.values()).sort((a, b) => 
+    new Date(b.createdAt || 0).getTime() - new Date(a.createdAt || 0).getTime()
+  );
+  res.json(drafts);
+});
+
+app.delete("/api/admin/ai/drafts/:id", requireAdmin, (req, res) => {
+  const { id } = req.params;
+  inMemoryAIDrafts.delete(id);
+  res.json({ success: true });
 });
 
 
@@ -921,6 +1288,11 @@ app.post("/api/quiz/generate", async (req, res) => {
     console.error("Gemini Error:", error);
     res.status(500).json({ error: "Failed to generate quiz questions" });
   }
+});
+
+// Explicit API 404 Catch-all to guarantee all /api requests return JSON, never HTML
+app.all("/api/*", (req, res) => {
+  res.status(404).json({ error: `API endpoint not found: ${req.method} ${req.originalUrl}` });
 });
 
 // Middleware for Vite

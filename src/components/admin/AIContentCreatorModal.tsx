@@ -60,7 +60,7 @@ export const AIContentCreatorModal: React.FC<AIContentCreatorModalProps> = ({ is
   const [scanning, setScanning] = useState(false);
   const [generating, setGenerating] = useState(false);
   const [previewMode, setPreviewMode] = useState(false);
-  const [notification, setNotification] = useState<{ type: 'success' | 'error'; message: string } | null>(null);
+  const [notification, setNotification] = useState<{ type: 'success' | 'error' | 'info'; message: string } | null>(null);
 
   // Scanner status
   const [scannerStatus, setScannerStatus] = useState<AIScannerStatus>({
@@ -118,29 +118,60 @@ export const AIContentCreatorModal: React.FC<AIContentCreatorModalProps> = ({ is
           ...(token ? { 'Authorization': `Bearer ${token}` } : {})
         }
       });
-      if (res.ok) {
+      const contentType = res.headers.get('content-type') || '';
+      if (res.ok && contentType.includes('application/json')) {
         const data = await res.json();
         setScannerStatus(data);
       }
     } catch (err) {
-      console.error("Failed to fetch scanner status", err);
+      console.warn("Scanner status sync note:", err);
     }
   };
 
-  const handleTriggerScan = async () => {
+  const handleTriggerScan = async (force: boolean = false) => {
     setScanning(true);
     setNotification(null);
     try {
-      const token = await auth.currentUser?.getIdToken();
+      if (!auth.currentUser && auth.authStateReady) {
+        await auth.authStateReady();
+      }
+      const currentUser = auth.currentUser;
+      const token = currentUser ? await currentUser.getIdToken() : null;
+
       const res = await fetch('/api/admin/ai/scan', {
         method: 'POST',
         headers: { 
           'Content-Type': 'application/json',
           ...(token ? { 'Authorization': `Bearer ${token}` } : {})
-        }
+        },
+        body: JSON.stringify({
+          topicType: 'all_round',
+          force
+        })
       });
-      const data = await res.json();
-      if (data.success) {
+
+      let data: any = {};
+      const contentType = res.headers.get('content-type') || '';
+      if (contentType.includes('application/json')) {
+        data = await res.json();
+      } else {
+        const text = await res.text();
+        throw new Error(res.status === 401 || res.status === 403 
+          ? 'Admin authorization required. Please ensure you are logged in as an administrator.' 
+          : `Server communication error (${res.status}). Please try again in a few moments.`);
+      }
+
+      if (res.ok && data.success) {
+        if (data.drafts && Array.isArray(data.drafts) && data.drafts.length > 0) {
+          await factService.saveScannedDrafts(data.drafts);
+          setDrafts(prev => {
+            const map = new Map<string, AIDraft>();
+            for (const d of data.drafts) map.set(d.id, d);
+            for (const d of prev) if (!map.has(d.id)) map.set(d.id, d);
+            return Array.from(map.values());
+          });
+          selectDraftForEditing(data.drafts[0]);
+        }
         setNotification({
           type: 'success',
           message: data.count > 0 
@@ -149,13 +180,23 @@ export const AIContentCreatorModal: React.FC<AIContentCreatorModalProps> = ({ is
         });
         await loadDrafts();
         fetchScannerStatus();
+      } else if (data.cooldown || res.status === 429) {
+        setNotification({
+          type: 'info',
+          message: data.message || '2-Hour cooldown is currently active. Scanner runs every 2 hours.'
+        });
+      } else if (data.quotaLimited) {
+        setNotification({
+          type: 'info',
+          message: data.message || 'Gemini API temporary quota reached. Please retry in a few moments.'
+        });
       } else {
-        throw new Error(data.error || 'Failed scan');
+        throw new Error(data.error || data.message || 'Failed scan');
       }
     } catch (err: any) {
       setNotification({
         type: 'error',
-        message: `Scan failed: ${err.message || 'Check server connection'}`
+        message: `${err.message || 'Failed to complete scan. Please try again.'}`
       });
     } finally {
       setScanning(false);
@@ -183,19 +224,31 @@ export const AIContentCreatorModal: React.FC<AIContentCreatorModalProps> = ({ is
         })
       });
 
-      if (!res.ok) {
-        const errData = await res.json();
-        throw new Error(errData.error || 'Failed to generate draft');
+      let responseData: any = null;
+      const contentType = res.headers.get('content-type') || '';
+      if (contentType.includes('application/json')) {
+        responseData = await res.json();
+      } else {
+        const text = await res.text();
+        throw new Error(res.status === 401 || res.status === 403 
+          ? 'Admin authorization required.' 
+          : `Server error (${res.status}): ${text.substring(0, 60)}`);
       }
 
-      const newDraft: AIDraft = await res.json();
+      if (!res.ok) {
+        throw new Error(responseData?.error || 'Failed to generate draft');
+      }
+
+      const newDraft: AIDraft = responseData;
+      await factService.createAIDraft(newDraft);
+      setDrafts(prev => [newDraft, ...prev.filter(d => d.id !== newDraft.id)]);
+      selectDraftForEditing(newDraft);
       setNotification({
         type: 'success',
         message: `Verified draft created for: "${newDraft.title}"!`
       });
       setCustomTopic('');
       await loadDrafts();
-      selectDraftForEditing(newDraft);
       setActiveTab('queue');
     } catch (err: any) {
       setNotification({
@@ -418,7 +471,7 @@ export const AIContentCreatorModal: React.FC<AIContentCreatorModalProps> = ({ is
 
             <div className="flex items-center gap-2">
               <button
-                onClick={handleTriggerScan}
+                onClick={() => handleTriggerScan(false)}
                 disabled={scanning}
                 className="flex items-center gap-1.5 px-4 py-2 bg-gold/15 hover:bg-gold/25 text-ink font-bold text-xs rounded-xl border border-gold/30 transition-all shadow-sm disabled:opacity-50"
                 title="Force an instant scan of Google Trends now"
@@ -483,10 +536,20 @@ export const AIContentCreatorModal: React.FC<AIContentCreatorModalProps> = ({ is
           {/* Notification Alert */}
           {notification && (
             <div className={`px-6 py-2.5 text-xs flex items-center justify-between ${
-              notification.type === 'success' ? 'bg-emerald-50 text-emerald-900 border-b border-emerald-200' : 'bg-rose-50 text-rose-900 border-b border-rose-200'
+              notification.type === 'success' 
+                ? 'bg-emerald-50 text-emerald-900 border-b border-emerald-200' 
+                : notification.type === 'info'
+                ? 'bg-amber-50 text-amber-900 border-b border-amber-200'
+                : 'bg-rose-50 text-rose-900 border-b border-rose-200'
             }`}>
               <div className="flex items-center gap-2">
-                {notification.type === 'success' ? <CheckCircle2 size={16} className="text-emerald-600" /> : <AlertCircle size={16} className="text-rose-600" />}
+                {notification.type === 'success' ? (
+                  <CheckCircle2 size={16} className="text-emerald-600" />
+                ) : notification.type === 'info' ? (
+                  <Clock size={16} className="text-amber-600" />
+                ) : (
+                  <AlertCircle size={16} className="text-rose-600" />
+                )}
                 <span>{notification.message}</span>
               </div>
               <button onClick={() => setNotification(null)} className="text-xs opacity-70 hover:opacity-100 font-bold">
@@ -640,7 +703,7 @@ export const AIContentCreatorModal: React.FC<AIContentCreatorModalProps> = ({ is
                       <strong>Current Status:</strong> {scannerStatus.statusMessage}
                     </div>
                     <button
-                      onClick={handleTriggerScan}
+                      onClick={() => handleTriggerScan(false)}
                       disabled={scanning}
                       className="px-4 py-2 bg-ink text-white text-xs font-bold rounded-xl hover:bg-gold hover:text-ink transition-all"
                     >
@@ -677,7 +740,7 @@ export const AIContentCreatorModal: React.FC<AIContentCreatorModalProps> = ({ is
                       <div className="p-6 text-center space-y-2">
                         <p className="text-xs text-ink3">No drafts found.</p>
                         <button
-                          onClick={handleTriggerScan}
+                          onClick={() => handleTriggerScan(false)}
                           className="text-xs font-bold text-gold hover:underline"
                         >
                           Scan Google Trends Now
@@ -1057,7 +1120,7 @@ export const AIContentCreatorModal: React.FC<AIContentCreatorModalProps> = ({ is
                         Choose a draft from the left queue to review and edit, or click "Scan Trends Now" to fetch live verified news.
                       </p>
                       <button
-                        onClick={handleTriggerScan}
+                        onClick={() => handleTriggerScan(false)}
                         disabled={scanning}
                         className="px-5 py-2.5 bg-ink text-white hover:bg-gold hover:text-ink text-xs font-bold rounded-xl transition-all shadow-sm"
                       >

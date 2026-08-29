@@ -49,6 +49,8 @@ export interface Fact {
   quizMCQs?: QuizMCQ[];
   bilingualTerms?: BilingualTerm[];
   socialPostDigest?: string;
+  searchKeywords?: string[];
+  targetKeyword?: string;
   affiliateProducts?: AffiliateProduct[];
 }
 
@@ -210,6 +212,8 @@ export interface AIDraft {
   quizMCQs?: QuizMCQ[];
   bilingualTerms?: BilingualTerm[];
   socialPostDigest?: string;
+  searchKeywords?: string[];
+  targetKeyword?: string;
   createdAt: string;
   affiliateProducts?: AffiliateProduct[];
 }
