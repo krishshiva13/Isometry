@@ -1290,6 +1290,53 @@ app.post("/api/quiz/generate", async (req, res) => {
   }
 });
 
+app.get("/api/utils/resolve-image", async (req, res) => {
+  const targetUrl = req.query.url as string;
+  if (!targetUrl) {
+    return res.status(400).json({ error: "URL query parameter is required" });
+  }
+
+  try {
+    const fetchRes = await fetch(targetUrl, {
+      headers: {
+        "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
+        "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,image/*;q=0.8,*/*;q=0.5"
+      }
+    });
+
+    const contentType = fetchRes.headers.get("content-type") || "";
+    if (contentType.startsWith("image/")) {
+      return res.json({ directUrl: targetUrl });
+    }
+
+    const html = await fetchRes.text();
+    // 1. Look for OpenGraph image
+    const ogMatch = html.match(/<meta[^>]+property=["']og:image["'][^>]+content=["']([^"']+)["']/i) 
+      || html.match(/<meta[^>]+content=["']([^"']+)["'][^>]+property=["']og:image["']/i);
+    if (ogMatch && ogMatch[1]) {
+      return res.json({ directUrl: ogMatch[1] });
+    }
+
+    // 2. Look for twitter:image
+    const twitterMatch = html.match(/<meta[^>]+name=["']twitter:image["'][^>]+content=["']([^"']+)["']/i)
+      || html.match(/<meta[^>]+content=["']([^"']+)["'][^>]+name=["']twitter:image["']/i);
+    if (twitterMatch && twitterMatch[1]) {
+      return res.json({ directUrl: twitterMatch[1] });
+    }
+
+    // 3. Look for imgbb specific viewer structure or direct image elements
+    const imgbbMatch = html.match(/<link[^>]+rel=["']image_src["'][^>]+href=["']([^"']+)["']/i)
+      || html.match(/<img[^>]+src=["'](https:\/\/[a-zA-Z0-9.-]+\.ibb\.co\/[^"']+)["']/i);
+    if (imgbbMatch && imgbbMatch[1]) {
+      return res.json({ directUrl: imgbbMatch[1] });
+    }
+
+    return res.json({ directUrl: targetUrl });
+  } catch (err: any) {
+    return res.status(500).json({ error: "Failed to resolve image URL", details: err.message });
+  }
+});
+
 // Explicit API 404 Catch-all to guarantee all /api requests return JSON, never HTML
 app.all("/api/*", (req, res) => {
   res.status(404).json({ error: `API endpoint not found: ${req.method} ${req.originalUrl}` });

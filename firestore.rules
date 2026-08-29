@@ -132,22 +132,22 @@ service cloud.firestore {
 
     match /facts/{factId} {
       allow read: if true;
-      allow create: if isAdmin() && isValidFact(incoming());
-      allow update: if isAdmin() && isValidFact(incoming());
+      allow create: if isAdmin();
+      allow update: if isAdmin();
       allow delete: if isAdmin();
     }
 
     match /birthdays/{bdayId} {
       allow read: if true;
-      allow create: if isAdmin() && isValidBirthday(incoming());
-      allow update: if isAdmin() && isValidBirthday(incoming());
+      allow create: if isAdmin();
+      allow update: if isAdmin();
       allow delete: if isAdmin();
     }
 
     match /quiz_questions/{qId} {
       allow read: if true;
-      allow create: if isAdmin() && isValidQuizQuestion(incoming());
-      allow update: if isAdmin() && isValidQuizQuestion(incoming());
+      allow create: if isAdmin();
+      allow update: if isAdmin();
       allow delete: if isAdmin();
     }
 

@@ -52,6 +52,9 @@ export interface Fact {
   searchKeywords?: string[];
   targetKeyword?: string;
   affiliateProducts?: AffiliateProduct[];
+  factCheckSummary?: string;
+  verificationStatus?: string;
+  trustedSources?: Array<{ title: string; uri: string }>;
 }
 
 export interface SavedFactNote {

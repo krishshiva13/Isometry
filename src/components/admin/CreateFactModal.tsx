@@ -3,6 +3,7 @@ import { motion, AnimatePresence } from 'motion/react';
 import { X, Save, Plus, Calendar, Clock, ShoppingBag, Trash2, ExternalLink, BookCheck, ShieldAlert } from 'lucide-react';
 import { factService } from '../../services/factService';
 import { Fact, Category, AffiliateProduct } from '../../types';
+import { ImageUploadField } from '../common/ImageUploadField';
 
 const COLOR_OPTIONS = [
   { name: 'gold', label: 'Gold', bg: 'bg-[#d9ad42]', text: 'text-[#d9ad42]' },
@@ -241,45 +242,31 @@ export const CreateFactModal = ({ isOpen, onClose, onSuccess, initialCat }: Crea
               />
             </div>
 
-            <div className="grid grid-cols-1 sm:grid-cols-3 gap-6">
+            <div className="space-y-4">
               <div className="space-y-2">
                 <label className="text-xs font-bold uppercase tracking-widest text-ink3">Emoji Accent</label>
                 <input 
                   value={formData.emoji}
                   onChange={(e) => setFormData({...formData, emoji: e.target.value})}
-                  className="w-full bg-white border border-black/10 rounded-xl px-4 py-3 focus:border-gold outline-none transition-all text-center text-xl"
+                  className="w-24 bg-white border border-black/10 rounded-xl px-4 py-2.5 focus:border-gold outline-none transition-all text-center text-xl"
                   placeholder="📝"
                 />
               </div>
 
-              <div className="sm:col-span-2 space-y-2">
-                <label className="text-xs font-bold uppercase tracking-widest text-ink3">Cover Image URL (Optional)</label>
-                <input 
-                  value={formData.imageUrl}
-                  onChange={(e) => setFormData({...formData, imageUrl: e.target.value})}
-                  className="w-full bg-white border border-black/10 rounded-xl px-4 py-3 focus:border-gold outline-none transition-all text-sm"
-                  placeholder="https://images.unsplash.com/photo-..."
-                />
-              </div>
-            </div>
-
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-6 bg-paper2 p-4 rounded-2xl border border-black/5">
-              <div className="space-y-2">
-                <label className="text-xs font-bold uppercase tracking-widest text-ink3">Cover Image Alt Text (SEO)</label>
-                <input 
-                  value={formData.imageAlt || ''}
-                  onChange={(e) => setFormData({...formData, imageAlt: e.target.value})}
-                  className="w-full bg-white border border-black/10 rounded-xl px-4 py-3 focus:border-gold outline-none transition-all text-sm"
-                  placeholder="Describe what is in the image..."
-                />
-              </div>
-              <div className="space-y-2">
-                <label className="text-xs font-bold uppercase tracking-widest text-ink3">Cover Image Credit / Source</label>
-                <input 
-                  value={formData.imageCredit || ''}
-                  onChange={(e) => setFormData({...formData, imageCredit: e.target.value})}
-                  className="w-full bg-white border border-black/10 rounded-xl px-4 py-3 focus:border-gold outline-none transition-all text-sm"
-                  placeholder="e.g., Jane Smith via Wikimedia Commons"
+              <div className="bg-paper2 p-4 rounded-2xl border border-black/5">
+                <ImageUploadField
+                  label="Cover / Featured Image"
+                  imageUrl={formData.imageUrl || ''}
+                  imageAlt={formData.imageAlt || formData.title}
+                  imageCredit={formData.imageCredit || ''}
+                  onChange={(media) => {
+                    setFormData({
+                      ...formData,
+                      imageUrl: media.imageUrl,
+                      imageAlt: media.imageAlt !== undefined ? media.imageAlt : formData.imageAlt,
+                      imageCredit: media.imageCredit !== undefined ? media.imageCredit : formData.imageCredit
+                    });
+                  }}
                 />
               </div>
             </div>

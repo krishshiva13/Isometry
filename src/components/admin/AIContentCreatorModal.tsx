@@ -30,6 +30,8 @@ import { factService } from '../../services/factService';
 import { useAuth } from '../../contexts/AuthContext';
 import { auth } from '../../lib/firebase';
 import ReactMarkdown from 'react-markdown';
+import { ImageUploadField } from '../common/ImageUploadField';
+import { normalizeImageUrl } from '../../lib/imageUtils';
 
 const COLOR_OPTIONS = [
   { name: 'gold', label: 'Gold', bg: 'bg-[#d9ad42]', text: 'text-[#d9ad42]' },
@@ -296,18 +298,23 @@ export const AIContentCreatorModal: React.FC<AIContentCreatorModalProps> = ({ is
     setLoading(true);
     try {
       await factService.updateAIDraft(selectedDraft.id, {
-        title: editForm.title,
-        cat: editForm.cat,
-        emoji: editForm.emoji,
-        year: editForm.year,
-        excerpt: editForm.excerpt,
-        full: editForm.full,
-        imageUrl: editForm.imageUrl,
-        imageAlt: editForm.imageAlt,
-        imageCredit: editForm.imageCredit,
-        factCheckSummary: editForm.factCheckSummary,
-        examRelevance: editForm.examRelevance,
-        affiliateProducts: editForm.affiliateProducts
+        title: editForm.title || '',
+        cat: editForm.cat || 'science',
+        topicType: editForm.topicType || 'day_in_history',
+        emoji: editForm.emoji || '📝',
+        year: editForm.year || new Date().getFullYear(),
+        excerpt: editForm.excerpt || '',
+        full: editForm.full || '',
+        imageUrl: editForm.imageUrl || '',
+        imageAlt: editForm.imageAlt || '',
+        imageCredit: editForm.imageCredit || '',
+        factCheckSummary: editForm.factCheckSummary || '',
+        examRelevance: editForm.examRelevance || '',
+        quizMCQs: editForm.quizMCQs || [],
+        bilingualTerms: editForm.bilingualTerms || [],
+        socialPostDigest: editForm.socialPostDigest || '',
+        affiliateProducts: editForm.affiliateProducts || [],
+        trustedSources: editForm.trustedSources || []
       });
 
       setNotification({
@@ -359,7 +366,10 @@ export const AIContentCreatorModal: React.FC<AIContentCreatorModalProps> = ({ is
         quizMCQs: editForm.quizMCQs || [],
         bilingualTerms: editForm.bilingualTerms || [],
         socialPostDigest: editForm.socialPostDigest || '',
-        affiliateProducts: editForm.affiliateProducts || []
+        affiliateProducts: editForm.affiliateProducts || [],
+        examRelevance: editForm.examRelevance || '',
+        factCheckSummary: editForm.factCheckSummary || '',
+        trustedSources: editForm.trustedSources || []
       };
 
       if (publishType === 'schedule') {
@@ -895,8 +905,20 @@ export const AIContentCreatorModal: React.FC<AIContentCreatorModalProps> = ({ is
                             </div>
 
                             {editForm.imageUrl && (
-                              <div className="rounded-2xl overflow-hidden border border-black/10">
-                                <img src={editForm.imageUrl} alt={editForm.imageAlt || editForm.title} className="w-full h-64 object-cover" />
+                              <div className="rounded-2xl overflow-hidden border border-black/10 relative bg-paper2">
+                                <img 
+                                  src={normalizeImageUrl(editForm.imageUrl)} 
+                                  alt={editForm.imageAlt || editForm.title} 
+                                  className="w-full h-64 object-cover" 
+                                  referrerPolicy="no-referrer"
+                                  onError={(e) => {
+                                    const target = e.target as HTMLImageElement;
+                                    target.onerror = null;
+                                    if (target.src.includes('?width=')) {
+                                      target.src = target.src.split('?')[0];
+                                    }
+                                  }}
+                                />
                                 {editForm.imageCredit && (
                                   <div className="p-2 text-[10px] text-ink3 text-right bg-paper2 font-mono">
                                     Photo Credit: {editForm.imageCredit}
@@ -1022,22 +1044,21 @@ export const AIContentCreatorModal: React.FC<AIContentCreatorModalProps> = ({ is
                             </div>
 
                             {/* Images & Publishing Schedule */}
-                            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                              <div className="bg-white p-4 rounded-2xl border border-black/10 space-y-3">
-                                <span className="text-xs font-bold uppercase tracking-wider text-ink">Cover Image</span>
-                                <input
-                                  type="url"
-                                  value={editForm.imageUrl || ''}
-                                  onChange={(e) => setEditForm({ ...editForm, imageUrl: e.target.value })}
-                                  placeholder="Image URL (Unsplash or Wikimedia)..."
-                                  className="w-full bg-paper2 border border-black/10 rounded-xl p-2.5 text-xs text-ink focus:border-gold outline-none"
-                                />
-                                <input
-                                  type="text"
-                                  value={editForm.imageCredit || ''}
-                                  onChange={(e) => setEditForm({ ...editForm, imageCredit: e.target.value })}
-                                  placeholder="Image Credit / Source..."
-                                  className="w-full bg-paper2 border border-black/10 rounded-xl p-2.5 text-xs text-ink focus:border-gold outline-none"
+                            <div className="space-y-4">
+                              <div className="bg-white p-4 rounded-2xl border border-black/10">
+                                <ImageUploadField
+                                  label="Cover Image (Upload File or Paste Link)"
+                                  imageUrl={editForm.imageUrl || ''}
+                                  imageAlt={editForm.imageAlt || editForm.title}
+                                  imageCredit={editForm.imageCredit || ''}
+                                  onChange={(media) => {
+                                    setEditForm({
+                                      ...editForm,
+                                      imageUrl: media.imageUrl,
+                                      imageAlt: media.imageAlt !== undefined ? media.imageAlt : editForm.imageAlt,
+                                      imageCredit: media.imageCredit !== undefined ? media.imageCredit : editForm.imageCredit
+                                    });
+                                  }}
                                 />
                               </div>
 

@@ -55,6 +55,31 @@ function handleFirestoreError(error: unknown, operationType: OperationType, path
   throw new Error(JSON.stringify(errInfo));
 }
 
+export function cleanForFirestore<T>(data: T): T {
+  if (data === null || data === undefined) {
+    return null as unknown as T;
+  }
+  if (Array.isArray(data)) {
+    return data
+      .filter(item => item !== undefined)
+      .map(item => cleanForFirestore(item)) as unknown as T;
+  }
+  if (typeof data === 'object') {
+    // If it's a Firestore Timestamp or serverTimestamp FieldValue or special object
+    if (data.constructor && data.constructor.name !== 'Object') {
+      return data;
+    }
+    const cleaned: Record<string, any> = {};
+    for (const [key, val] of Object.entries(data)) {
+      if (val !== undefined) {
+        cleaned[key] = cleanForFirestore(val);
+      }
+    }
+    return cleaned as T;
+  }
+  return data;
+}
+
 export const factService = {
   async getFacts(cat?: string, featuredOnly: boolean = false, limitCount: number = 20, isAdmin: boolean = false) {
     const path = "facts";
@@ -151,10 +176,11 @@ export const factService = {
     const path = `facts/${id}`;
     try {
       const docRef = doc(db, "facts", id);
-      await updateDoc(docRef, {
+      const cleaned = cleanForFirestore({
         ...updates,
         updatedAt: serverTimestamp()
       });
+      await updateDoc(docRef, cleaned);
     } catch (error) {
       handleFirestoreError(error, OperationType.UPDATE, path);
     }
@@ -164,11 +190,12 @@ export const factService = {
     const path = `facts/${fact.id}`;
     try {
       const docRef = doc(db, "facts", fact.id);
-      await setDoc(docRef, {
+      const cleaned = cleanForFirestore({
         ...fact,
         createdAt: serverTimestamp(),
         updatedAt: serverTimestamp()
       });
+      await setDoc(docRef, cleaned);
     } catch (error) {
       handleFirestoreError(error, OperationType.CREATE, path);
     }
@@ -394,13 +421,14 @@ export const factService = {
     try {
       const id = draft.id || `draft-${Date.now()}`;
       const docRef = doc(db, path, id);
-      await setDoc(docRef, {
+      const cleaned = cleanForFirestore({
         ...draft,
         id,
         status: draft.status || 'pending',
         createdAt: serverTimestamp(),
         updatedAt: serverTimestamp()
-      }, { merge: true });
+      });
+      await setDoc(docRef, cleaned, { merge: true });
       return id;
     } catch (error) {
       handleFirestoreError(error, OperationType.CREATE, path);
@@ -411,10 +439,11 @@ export const factService = {
     const path = `ai_drafts/${id}`;
     try {
       const docRef = doc(db, "ai_drafts", id);
-      await updateDoc(docRef, {
+      const cleaned = cleanForFirestore({
         ...updates,
         updatedAt: serverTimestamp()
       });
+      await updateDoc(docRef, cleaned);
     } catch (error) {
       handleFirestoreError(error, OperationType.UPDATE, path);
     }
