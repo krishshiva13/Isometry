@@ -4,6 +4,7 @@ import { X, Save, Plus, Calendar, Clock, ShoppingBag, Trash2, ExternalLink, Book
 import { factService } from '../../services/factService';
 import { Fact, Category, AffiliateProduct } from '../../types';
 import { ImageUploadField } from '../common/ImageUploadField';
+import { MarkdownToolbar } from '../common/MarkdownToolbar';
 
 const COLOR_OPTIONS = [
   { name: 'gold', label: 'Gold', bg: 'bg-[#d9ad42]', text: 'text-[#d9ad42]' },
@@ -327,12 +328,19 @@ export const CreateFactModal = ({ isOpen, onClose, onSuccess, initialCat }: Crea
                 </p>
               </div>
 
+              {/* Formatting and Bullet / Number List Toolbar */}
+              <MarkdownToolbar
+                textareaRef={textareaRef}
+                value={formData.full || ''}
+                onChange={(val) => setFormData({ ...formData, full: val })}
+              />
+
               <textarea 
                 ref={textareaRef}
                 value={formData.full}
                 onChange={(e) => setFormData({...formData, full: e.target.value})}
                 className="w-full bg-white border border-black/10 rounded-xl px-4 py-3 focus:border-gold outline-none transition-all h-64 font-serif leading-relaxed"
-                placeholder="Write the full story here... Use Markdown."
+                placeholder="Write the full story here... Use Markdown or the list formatting tools above."
                 required
               />
             </div>

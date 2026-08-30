@@ -7,6 +7,7 @@ import { Fact, Birthday } from '../types';
 import { cn } from '../lib/utils';
 import { Ticker } from '../components/Ticker';
 import { FactCard } from '../components/FactCard';
+import { StudyHubSection } from '../components/StudyHubSection';
 import { INITIAL_FACTS, INITIAL_BIRTHDAYS, INITIAL_QUIZ } from '../seed';
 
 import { useAuth } from '../contexts/AuthContext';
@@ -141,6 +142,9 @@ export const Home = () => {
           </div>
         </div>
       </section>
+
+      {/* Interactive Study Tools & Pages Hub */}
+      <StudyHubSection />
 
       {/* Featured Grid */}
       <section className="py-16 px-4 bg-paper2">

@@ -23,7 +23,10 @@ import {
   HelpCircle,
   Calendar,
   ShoppingBag,
-  ArrowRight
+  ArrowRight,
+  Maximize2,
+  Minimize2,
+  Zap
 } from 'lucide-react';
 import { AIDraft, Category, Fact, AIScannerStatus, AffiliateProduct } from '../../types';
 import { factService } from '../../services/factService';
@@ -31,6 +34,7 @@ import { useAuth } from '../../contexts/AuthContext';
 import { auth } from '../../lib/firebase';
 import ReactMarkdown from 'react-markdown';
 import { ImageUploadField } from '../common/ImageUploadField';
+import { MarkdownToolbar } from '../common/MarkdownToolbar';
 import { normalizeImageUrl } from '../../lib/imageUtils';
 
 const COLOR_OPTIONS = [
@@ -57,7 +61,9 @@ export const AIContentCreatorModal: React.FC<AIContentCreatorModalProps> = ({ is
   const [drafts, setDrafts] = useState<AIDraft[]>([]);
   const [selectedDraft, setSelectedDraft] = useState<AIDraft | null>(null);
   const [activeTab, setActiveTab] = useState<'queue' | 'custom_generate' | 'scanner_info'>('queue');
-  const [filterStatus, setFilterStatus] = useState<string>('all');
+  const [filterStatus, setFilterStatus] = useState<string>('pending');
+  const [searchQuery, setSearchQuery] = useState<string>('');
+  const [isFullscreen, setIsFullscreen] = useState<boolean>(false);
   const [loading, setLoading] = useState(false);
   const [scanning, setScanning] = useState(false);
   const [generating, setGenerating] = useState(false);
@@ -96,6 +102,17 @@ export const AIContentCreatorModal: React.FC<AIContentCreatorModalProps> = ({ is
       fetchScannerStatus();
     }
   }, [isOpen, isAdmin]);
+
+  // Keyboard shortcut: Escape to close modal
+  useEffect(() => {
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (e.key === 'Escape' && isOpen) {
+        onClose();
+      }
+    };
+    window.addEventListener('keydown', handleKeyDown);
+    return () => window.removeEventListener('keydown', handleKeyDown);
+  }, [isOpen, onClose]);
 
   const loadDrafts = async () => {
     setLoading(true);
@@ -444,63 +461,95 @@ export const AIContentCreatorModal: React.FC<AIContentCreatorModalProps> = ({ is
     );
   }
 
+  const pendingCount = drafts.filter(d => (d.status || 'pending') === 'pending').length;
+  const publishedCount = drafts.filter(d => d.status === 'published').length;
+
   const filteredDrafts = drafts.filter(d => {
-    if (filterStatus === 'all') return true;
-    return d.status === filterStatus;
+    const status = d.status || 'pending';
+    if (filterStatus !== 'all' && status !== filterStatus) return false;
+    
+    if (searchQuery.trim()) {
+      const q = searchQuery.toLowerCase();
+      const titleMatch = d.title?.toLowerCase().includes(q);
+      const catMatch = d.cat?.toLowerCase().includes(q);
+      const trendMatch = d.sourceTrend?.toLowerCase().includes(q);
+      const fullMatch = d.full?.toLowerCase().includes(q);
+      return Boolean(titleMatch || catMatch || trendMatch || fullMatch);
+    }
+    return true;
   });
 
   return (
     <AnimatePresence>
-      <div className="fixed inset-0 z-50 flex items-center justify-center p-2 sm:p-4 bg-black/70 backdrop-blur-md">
+      <div className={`fixed inset-0 z-[250] ${isFullscreen ? 'p-0 bg-ink' : 'flex items-center justify-center p-2 sm:p-4 bg-black/75 backdrop-blur-md'}`}>
         <motion.div
-          initial={{ opacity: 0, scale: 0.96, y: 15 }}
+          initial={{ opacity: 0, scale: isFullscreen ? 1 : 0.96, y: 15 }}
           animate={{ opacity: 1, scale: 1, y: 0 }}
-          exit={{ opacity: 0, scale: 0.96, y: 15 }}
-          className="bg-paper w-full max-w-6xl max-h-[94vh] rounded-3xl shadow-2xl overflow-hidden border border-black/10 flex flex-col"
+          exit={{ opacity: 0, scale: isFullscreen ? 1 : 0.96, y: 15 }}
+          className={`bg-paper w-full ${isFullscreen ? 'h-screen rounded-none' : 'max-w-7xl h-[94vh] rounded-3xl shadow-2xl border border-black/10'} overflow-hidden flex flex-col`}
         >
           {/* Header */}
-          <div className="px-6 py-4 border-b border-black/10 bg-paper2 flex items-center justify-between flex-shrink-0">
+          <div className="px-5 sm:px-6 py-3.5 border-b border-black/10 bg-paper2 flex items-center justify-between flex-shrink-0 gap-3">
             <div className="flex items-center gap-3">
-              <div className="w-10 h-10 rounded-2xl bg-gradient-to-br from-gold/30 to-amber-500/20 text-gold flex items-center justify-center border border-gold/30 shadow-sm">
+              <div className="w-10 h-10 rounded-2xl bg-gradient-to-br from-gold/30 to-amber-500/20 text-gold flex items-center justify-center border border-gold/30 shadow-sm flex-shrink-0">
                 <Sparkles className="w-5 h-5" />
               </div>
               <div>
-                <div className="flex items-center gap-2">
-                  <h2 className="text-xl font-serif font-black text-ink tracking-tight">
+                <div className="flex items-center gap-2 flex-wrap">
+                  <h2 className="text-lg sm:text-xl font-serif font-black text-ink tracking-tight">
                     AI Content Creator & Verification Studio
                   </h2>
                   <span className="bg-emerald-100 text-emerald-800 text-[10px] font-mono font-bold px-2 py-0.5 rounded-full border border-emerald-300">
                     Admin Exclusive
                   </span>
                 </div>
-                <p className="text-xs text-ink3">
+                <p className="text-xs text-ink3 hidden sm:block">
                   Autonomous 2-Hour Google Trends & Exam Updates Scanner with Veracity Checks
                 </p>
               </div>
             </div>
 
-            <div className="flex items-center gap-2">
+            <div className="flex items-center gap-2 flex-shrink-0">
               <button
                 onClick={() => handleTriggerScan(false)}
                 disabled={scanning}
-                className="flex items-center gap-1.5 px-4 py-2 bg-gold/15 hover:bg-gold/25 text-ink font-bold text-xs rounded-xl border border-gold/30 transition-all shadow-sm disabled:opacity-50"
-                title="Force an instant scan of Google Trends now"
+                className="hidden sm:flex items-center gap-1.5 px-3.5 py-1.5 bg-gold/15 hover:bg-gold/25 text-ink font-bold text-xs rounded-xl border border-gold/30 transition-all shadow-sm disabled:opacity-50"
+                title="Scan Google Trends for new educational topics"
               >
                 <RefreshCw size={14} className={scanning ? "animate-spin text-gold" : "text-gold"} />
-                <span>{scanning ? "Scanning Live Web…" : "Scan Trends Now"}</span>
+                <span>{scanning ? "Scanning..." : "Scan Trends"}</span>
+              </button>
+
+              <button
+                onClick={() => handleTriggerScan(true)}
+                disabled={scanning}
+                className="flex items-center gap-1.5 px-3 py-1.5 bg-amber-500 hover:bg-amber-600 text-white font-bold text-xs rounded-xl transition-all shadow-sm disabled:opacity-50"
+                title="Bypass 2-hour cooldown and force an immediate scan"
+              >
+                <Zap size={14} className={scanning ? "animate-spin" : ""} />
+                <span>Force Scan</span>
+              </button>
+
+              <button
+                onClick={() => setIsFullscreen(!isFullscreen)}
+                className="p-2 hover:bg-black/5 rounded-xl text-ink2 hover:text-ink transition-all border border-black/5"
+                title={isFullscreen ? "Exit Fullscreen" : "Full Screen Studio"}
+              >
+                {isFullscreen ? <Minimize2 size={18} /> : <Maximize2 size={18} />}
               </button>
 
               <button
                 onClick={onClose}
-                className="p-2 hover:bg-black/5 rounded-full text-ink2 hover:text-ink transition-all"
+                className="p-2 bg-black/5 hover:bg-rose-50 hover:text-rose-600 rounded-xl text-ink transition-all"
+                title="Close Studio (Esc)"
               >
-                <X size={22} />
+                <X size={20} />
               </button>
             </div>
           </div>
 
           {/* Top Info / Navigation Bar */}
-          <div className="px-6 py-2.5 bg-white border-b border-black/5 flex flex-wrap items-center justify-between gap-3 text-xs flex-shrink-0">
+          <div className="px-5 sm:px-6 py-2.5 bg-white border-b border-black/5 flex flex-wrap items-center justify-between gap-3 text-xs flex-shrink-0">
             <div className="flex items-center gap-1 bg-paper2 p-1 rounded-xl border border-black/5">
               <button
                 onClick={() => setActiveTab('queue')}
@@ -545,26 +594,36 @@ export const AIContentCreatorModal: React.FC<AIContentCreatorModalProps> = ({ is
 
           {/* Notification Alert */}
           {notification && (
-            <div className={`px-6 py-2.5 text-xs flex items-center justify-between ${
+            <div className={`px-6 py-2.5 text-xs flex items-center justify-between gap-4 ${
               notification.type === 'success' 
                 ? 'bg-emerald-50 text-emerald-900 border-b border-emerald-200' 
                 : notification.type === 'info'
                 ? 'bg-amber-50 text-amber-900 border-b border-amber-200'
                 : 'bg-rose-50 text-rose-900 border-b border-rose-200'
             }`}>
-              <div className="flex items-center gap-2">
+              <div className="flex items-center gap-2 flex-1">
                 {notification.type === 'success' ? (
-                  <CheckCircle2 size={16} className="text-emerald-600" />
+                  <CheckCircle2 size={16} className="text-emerald-600 flex-shrink-0" />
                 ) : notification.type === 'info' ? (
-                  <Clock size={16} className="text-amber-600" />
+                  <Clock size={16} className="text-amber-600 flex-shrink-0" />
                 ) : (
-                  <AlertCircle size={16} className="text-rose-600" />
+                  <AlertCircle size={16} className="text-rose-600 flex-shrink-0" />
                 )}
                 <span>{notification.message}</span>
               </div>
-              <button onClick={() => setNotification(null)} className="text-xs opacity-70 hover:opacity-100 font-bold">
-                Dismiss
-              </button>
+              <div className="flex items-center gap-2">
+                {notification.type === 'info' && (
+                  <button 
+                    onClick={() => handleTriggerScan(true)}
+                    className="px-2.5 py-1 bg-amber-600 hover:bg-amber-700 text-white rounded-lg font-bold text-[11px] transition-colors"
+                  >
+                    ⚡ Force Scan Now
+                  </button>
+                )}
+                <button onClick={() => setNotification(null)} className="text-xs opacity-70 hover:opacity-100 font-bold">
+                  Dismiss
+                </button>
+              </div>
             </div>
           )}
 
@@ -727,20 +786,79 @@ export const AIContentCreatorModal: React.FC<AIContentCreatorModalProps> = ({ is
             {activeTab === 'queue' && (
               <>
                 {/* Left Sidebar: Drafts List */}
-                <div className="w-full md:w-80 border-r border-black/10 bg-white flex flex-col flex-shrink-0 h-[300px] md:h-auto overflow-hidden">
-                  <div className="p-3 border-b border-black/5 bg-paper2 flex items-center justify-between">
-                    <span className="text-xs font-bold uppercase tracking-wider text-ink3">
-                      Drafts ({filteredDrafts.length})
-                    </span>
-                    <select
-                      value={filterStatus}
-                      onChange={(e) => setFilterStatus(e.target.value)}
-                      className="text-[11px] bg-white border border-black/10 rounded-lg px-2 py-1 outline-none text-ink font-medium"
-                    >
-                      <option value="all">All Status</option>
-                      <option value="pending">Pending Review</option>
-                      <option value="published">Published</option>
-                    </select>
+                <div className="w-full md:w-88 border-r border-black/10 bg-white flex flex-col flex-shrink-0 h-[320px] md:h-auto overflow-hidden">
+                  <div className="p-3 border-b border-black/5 bg-paper2 space-y-2">
+                    <div className="flex items-center justify-between">
+                      <span className="text-xs font-bold uppercase tracking-wider text-ink3">
+                        Drafts Queue ({filteredDrafts.length})
+                      </span>
+                      <button
+                        onClick={() => handleTriggerScan(false)}
+                        disabled={scanning}
+                        className="text-[11px] font-bold text-gold hover:underline flex items-center gap-1"
+                        title="Scan new trends"
+                      >
+                        <RefreshCw size={11} className={scanning ? "animate-spin" : ""} />
+                        <span>Scan</span>
+                      </button>
+                    </div>
+
+                    {/* Search Box */}
+                    <div className="relative">
+                      <Search size={14} className="absolute left-2.5 top-1/2 -translate-y-1/2 text-ink3" />
+                      <input
+                        type="text"
+                        value={searchQuery}
+                        onChange={(e) => setSearchQuery(e.target.value)}
+                        placeholder="Search drafts by title, keyword…"
+                        className="w-full bg-white border border-black/10 rounded-xl pl-8 pr-7 py-1.5 text-xs text-ink placeholder:text-ink3/60 outline-none focus:border-gold"
+                      />
+                      {searchQuery && (
+                        <button
+                          onClick={() => setSearchQuery('')}
+                          className="absolute right-2 top-1/2 -translate-y-1/2 text-ink3 hover:text-ink"
+                        >
+                          <X size={12} />
+                        </button>
+                      )}
+                    </div>
+
+                    {/* Filter Segmented Buttons */}
+                    <div className="grid grid-cols-3 gap-1 bg-paper p-1 rounded-xl border border-black/5 text-[11px]">
+                      <button
+                        type="button"
+                        onClick={() => setFilterStatus('pending')}
+                        className={`py-1 rounded-lg font-bold transition-all ${
+                          filterStatus === 'pending'
+                            ? 'bg-amber-100 text-amber-900 shadow-xs'
+                            : 'text-ink3 hover:text-ink'
+                        }`}
+                      >
+                        Pending ({pendingCount})
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => setFilterStatus('published')}
+                        className={`py-1 rounded-lg font-bold transition-all ${
+                          filterStatus === 'published'
+                            ? 'bg-emerald-100 text-emerald-900 shadow-xs'
+                            : 'text-ink3 hover:text-ink'
+                        }`}
+                      >
+                        Live ({publishedCount})
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => setFilterStatus('all')}
+                        className={`py-1 rounded-lg font-bold transition-all ${
+                          filterStatus === 'all'
+                            ? 'bg-white text-ink shadow-xs'
+                            : 'text-ink3 hover:text-ink'
+                        }`}
+                      >
+                        All ({drafts.length})
+                      </button>
+                    </div>
                   </div>
 
                   <div className="flex-1 overflow-y-auto p-2 space-y-1.5 divide-y divide-black/5">
@@ -748,12 +866,17 @@ export const AIContentCreatorModal: React.FC<AIContentCreatorModalProps> = ({ is
                       <div className="p-6 text-center text-xs text-ink3">Loading drafts...</div>
                     ) : filteredDrafts.length === 0 ? (
                       <div className="p-6 text-center space-y-2">
-                        <p className="text-xs text-ink3">No drafts found.</p>
+                        <p className="text-xs text-ink3">
+                          {searchQuery ? `No drafts matching "${searchQuery}".` : `No ${filterStatus} drafts found.`}
+                        </p>
                         <button
-                          onClick={() => handleTriggerScan(false)}
-                          className="text-xs font-bold text-gold hover:underline"
+                          onClick={() => {
+                            setSearchQuery('');
+                            setFilterStatus('all');
+                          }}
+                          className="text-xs font-bold text-gold hover:underline block mx-auto"
                         >
-                          Scan Google Trends Now
+                          Clear Filters
                         </button>
                       </div>
                     ) : (
@@ -774,7 +897,7 @@ export const AIContentCreatorModal: React.FC<AIContentCreatorModalProps> = ({ is
                               <span className={`px-1.5 py-0.2 rounded font-bold ${
                                 draft.status === 'published' ? 'bg-emerald-100 text-emerald-800' : 'bg-amber-100 text-amber-900'
                               }`}>
-                                {draft.status || 'pending'}
+                                {draft.status === 'published' ? 'Published' : 'Pending Review'}
                               </span>
                             </div>
                             <h4 className="text-xs font-serif font-bold text-ink line-clamp-2 leading-snug">
@@ -1008,17 +1131,24 @@ export const AIContentCreatorModal: React.FC<AIContentCreatorModalProps> = ({ is
                             <div className="space-y-3 bg-white p-5 rounded-2xl border border-black/10">
                               <div className="flex items-center justify-between">
                                 <label className="text-[11px] font-bold uppercase tracking-wider text-ink3">
-                                  Full Article Content (Markdown) *
+                                  Full Article Content (Markdown & Lists) *
                                 </label>
                                 <div className="text-[11px] text-ink3">
-                                  Supports Markdown headers, lists, and visual color tags
+                                  Use toolbar below for bullet points, numbered lists, headings & styling
                                 </div>
                               </div>
+
+                              {/* Markdown Formatting Toolbar with Bullet & Numbered List Buttons */}
+                              <MarkdownToolbar
+                                textareaRef={textareaRef}
+                                value={editForm.full || ''}
+                                onChange={(val) => setEditForm({ ...editForm, full: val })}
+                              />
 
                               {/* Highlight Color Picker */}
                               <div className="p-3 bg-paper2 rounded-xl border border-black/5 space-y-2">
                                 <div className="text-[10px] font-bold uppercase tracking-wider text-ink3">
-                                  🎨 Click to highlight selected word or heading:
+                                  🎨 Quick Text Highlight Palette:
                                 </div>
                                 <div className="flex flex-wrap gap-1.5">
                                   {COLOR_OPTIONS.map((c) => (
@@ -1039,6 +1169,7 @@ export const AIContentCreatorModal: React.FC<AIContentCreatorModalProps> = ({ is
                                 ref={textareaRef}
                                 value={editForm.full || ''}
                                 onChange={(e) => setEditForm({ ...editForm, full: e.target.value })}
+                                placeholder="Type or format your article here using bullet points, numbered lists, headers, etc."
                                 className="w-full bg-paper2 border border-black/10 rounded-xl p-4 text-xs font-serif leading-relaxed text-ink h-80 focus:border-gold outline-none"
                               />
                             </div>
