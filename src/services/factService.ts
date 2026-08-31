@@ -388,8 +388,10 @@ export const factService = {
           for (const d of serverDrafts) {
             if (!map.has(d.id)) {
               map.set(d.id, d);
-              // Auto-persist new server draft to Firestore in background
-              this.createAIDraft(d).catch(() => {});
+              // Auto-persist new server draft to Firestore in background if admin
+              if (auth.currentUser?.email?.toLowerCase() === 'krish02shiva@gmail.com') {
+                this.createAIDraft(d).catch(() => {});
+              }
             }
           }
           return Array.from(map.values()).sort((a, b) => 

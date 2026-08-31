@@ -19,7 +19,7 @@ service cloud.firestore {
 
     function isAdmin() {
       return isSignedIn() && (
-        request.auth.token.email == 'krish02shiva@gmail.com' ||
+        ('email' in request.auth.token && request.auth.token.email != null && request.auth.token.email.lower() == 'krish02shiva@gmail.com') ||
         exists(/databases/$(database)/documents/admins/$(request.auth.uid)) ||
         (exists(/databases/$(database)/documents/users/$(request.auth.uid)) &&
          get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role == 'admin')
@@ -113,13 +113,13 @@ service cloud.firestore {
     }
 
     function isValidUserProfile(data) {
-      return data.uid == request.auth.uid
+      return (!('uid' in data) || data.uid == request.auth.uid)
         && (!('name' in data) || data.name is string)
         && (!('email' in data) || data.email == null || (data.email is string && data.email.matches('^.+@.+\\..+$')))
         && (!('phoneNumber' in data) || data.phoneNumber == null || data.phoneNumber is string)
         && (!('photoURL' in data) || data.photoURL == null || data.photoURL is string)
         && (!('role' in data) || data.role == 'admin' || data.role == 'user')
-        && (('role' in data && data.role == 'admin') ? (request.auth.token.email == 'krish02shiva@gmail.com') : true);
+        && (('role' in data && data.role == 'admin') ? (('email' in request.auth.token && request.auth.token.email != null && request.auth.token.email.lower() == 'krish02shiva@gmail.com') || isAdmin()) : true);
     }
 
     // ═══════════════════════════════════════════
@@ -128,6 +128,11 @@ service cloud.firestore {
 
     match /ai_drafts/{draftId} {
       allow read, write: if isAdmin();
+    }
+
+    match /admins/{adminId} {
+      allow read: if isSignedIn();
+      allow write: if isAdmin();
     }
 
     match /facts/{factId} {

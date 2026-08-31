@@ -49,15 +49,60 @@ app.use("/api/", (req, res, next) => {
   next();
 });
 
-// Initialize Gemini
-const ai = new GoogleGenAI({
-  apiKey: process.env.GEMINI_API_KEY,
-  httpOptions: {
-    headers: {
-      'User-Agent': 'aistudio-build',
-    }
+// Get or initialize Gemini AI Client with flexible key discovery & validation
+function getGeminiClient(): GoogleGenAI {
+  const apiKey = (
+    process.env.GEMINI_API_KEY ||
+    process.env.GOOGLE_API_KEY ||
+    process.env.VITE_GEMINI_API_KEY ||
+    process.env.API_KEY ||
+    ""
+  ).trim();
+
+  if (!apiKey) {
+    throw new Error(
+      "GEMINI_API_KEY is not configured in the server environment. Please set GEMINI_API_KEY in the Settings > Secrets menu."
+    );
   }
-});
+
+  return new GoogleGenAI({
+    apiKey,
+    httpOptions: {
+      headers: {
+        'User-Agent': 'aistudio-build',
+      }
+    }
+  });
+}
+
+function formatGeminiErrorMessage(error: any): string {
+  if (!error) return "An unexpected error occurred during AI generation.";
+  const raw = error.message || String(error);
+
+  if (
+    raw.includes("ACCESS_TOKEN_SCOPE_INSUFFICIENT") ||
+    raw.includes("insufficient authentication scopes") ||
+    raw.includes("PERMISSION_DENIED")
+  ) {
+    return "Gemini API authorization error (PERMISSION_DENIED): Please verify that a valid GEMINI_API_KEY is configured in Settings > Secrets.";
+  }
+  if (raw.includes("503") || raw.includes("UNAVAILABLE") || raw.includes("high demand")) {
+    return "The AI model is temporarily experiencing high traffic. Please try again in a few moments.";
+  }
+  if (raw.includes("429") || raw.includes("quota") || raw.includes("RESOURCE_EXHAUSTED")) {
+    return "Gemini API temporary quota limit was reached. Please wait a moment and retry.";
+  }
+
+  try {
+    const parsed = JSON.parse(raw);
+    if (parsed?.error?.message) {
+      return parsed.error.message;
+    }
+  } catch (e) {
+    // Not a JSON string
+  }
+  return raw;
+}
 
 // Initialize Firebase for server-side persistence
 let serverDb: any = null;
@@ -174,68 +219,67 @@ function getCooldownRemaining(): number {
   return Math.max(0, diff);
 }
 
-// Helper function: Robust Gemini call with exponential backoff, rate-limit (429) retry & tool fallbacks
+// Helper function: Robust Gemini call with multi-model failover, rate-limit (429) & tool fallbacks
 async function safeGenerateContent(params: {
   contents: any;
   config?: any;
   preferredModel?: string;
   allowSearchFallback?: boolean;
 }): Promise<{ text: string; rawResponse: any; usedSearch: boolean }> {
-  const modelsToTry = [params.preferredModel || "gemini-3.7-flash", "gemini-2.5-flash", "gemini-3.1-flash-lite"];
-  const maxRetries = 2;
+  const ai = getGeminiClient();
+  const rawModelList = [
+    params.preferredModel,
+    "gemini-2.5-flash",
+    "gemini-2.5-flash-lite",
+    "gemini-3.7-flash",
+    "gemini-3.1-flash-lite"
+  ].filter((m): m is string => Boolean(m));
+  
+  // Deduplicate while preserving priority order
+  const modelsToTry = Array.from(new Set(rawModelList));
   let lastError: any = null;
 
   for (const model of modelsToTry) {
-    for (let attempt = 0; attempt <= maxRetries; attempt++) {
-      try {
-        const response = await ai.models.generateContent({
-          model,
-          contents: params.contents,
-          config: params.config
-        });
-        return {
-          text: response.text || "",
-          rawResponse: response,
-          usedSearch: !!(params.config?.tools && params.config.tools.length > 0)
-        };
-      } catch (err: any) {
-        lastError = err;
-        const errMsg = (err?.message || "").toLowerCase();
-        const errStatus = err?.status || err?.code;
-        const isQuotaOrRateLimit = errMsg.includes("429") || errMsg.includes("quota") || errMsg.includes("resource_exhausted") || errStatus === 429;
-        
-        console.warn(`[Gemini API] Model ${model} (attempt ${attempt + 1}/${maxRetries + 1}) encountered issue: ${err.message}`);
+    try {
+      const response = await ai.models.generateContent({
+        model,
+        contents: params.contents,
+        config: params.config
+      });
+      return {
+        text: response.text || "",
+        rawResponse: response,
+        usedSearch: !!(params.config?.tools && params.config.tools.length > 0)
+      };
+    } catch (err: any) {
+      lastError = err;
+      const errMsg = (err?.message || String(err)).toLowerCase();
+      console.warn(`[Gemini API] Model ${model} encountered issue: ${err.message || err}`);
 
-        // If tools / googleSearch might be causing the issue or rate limiting, attempt without tools
-        if (params.allowSearchFallback && params.config?.tools && attempt === 0) {
-          try {
-            console.log(`[Gemini API] Attempting fallback generation without search tools for ${model}...`);
-            const fallbackConfig = { ...params.config };
-            delete fallbackConfig.tools;
-            const fallbackResponse = await ai.models.generateContent({
-              model,
-              contents: params.contents,
-              config: fallbackConfig
-            });
-            return {
-              text: fallbackResponse.text || "",
-              rawResponse: fallbackResponse,
-              usedSearch: false
-            };
-          } catch (toolFallbackErr: any) {
-            console.warn(`[Gemini API] Tool-less fallback with ${model} failed: ${toolFallbackErr.message}`);
-          }
+      // If search tool might have caused quota or high-demand error, try tool-less fallback immediately
+      if (params.allowSearchFallback && params.config?.tools) {
+        try {
+          console.log(`[Gemini API] Attempting fallback generation without search tools for ${model}...`);
+          const fallbackConfig = { ...params.config };
+          delete fallbackConfig.tools;
+          const fallbackResponse = await ai.models.generateContent({
+            model,
+            contents: params.contents,
+            config: fallbackConfig
+          });
+          return {
+            text: fallbackResponse.text || "",
+            rawResponse: fallbackResponse,
+            usedSearch: false
+          };
+        } catch (toolFallbackErr: any) {
+          console.warn(`[Gemini API] Tool-less fallback with ${model} failed: ${toolFallbackErr.message || toolFallbackErr}`);
         }
+      }
 
-        if (isQuotaOrRateLimit && attempt < maxRetries) {
-          const delayMs = (attempt + 1) * 2000;
-          console.log(`[Gemini API] Quota/Rate limit encountered. Backing off for ${delayMs}ms before retry...`);
-          await new Promise(r => setTimeout(r, delayMs));
-          continue;
-        }
-
-        // Try next model if available
-        break;
+      // If 429/503, pause briefly and allow loop to try the next model immediately
+      if (errMsg.includes("429") || errMsg.includes("503") || errMsg.includes("quota") || errMsg.includes("resource_exhausted") || errMsg.includes("unavailable")) {
+        await new Promise(r => setTimeout(r, 600));
       }
     }
   }
@@ -852,11 +896,10 @@ app.post("/api/admin/ai/scan", requireAdmin, async (req, res) => {
       status: { ...scannerStatus, cooldownRemainingMs: TWO_HOURS_MS }
     });
   } catch (error: any) {
-    const isQuota = (error?.message || "").includes("429") || (error?.message || "").includes("quota");
+    const errMsg = formatGeminiErrorMessage(error);
+    const isQuota = errMsg.includes("quota") || errMsg.includes("429");
     res.status(isQuota ? 429 : 500).json({
-      error: isQuota
-        ? "Gemini API quota rate-limit active. Please try again in the next cycle or generate a single topic directly."
-        : (error.message || "Failed to run scan")
+      error: errMsg
     });
   }
 });
@@ -953,11 +996,10 @@ app.post("/api/admin/ai/scan-keywords", requireAdmin, async (req, res) => {
       status: { ...scannerStatus, cooldownRemainingMs: TWO_HOURS_MS }
     });
   } catch (error: any) {
-    const isQuota = (error?.message || "").includes("429") || (error?.message || "").includes("quota");
+    const errMsg = formatGeminiErrorMessage(error);
+    const isQuota = errMsg.includes("quota") || errMsg.includes("429");
     res.status(isQuota ? 429 : 500).json({
-      error: isQuota
-        ? "Gemini API quota rate-limit active. Please try again in the next cycle or generate a single topic directly."
-        : (error.message || "Failed to run keyword scan")
+      error: errMsg
     });
   }
 });
@@ -1146,12 +1188,11 @@ REQUIREMENTS:
 
     res.json(draftData);
   } catch (error: any) {
-    const isQuota = (error?.message || "").includes("429") || (error?.message || "").includes("quota");
-    console.error("Single generate error:", error?.message || error);
+    const errMsg = formatGeminiErrorMessage(error);
+    const isQuota = errMsg.includes("quota") || errMsg.includes("429");
+    console.error("Single generate error:", errMsg);
     res.status(isQuota ? 429 : 500).json({ 
-      error: isQuota 
-        ? "Gemini API temporary quota limit was reached. Please wait a moment and retry." 
-        : (error.message || "Failed to generate topic draft") 
+      error: errMsg
     });
   }
 });
@@ -1259,9 +1300,10 @@ app.post("/api/quiz/generate", async (req, res) => {
   }
 
   try {
-    const response = await ai.models.generateContent({
-      model: "gemini-3-flash-preview",
+    const response = await safeGenerateContent({
+      preferredModel: "gemini-3.7-flash",
       contents: prompt,
+      allowSearchFallback: false,
       config: {
         systemInstruction: "You are a quiz generator for FActHub — a facts website about history, science, inventions, discoveries, and famous people. Generate quiz questions based on the user's request. RESPOND ONLY with a valid JSON array of quiz question objects (no markdown, just the JSON array). Each object must have: q (question string), opts (array of 4 answer strings), correct (0-indexed number of correct option), cat (category string), explanation (short explanation why the answer is correct).",
         responseMimeType: "application/json",
@@ -1279,14 +1321,14 @@ app.post("/api/quiz/generate", async (req, res) => {
             required: ["q", "opts", "correct", "cat"]
           }
         }
-      },
+      }
     });
 
     const result = JSON.parse(response.text || "[]");
     res.json(result);
-  } catch (error) {
+  } catch (error: any) {
     console.error("Gemini Error:", error);
-    res.status(500).json({ error: "Failed to generate quiz questions" });
+    res.status(500).json({ error: formatGeminiErrorMessage(error) });
   }
 });
 

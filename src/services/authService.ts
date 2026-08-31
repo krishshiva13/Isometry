@@ -65,7 +65,7 @@ export const authService = {
       } else {
         const currentData = snap.data();
         if (assignedRole === 'admin' && currentData?.role !== 'admin') {
-          await setDoc(userRef, { role: 'admin' }, { merge: true });
+          await setDoc(userRef, { uid: user.uid, role: 'admin' }, { merge: true });
           return { ...currentData, role: 'admin' };
         }
         return currentData;

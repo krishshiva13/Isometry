@@ -255,7 +255,11 @@ export const AIContentCreatorModal: React.FC<AIContentCreatorModalProps> = ({ is
       }
 
       if (!res.ok) {
-        throw new Error(responseData?.error || 'Failed to generate draft');
+        let errMessage = responseData?.error || responseData?.message || 'Failed to generate draft';
+        if (typeof errMessage === 'object') {
+          errMessage = errMessage?.message || JSON.stringify(errMessage);
+        }
+        throw new Error(errMessage);
       }
 
       const newDraft: AIDraft = responseData;
