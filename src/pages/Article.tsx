@@ -16,6 +16,7 @@ import { notebookService } from '../services/notebookService';
 import { ArticleHeroImage } from '../components/common/ArticleHeroImage';
 import { ImageUploadField } from '../components/common/ImageUploadField';
 import { normalizeImageUrl } from '../lib/imageUtils';
+import { recordFactRead } from '../components/DailyGoalTracker';
 
 const DEFAULT_CATEGORY_BOOKS: Record<string, AffiliateProduct[]> = {
   history: [
@@ -265,6 +266,7 @@ export const Article = () => {
             setError("This interesting fact is scheduled for a future release! Please check back later.");
           } else {
             setFact(data);
+            recordFactRead();
             const allFromCat = await factService.getFacts(data.cat, false, 20, isAdmin);
             setRelated(allFromCat?.filter(f => f.id !== id).slice(0, 4) || []);
           }

@@ -28,7 +28,8 @@ import {
   GraduationCap,
   Search,
   SlidersHorizontal,
-  Globe
+  Globe,
+  Terminal
 } from 'lucide-react';
 import { AIDraft, Category, Fact, AIScannerStatus, QuizMCQ, BilingualTerm } from '../types';
 import { factService } from '../services/factService';
@@ -37,6 +38,11 @@ import { auth } from '../lib/firebase';
 import ReactMarkdown from 'react-markdown';
 import { ImageUploadField } from '../components/common/ImageUploadField';
 import { normalizeImageUrl } from '../lib/imageUtils';
+import { AdminDebugConsole } from '../components/admin/AdminDebugConsole';
+import { AIGenerationSkeleton } from '../components/admin/AIGenerationSkeleton';
+import { AIGenerationErrorState } from '../components/admin/AIGenerationErrorState';
+import { adminLogService } from '../services/adminLogService';
+import { fetchWithExponentialBackoff, RetryProgress } from '../lib/apiRetry';
 
 const COLOR_OPTIONS = [
   { name: 'gold', label: 'Gold', bg: 'bg-[#d9ad42]', text: 'text-[#d9ad42]' },
@@ -87,7 +93,7 @@ export const AdminAIPanel = () => {
 
   const [drafts, setDrafts] = useState<AIDraft[]>([]);
   const [selectedDraft, setSelectedDraft] = useState<AIDraft | null>(null);
-  const [activeTab, setActiveTab] = useState<'keyword_creator' | 'queue' | 'scan_hub' | 'custom_generate' | 'scanner_info'>('keyword_creator');
+  const [activeTab, setActiveTab] = useState<'keyword_creator' | 'queue' | 'scan_hub' | 'custom_generate' | 'scanner_info' | 'debug_console'>('keyword_creator');
   const [filterStatus, setFilterStatus] = useState<string>('all');
   const [filterTopic, setFilterTopic] = useState<string>('all');
   const [filterKeyword, setFilterKeyword] = useState<string>('all');
@@ -95,6 +101,8 @@ export const AdminAIPanel = () => {
   const [scanning, setScanning] = useState(false);
   const [keywordScanning, setKeywordScanning] = useState(false);
   const [generating, setGenerating] = useState(false);
+  const [retryProgress, setRetryProgress] = useState<RetryProgress | null>(null);
+  const [generationError, setGenerationError] = useState<string | null>(null);
   const [previewMode, setPreviewMode] = useState(false);
   const [copiedDigest, setCopiedDigest] = useState(false);
   const [notification, setNotification] = useState<{ type: 'success' | 'error' | 'info'; message: string } | null>(null);
@@ -313,29 +321,48 @@ export const AdminAIPanel = () => {
     }
 
     setKeywordScanning(true);
+    setRetryProgress(null);
     setNotification({
       type: 'info',
       message: `Scanning Google news & factual databases for keywords: ${selectedKeywords.slice(0, 4).join(', ')}${selectedKeywords.length > 4 ? ` +${selectedKeywords.length - 4} more` : ''}...`
     });
 
+    adminLogService.log('info', 'AI_SCAN_KEYWORDS', `Initiating autonomous keyword scan for: ${selectedKeywords.join(', ')}`, {
+      keywords: selectedKeywords,
+      targetExam: keywordTargetExam,
+      topicType: keywordTopicType,
+      force
+    }, '/api/admin/ai/scan-keywords');
+
     try {
       const token = await auth.currentUser?.getIdToken();
-      const res = await fetch('/api/admin/ai/scan-keywords', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          ...(token ? { 'Authorization': `Bearer ${token}` } : {})
+      const res = await fetchWithExponentialBackoff(
+        '/api/admin/ai/scan-keywords',
+        {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            ...(token ? { 'Authorization': `Bearer ${token}` } : {})
+          },
+          body: JSON.stringify({
+            keywords: selectedKeywords,
+            query: keywordQuery.trim() || undefined,
+            targetExam: keywordTargetExam,
+            topicType: keywordTopicType,
+            eventMonth: selectedMonth,
+            eventDay: selectedDay,
+            force
+          })
         },
-        body: JSON.stringify({
-          keywords: selectedKeywords,
-          query: keywordQuery.trim() || undefined,
-          targetExam: keywordTargetExam,
-          topicType: keywordTopicType,
-          eventMonth: selectedMonth,
-          eventDay: selectedDay,
-          force
-        })
-      });
+        {
+          maxRetries: 3,
+          initialDelayMs: 2000,
+          onRetryProgress: (progress) => {
+            setRetryProgress(progress);
+            adminLogService.log('warn', 'AI_RETRY', `Retry ${progress.attempt}/${progress.maxRetries} during keyword scan (${progress.statusMessage})`, progress, '/api/admin/ai/scan-keywords');
+          }
+        }
+      );
 
       let data: any = {};
       const contentType = res.headers.get('content-type') || '';
@@ -358,6 +385,12 @@ export const AdminAIPanel = () => {
           });
           selectDraftForEditing(data.drafts[0]);
         }
+
+        adminLogService.log('success', 'AI_SCAN_KEYWORDS', `Keyword scan completed with ${data.drafts?.length || 0} drafts`, {
+          count: data.drafts?.length || 0,
+          quotaLimited: data.quotaLimited
+        }, '/api/admin/ai/scan-keywords', res.status);
+
         setNotification({
           type: 'success',
           message: data.message || `Keyword scan finished! ${data.newDraftsCount || data.count} verified drafts generated and ready for your review.`
@@ -366,6 +399,7 @@ export const AdminAIPanel = () => {
         fetchScannerStatus();
         setActiveTab('queue');
       } else if (data.quotaLimited) {
+        adminLogService.log('warn', 'AI_QUOTA', `Gemini API temporary quota reached during keyword scan`, data, '/api/admin/ai/scan-keywords');
         setNotification({
           type: 'info',
           message: data.message || 'Gemini API temporary quota reached. Please retry in a few moments.'
@@ -384,12 +418,19 @@ export const AdminAIPanel = () => {
         throw new Error(data.error || 'Failed keyword scan');
       }
     } catch (err: any) {
+      const errMsg = err.message || 'Check network connection';
+      adminLogService.log('error', 'AI_SCAN_KEYWORDS', `Keyword scan failed: ${errMsg}`, {
+        error: err.toString(),
+        stack: err.stack
+      }, '/api/admin/ai/scan-keywords');
+
       setNotification({
         type: 'error',
-        message: `Keyword scan failed: ${err.message || 'Check network connection'}`
+        message: `Keyword scan failed: ${errMsg}`
       });
     } finally {
       setKeywordScanning(false);
+      setRetryProgress(null);
     }
   };
 
@@ -429,29 +470,50 @@ export const AdminAIPanel = () => {
     setCustomKeywordInput('');
   };
 
-  const handleGenerateCustom = async (e: React.FormEvent) => {
-    e.preventDefault();
+  const handleGenerateCustom = async (e?: React.FormEvent) => {
+    if (e) e.preventDefault();
     if (!customTopic.trim()) return;
 
     setGenerating(true);
+    setGenerationError(null);
+    setRetryProgress(null);
     setNotification(null);
+
+    adminLogService.log('info', 'AI_GENERATE', `Starting single draft generation for topic: "${customTopic}"`, {
+      topic: customTopic,
+      category: customCategory,
+      topicType: customTopicType,
+      focus: customFocus
+    }, '/api/admin/ai/generate-single');
+
     try {
       const token = await auth.currentUser?.getIdToken();
-      const res = await fetch('/api/admin/ai/generate-single', {
-        method: 'POST',
-        headers: { 
-          'Content-Type': 'application/json',
-          ...(token ? { 'Authorization': `Bearer ${token}` } : {})
+      const res = await fetchWithExponentialBackoff(
+        '/api/admin/ai/generate-single',
+        {
+          method: 'POST',
+          headers: { 
+            'Content-Type': 'application/json',
+            ...(token ? { 'Authorization': `Bearer ${token}` } : {})
+          },
+          body: JSON.stringify({
+            topic: customTopic,
+            category: customCategory,
+            topicType: customTopicType,
+            focus: customFocus,
+            eventMonth: selectedMonth,
+            eventDay: selectedDay
+          })
         },
-        body: JSON.stringify({
-          topic: customTopic,
-          category: customCategory,
-          topicType: customTopicType,
-          focus: customFocus,
-          eventMonth: selectedMonth,
-          eventDay: selectedDay
-        })
-      });
+        {
+          maxRetries: 3,
+          initialDelayMs: 1500,
+          onRetryProgress: (progress) => {
+            setRetryProgress(progress);
+            adminLogService.log('warn', 'AI_RETRY', `Retry attempt ${progress.attempt}/${progress.maxRetries} for: "${customTopic}" (${progress.statusMessage})`, progress, '/api/admin/ai/generate-single');
+          }
+        }
+      );
 
       let responseData: any = null;
       const contentType = res.headers.get('content-type') || '';
@@ -460,18 +522,25 @@ export const AdminAIPanel = () => {
       } else {
         const text = await res.text();
         throw new Error(res.status === 401 || res.status === 403 
-          ? 'Admin authorization required.' 
+          ? 'Admin authorization required. Please make sure you are signed in as an administrator.' 
           : `Server error (${res.status}): ${text.substring(0, 80)}`);
       }
 
       if (!res.ok) {
-        throw new Error(responseData?.error || 'Failed to generate draft');
+        throw new Error(responseData?.error || responseData?.message || 'Failed to generate draft');
       }
 
       const newDraft: AIDraft = responseData;
       await factService.createAIDraft(newDraft);
       setDrafts(prev => [newDraft, ...prev.filter(d => d.id !== newDraft.id)]);
       selectDraftForEditing(newDraft);
+
+      adminLogService.log('success', 'AI_GENERATE', `Successfully generated draft: "${newDraft.title}"`, {
+        id: newDraft.id,
+        category: newDraft.cat,
+        mcqsCount: newDraft.quizMCQs?.length || 0
+      }, '/api/admin/ai/generate-single', res.status);
+
       setNotification({
         type: 'success',
         message: `Verified draft created for: "${newDraft.title}" with MCQs & glossary!`
@@ -480,12 +549,20 @@ export const AdminAIPanel = () => {
       await loadDrafts();
       setActiveTab('queue');
     } catch (err: any) {
+      const errMsg = err.message || 'Unknown generation error';
+      setGenerationError(errMsg);
+      adminLogService.log('error', 'AI_GENERATE', `Generation failed for: "${customTopic}" - ${errMsg}`, {
+        error: err.toString(),
+        stack: err.stack
+      }, '/api/admin/ai/generate-single');
+
       setNotification({
         type: 'error',
-        message: `Generation error: ${err.message}`
+        message: `Generation error: ${errMsg}`
       });
     } finally {
       setGenerating(false);
+      setRetryProgress(null);
     }
   };
 
@@ -796,6 +873,15 @@ export const AdminAIPanel = () => {
             >
               <ShieldCheck size={14} />
               <span>Anti-Noise Rules</span>
+            </button>
+            <button
+              onClick={() => setActiveTab('debug_console')}
+              className={`px-3.5 py-1.5 rounded-lg font-bold transition-all flex items-center gap-1.5 ${
+                activeTab === 'debug_console' ? 'bg-white shadow-sm text-ink text-rose-600' : 'text-ink3 hover:text-ink'
+              }`}
+            >
+              <Terminal size={14} className="text-rose-500" />
+              <span>Debug Console</span>
             </button>
           </div>
 
@@ -1279,100 +1365,119 @@ export const AdminAIPanel = () => {
         {/* Tab 2: Custom Single Topic Generator */}
         {activeTab === 'custom_generate' && (
           <div className="flex-1 max-w-2xl mx-auto py-4 space-y-6">
-            <div className="text-center space-y-2">
-              <div className="w-12 h-12 bg-gold/15 text-gold rounded-2xl flex items-center justify-center mx-auto mb-2 font-serif font-bold text-xl">
-                ⚡
-              </div>
-              <h3 className="text-2xl font-serif font-black text-ink">Generate Custom Educational Topic</h3>
-              <p className="text-xs text-ink3 max-w-md mx-auto">
-                Type any exam syllabus topic, historical anniversary, or science breakthrough. AI will verify facts and write a complete draft with 3-5 MCQs and bilingual terms.
-              </p>
-            </div>
-
-            <form onSubmit={handleGenerateCustom} className="space-y-4 bg-white p-6 rounded-2xl border border-black/10 shadow-sm">
-              <div className="space-y-1.5">
-                <label className="text-xs font-bold uppercase tracking-widest text-ink3">Topic or Event Headline *</label>
-                <input
-                  type="text"
-                  value={customTopic}
-                  onChange={(e) => setCustomTopic(e.target.value)}
-                  placeholder="e.g., Battle of Plassey 1757, James Webb Space Telescope Findings, or Article 370 Supreme Court Verdict..."
-                  className="w-full bg-paper2 border border-black/10 rounded-xl px-4 py-3 text-sm focus:border-gold outline-none font-medium text-ink"
-                  required
-                />
-              </div>
-
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                <div className="space-y-1.5">
-                  <label className="text-xs font-bold uppercase tracking-widest text-ink3">Topic Pillar Type</label>
-                  <select
-                    value={customTopicType}
-                    onChange={(e) => setCustomTopicType(e.target.value)}
-                    className="w-full bg-paper2 border border-black/10 rounded-xl px-3 py-2.5 text-xs font-medium focus:border-gold outline-none text-ink"
-                  >
-                    <option value="day_in_history">📅 Day in History</option>
-                    <option value="national_days">🎖️ National & Important Days</option>
-                    <option value="science">🔬 Science & Discovery</option>
-                    <option value="exam_gk">🏛️ Government Exam GK</option>
-                    <option value="current_affairs">📰 Current Affairs News</option>
-                  </select>
+            
+            {generating ? (
+              <AIGenerationSkeleton
+                topic={customTopic}
+                category={customCategory}
+                retryProgress={retryProgress}
+              />
+            ) : generationError ? (
+              <AIGenerationErrorState
+                error={generationError}
+                topic={customTopic}
+                onRetry={() => handleGenerateCustom()}
+                onOpenDebugLogs={() => setActiveTab('debug_console')}
+                onCancel={() => setGenerationError(null)}
+                isRetrying={generating}
+              />
+            ) : (
+              <>
+                <div className="text-center space-y-2">
+                  <div className="w-12 h-12 bg-gold/15 text-gold rounded-2xl flex items-center justify-center mx-auto mb-2 font-serif font-bold text-xl">
+                    ⚡
+                  </div>
+                  <h3 className="text-2xl font-serif font-black text-ink">Generate Custom Educational Topic</h3>
+                  <p className="text-xs text-ink3 max-w-md mx-auto">
+                    Type any exam syllabus topic, historical anniversary, or science breakthrough. AI will verify facts and write a complete draft with 3-5 MCQs and bilingual terms.
+                  </p>
                 </div>
 
-                <div className="space-y-1.5">
-                  <label className="text-xs font-bold uppercase tracking-widest text-ink3">Category Tag</label>
-                  <select
-                    value={customCategory}
-                    onChange={(e) => setCustomCategory(e.target.value as Category)}
-                    className="w-full bg-paper2 border border-black/10 rounded-xl px-3 py-2.5 text-xs font-medium focus:border-gold outline-none text-ink"
+                <form onSubmit={handleGenerateCustom} className="space-y-4 bg-white p-6 rounded-2xl border border-black/10 shadow-sm">
+                  <div className="space-y-1.5">
+                    <label className="text-xs font-bold uppercase tracking-widest text-ink3">Topic or Event Headline *</label>
+                    <input
+                      type="text"
+                      value={customTopic}
+                      onChange={(e) => setCustomTopic(e.target.value)}
+                      placeholder="e.g., Battle of Plassey 1757, James Webb Space Telescope Findings, or Article 370 Supreme Court Verdict..."
+                      className="w-full bg-paper2 border border-black/10 rounded-xl px-4 py-3 text-sm focus:border-gold outline-none font-medium text-ink"
+                      required
+                    />
+                  </div>
+
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                    <div className="space-y-1.5">
+                      <label className="text-xs font-bold uppercase tracking-widest text-ink3">Topic Pillar Type</label>
+                      <select
+                        value={customTopicType}
+                        onChange={(e) => setCustomTopicType(e.target.value)}
+                        className="w-full bg-paper2 border border-black/10 rounded-xl px-3 py-2.5 text-xs font-medium focus:border-gold outline-none text-ink"
+                      >
+                        <option value="day_in_history">📅 Day in History</option>
+                        <option value="national_days">🎖️ National & Important Days</option>
+                        <option value="science">🔬 Science & Discovery</option>
+                        <option value="exam_gk">🏛️ Government Exam GK</option>
+                        <option value="current_affairs">📰 Current Affairs News</option>
+                      </select>
+                    </div>
+
+                    <div className="space-y-1.5">
+                      <label className="text-xs font-bold uppercase tracking-widest text-ink3">Category Tag</label>
+                      <select
+                        value={customCategory}
+                        onChange={(e) => setCustomCategory(e.target.value as Category)}
+                        className="w-full bg-paper2 border border-black/10 rounded-xl px-3 py-2.5 text-xs font-medium focus:border-gold outline-none text-ink"
+                      >
+                        <option value="history">HISTORY</option>
+                        <option value="science">SCIENCE</option>
+                        <option value="inventions">INVENTIONS</option>
+                        <option value="discoveries">DISCOVERIES</option>
+                        <option value="birthdays">BIRTHDAYS</option>
+                      </select>
+                    </div>
+                  </div>
+
+                  <div className="space-y-1.5">
+                    <label className="text-xs font-bold uppercase tracking-widest text-ink3">Exam Focus Target</label>
+                    <select
+                      value={customFocus}
+                      onChange={(e) => setCustomFocus(e.target.value)}
+                      className="w-full bg-paper2 border border-black/10 rounded-xl px-3 py-2.5 text-xs font-medium focus:border-gold outline-none text-ink"
+                    >
+                      <option value="UPSC Civil Services (GS-I/II/III)">UPSC Civil Services (GS-I / II / III)</option>
+                      <option value="SSC CGL, CHSL & Railways (Static GK)">SSC CGL / CHSL & Railways (Static & Dynamic GK)</option>
+                      <option value="State PSCs & Defense (NDA/CDS)">State PSCs (BPSC, UPPSC, MPSC, TNPSC) & Defense</option>
+                      <option value="General Science & World History">General Science & World History</option>
+                    </select>
+                  </div>
+
+                  <div className="p-3.5 bg-amber-50 border border-gold/30 rounded-xl text-xs text-ink2 flex items-start gap-2.5">
+                    <ShieldCheck size={16} className="text-gold flex-shrink-0 mt-0.5" />
+                    <span>
+                      <strong>Strict Veracity Engine:</strong> AI cross-references trusted channels (PIB, ISRO, DRDO, Nature, The Hindu) and writes 3-5 Practice MCQs + Bilingual definitions automatically.
+                    </span>
+                  </div>
+
+                  <button
+                    type="submit"
+                    disabled={generating || !customTopic.trim()}
+                    className="w-full py-3 bg-ink text-white rounded-xl font-bold text-sm hover:bg-gold hover:text-ink transition-all flex items-center justify-center gap-2 shadow-md disabled:opacity-50"
                   >
-                    <option value="history">HISTORY</option>
-                    <option value="science">SCIENCE</option>
-                    <option value="inventions">INVENTIONS</option>
-                    <option value="discoveries">DISCOVERIES</option>
-                    <option value="birthdays">BIRTHDAYS</option>
-                  </select>
-                </div>
-              </div>
-
-              <div className="space-y-1.5">
-                <label className="text-xs font-bold uppercase tracking-widest text-ink3">Exam Focus Target</label>
-                <select
-                  value={customFocus}
-                  onChange={(e) => setCustomFocus(e.target.value)}
-                  className="w-full bg-paper2 border border-black/10 rounded-xl px-3 py-2.5 text-xs font-medium focus:border-gold outline-none text-ink"
-                >
-                  <option value="UPSC Civil Services (GS-I/II/III)">UPSC Civil Services (GS-I / II / III)</option>
-                  <option value="SSC CGL, CHSL & Railways (Static GK)">SSC CGL / CHSL & Railways (Static & Dynamic GK)</option>
-                  <option value="State PSCs & Defense (NDA/CDS)">State PSCs (BPSC, UPPSC, MPSC, TNPSC) & Defense</option>
-                  <option value="General Science & World History">General Science & World History</option>
-                </select>
-              </div>
-
-              <div className="p-3.5 bg-amber-50 border border-gold/30 rounded-xl text-xs text-ink2 flex items-start gap-2.5">
-                <ShieldCheck size={16} className="text-gold flex-shrink-0 mt-0.5" />
-                <span>
-                  <strong>Strict Veracity Engine:</strong> AI cross-references trusted channels (PIB, ISRO, DRDO, Nature, The Hindu) and writes 3-5 Practice MCQs + Bilingual definitions automatically.
-                </span>
-              </div>
-
-              <button
-                type="submit"
-                disabled={generating || !customTopic.trim()}
-                className="w-full py-3 bg-ink text-white rounded-xl font-bold text-sm hover:bg-gold hover:text-ink transition-all flex items-center justify-center gap-2 shadow-md disabled:opacity-50"
-              >
-                {generating ? (
-                  <>
-                    <RefreshCw size={16} className="animate-spin text-gold" />
-                    <span>Searching Google & Generating MCQs + Glossary…</span>
-                  </>
-                ) : (
-                  <>
                     <Sparkles size={16} className="text-gold" />
                     <span>Generate & Add to Review Queue</span>
-                  </>
-                )}
-              </button>
-            </form>
+                  </button>
+                </form>
+              </>
+            )}
+
+          </div>
+        )}
+
+        {/* Tab 5: Real-Time Debug Console & Error Logging */}
+        {activeTab === 'debug_console' && (
+          <div className="flex-1 max-w-5xl mx-auto py-2">
+            <AdminDebugConsole />
           </div>
         )}
 

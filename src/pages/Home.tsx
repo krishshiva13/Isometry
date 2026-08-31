@@ -1,15 +1,28 @@
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useState, useMemo } from 'react';
 import { Link } from 'react-router-dom';
-import { motion } from 'motion/react';
+import { motion, AnimatePresence } from 'motion/react';
 import { Helmet } from 'react-helmet-async';
+import { 
+  Filter, 
+  Sparkles, 
+  Layers, 
+  SlidersHorizontal, 
+  BookOpen, 
+  RefreshCw, 
+  Compass, 
+  X, 
+  ChevronRight,
+  Target
+} from 'lucide-react';
 import { factService } from '../services/factService';
-import { Fact, Birthday } from '../types';
+import { Fact, Birthday, Category } from '../types';
 import { cn } from '../lib/utils';
 import { Ticker } from '../components/Ticker';
 import { FactCard } from '../components/FactCard';
 import { StudyHubSection } from '../components/StudyHubSection';
+import { DailyGoalTracker } from '../components/DailyGoalTracker';
+import { HomeFilterSidebar, FilterCriteria, GK_TAG_OPTIONS } from '../components/HomeFilterSidebar';
 import { INITIAL_FACTS, INITIAL_BIRTHDAYS, INITIAL_QUIZ } from '../seed';
-
 import { useAuth } from '../contexts/AuthContext';
 
 export const Home = () => {
@@ -17,16 +30,24 @@ export const Home = () => {
   const [facts, setFacts] = useState<Fact[]>(INITIAL_FACTS);
   const [birthdays, setBirthdays] = useState<Birthday[]>(INITIAL_BIRTHDAYS);
   const [loading, setLoading] = useState(true);
+  const [mobileFilterOpen, setMobileFilterOpen] = useState(false);
+
+  // Client-side instant filter state
+  const [filters, setFilters] = useState<FilterCriteria>({
+    category: 'all',
+    tag: 'all',
+    sortBy: 'newest',
+    searchQuery: ''
+  });
 
   useEffect(() => {
     const loadData = async () => {
       try {
-        // Only attempt seeding if initialized and user is admin
         if (!authLoading && isAdmin) {
           await factService.seedData(INITIAL_FACTS, INITIAL_BIRTHDAYS, INITIAL_QUIZ);
         }
         
-        const fetchedFacts = await factService.getFacts(undefined, false, 20, isAdmin);
+        const fetchedFacts = await factService.getFacts(undefined, false, 50, isAdmin);
         const fetchedBDays = await factService.getBirthdays(6);
 
         if (fetchedFacts && fetchedFacts.length > 0) setFacts(fetchedFacts);
@@ -41,15 +62,79 @@ export const Home = () => {
     loadData();
   }, [authLoading, isAdmin]);
 
-  const featuredFacts = facts.filter(f => f.featured);
-  const latestFacts = facts.slice(0, 9);
+  // Category counts
+  const categoryCounts = useMemo(() => {
+    const counts: Record<string, number> = {
+      history: 0,
+      science: 0,
+      inventions: 0,
+      discoveries: 0,
+      birthdays: 0
+    };
+    facts.forEach((f) => {
+      if (counts[f.cat] !== undefined) {
+        counts[f.cat]++;
+      }
+    });
+    return counts;
+  }, [facts]);
+
+  // Filtered & Sorted Facts
+  const filteredFacts = useMemo(() => {
+    let result = [...facts];
+
+    // 1. Category Filter
+    if (filters.category !== 'all') {
+      result = result.filter((f) => f.cat === filters.category);
+    }
+
+    // 2. Tag Filter
+    if (filters.tag !== 'all') {
+      const selectedTag = GK_TAG_OPTIONS.find((t) => t.id === filters.tag);
+      if (selectedTag && selectedTag.match) {
+        const keywords = selectedTag.match;
+        result = result.filter((f) => {
+          const text = `${f.title} ${f.excerpt} ${f.full || ''} ${f.cat}`.toLowerCase();
+          return keywords.some((kw) => text.includes(kw));
+        });
+      }
+    }
+
+    // 3. Search Query Filter
+    if (filters.searchQuery.trim()) {
+      const q = filters.searchQuery.toLowerCase().trim();
+      result = result.filter((f) => {
+        const searchCorpus = `${f.title} ${f.excerpt} ${f.year} ${f.cat} ${f.full || ''}`.toLowerCase();
+        return searchCorpus.includes(q);
+      });
+    }
+
+    // 4. Sorting
+    if (filters.sortBy === 'newest') {
+      result.sort((a, b) => {
+        const dateA = a.createdAt ? new Date(a.createdAt).getTime() : 0;
+        const dateB = b.createdAt ? new Date(b.createdAt).getTime() : 0;
+        return dateB - dateA;
+      });
+    } else if (filters.sortBy === 'year-asc') {
+      result.sort((a, b) => a.year - b.year);
+    } else if (filters.sortBy === 'year-desc') {
+      result.sort((a, b) => b.year - a.year);
+    } else if (filters.sortBy === 'featured') {
+      result.sort((a, b) => (b.featured ? 1 : 0) - (a.featured ? 1 : 0));
+    }
+
+    return result;
+  }, [facts, filters]);
+
+  const featuredFacts = facts.filter((f) => f.featured);
   const mainFeat = featuredFacts[0];
   const sideFeat = featuredFacts.slice(1, 5);
 
   const today = new Date();
   const curMonth = today.getMonth() + 1;
   const curDay = today.getDate();
-  const todayEvents = facts.filter(f => f.eventMonth === curMonth && f.eventDay === curDay);
+  const todayEvents = facts.filter((f) => f.eventMonth === curMonth && f.eventDay === curDay);
 
   return (
     <div className="fade-in">
@@ -143,6 +228,11 @@ export const Home = () => {
         </div>
       </section>
 
+      {/* Daily Study Goal Tracker & Quick Actions */}
+      <section className="py-6 px-4 bg-paper max-w-7xl mx-auto -mt-6 relative z-20">
+        <DailyGoalTracker />
+      </section>
+
       {/* Interactive Study Tools & Pages Hub */}
       <StudyHubSection />
 
@@ -184,7 +274,7 @@ export const Home = () => {
               </Link>
             )}
 
-            {sideFeat.map((f, i) => (
+            {sideFeat.map((f) => (
               <div key={f.id} className="bg-white border border-black/10 rounded-fact p-6 shadow-fact hover:-translate-y-1 transition-all group flex flex-col justify-between cursor-pointer">
                 <Link to={`/article/${f.id}`}>
                   <div className={cn("text-[0.65rem] font-bold uppercase tracking-widest mb-2", {
@@ -208,19 +298,134 @@ export const Home = () => {
         </div>
       </section>
 
-      {/* Latest Cards */}
+      {/* Main Fact Feed with Tag-Based Filter Sidebar */}
       <section className="py-16 px-4">
-        <div className="max-w-7xl mx-auto">
-          <div className="flex items-end justify-between mb-8 gap-4">
+        <div className="max-w-7xl mx-auto space-y-6">
+          
+          <div className="flex flex-col sm:flex-row sm:items-end justify-between gap-4 pb-2 border-b border-black/10">
             <div>
-              <h2 className="text-2xl font-serif font-bold text-ink">Latest Facts</h2>
-              <p className="text-sm text-ink3">Explore our newest additions</p>
+              <div className="flex items-center gap-2">
+                <h2 className="text-2xl font-serif font-bold text-ink">Explore Knowledge Feed</h2>
+                <span className="bg-gold/20 text-ink text-xs font-bold px-2 py-0.5 rounded-full">
+                  {filteredFacts.length} Facts
+                </span>
+              </div>
+              <p className="text-sm text-ink3">Filter facts by category, competitive exam topic, and historical chronology</p>
             </div>
+
+            {/* Mobile Filter Toggle Button */}
+            <button
+              onClick={() => setMobileFilterOpen(!mobileFilterOpen)}
+              className="lg:hidden inline-flex items-center gap-2 px-4 py-2 bg-ink text-white rounded-xl text-xs font-bold transition-all self-start sm:self-auto"
+            >
+              <SlidersHorizontal size={14} className="text-gold" />
+              <span>{mobileFilterOpen ? 'Hide Filters' : 'Filter & Sort'}</span>
+            </button>
           </div>
-          <div className="grid sm:grid-cols-2 lg:grid-cols-3 gap-6">
-            {latestFacts.map((fact, i) => (
-              <FactCard key={fact.id} fact={fact} index={i} />
-            ))}
+
+          {/* Mobile Filter Drawer (Collapsible) */}
+          <AnimatePresence>
+            {mobileFilterOpen && (
+              <motion.div
+                initial={{ opacity: 0, height: 0 }}
+                animate={{ opacity: 1, height: 'auto' }}
+                exit={{ opacity: 0, height: 0 }}
+                className="lg:hidden overflow-hidden"
+              >
+                <HomeFilterSidebar
+                  filters={filters}
+                  onChange={setFilters}
+                  categoryCounts={categoryCounts}
+                  totalCount={facts.length}
+                  filteredCount={filteredFacts.length}
+                />
+              </motion.div>
+            )}
+          </AnimatePresence>
+
+          {/* Desktop Layout: Sidebar + Grid */}
+          <div className="grid grid-cols-1 lg:grid-cols-12 gap-8 items-start">
+            
+            {/* Left Filter Sidebar (Sticky on Desktop) */}
+            <div className="hidden lg:block lg:col-span-4 sticky top-24">
+              <HomeFilterSidebar
+                filters={filters}
+                onChange={setFilters}
+                categoryCounts={categoryCounts}
+                totalCount={facts.length}
+                filteredCount={filteredFacts.length}
+              />
+            </div>
+
+            {/* Right Feed Cards */}
+            <div className="lg:col-span-8 space-y-6">
+              
+              {/* Active Filter Chips Bar */}
+              {(filters.category !== 'all' || filters.tag !== 'all' || filters.searchQuery) && (
+                <div className="bg-paper2 p-3 rounded-xl border border-black/5 flex flex-wrap items-center gap-2 text-xs">
+                  <span className="font-bold text-ink3">Active Filters:</span>
+                  
+                  {filters.category !== 'all' && (
+                    <span className="inline-flex items-center gap-1 bg-ink text-white px-2.5 py-1 rounded-lg font-medium">
+                      <span>Category: {filters.category.toUpperCase()}</span>
+                      <button onClick={() => setFilters({ ...filters, category: 'all' })} className="hover:text-gold">
+                        <X size={12} />
+                      </button>
+                    </span>
+                  )}
+
+                  {filters.tag !== 'all' && (
+                    <span className="inline-flex items-center gap-1 bg-gold text-ink px-2.5 py-1 rounded-lg font-bold">
+                      <span>Tag: {GK_TAG_OPTIONS.find((t) => t.id === filters.tag)?.label || filters.tag}</span>
+                      <button onClick={() => setFilters({ ...filters, tag: 'all' })} className="hover:text-rose-700">
+                        <X size={12} />
+                      </button>
+                    </span>
+                  )}
+
+                  {filters.searchQuery && (
+                    <span className="inline-flex items-center gap-1 bg-white border border-black/10 px-2.5 py-1 rounded-lg text-ink font-medium">
+                      <span>Query: "{filters.searchQuery}"</span>
+                      <button onClick={() => setFilters({ ...filters, searchQuery: '' })} className="hover:text-rose-600">
+                        <X size={12} />
+                      </button>
+                    </span>
+                  )}
+
+                  <button
+                    onClick={() => setFilters({ category: 'all', tag: 'all', sortBy: 'newest', searchQuery: '' })}
+                    className="text-xs font-bold text-rose-600 hover:underline ml-auto"
+                  >
+                    Reset All
+                  </button>
+                </div>
+              )}
+
+              {filteredFacts.length > 0 ? (
+                <div className="grid sm:grid-cols-2 gap-6">
+                  {filteredFacts.map((fact, i) => (
+                    <FactCard key={fact.id} fact={fact} index={i} />
+                  ))}
+                </div>
+              ) : (
+                <div className="bg-white border border-black/10 rounded-2xl p-12 text-center space-y-4">
+                  <div className="w-14 h-14 bg-paper2 rounded-full flex items-center justify-center mx-auto text-2xl">
+                    🔍
+                  </div>
+                  <h3 className="text-lg font-serif font-bold text-ink">No Facts Found</h3>
+                  <p className="text-xs text-ink3 max-w-sm mx-auto">
+                    No articles matched your search filter. Try clearing your tags or search for another keyword.
+                  </p>
+                  <button
+                    onClick={() => setFilters({ category: 'all', tag: 'all', sortBy: 'newest', searchQuery: '' })}
+                    className="px-4 py-2 bg-ink text-white text-xs font-bold rounded-xl hover:bg-gold hover:text-ink transition-all"
+                  >
+                    Clear All Filters
+                  </button>
+                </div>
+              )}
+            </div>
+
           </div>
         </div>
       </section>

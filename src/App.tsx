@@ -5,6 +5,7 @@ import { Footer } from './components/Footer';
 import { AuthProvider } from './contexts/AuthContext';
 import { HelmetProvider } from 'react-helmet-async';
 import { AnalyticsTracker } from './components/AnalyticsTracker';
+import { OfflineToast } from './components/OfflineToast';
 
 const Home = lazy(() => import('./pages/Home').then(m => ({ default: m.Home })));
 const Article = lazy(() => import('./pages/Article').then(m => ({ default: m.Article })));
@@ -70,6 +71,7 @@ export default function App() {
               </Suspense>
             </main>
             <Footer />
+            <OfflineToast />
           </div>
         </AuthProvider>
       </Router>

@@ -26,7 +26,8 @@ import {
   ArrowRight,
   Maximize2,
   Minimize2,
-  Zap
+  Zap,
+  Terminal
 } from 'lucide-react';
 import { AIDraft, Category, Fact, AIScannerStatus, AffiliateProduct } from '../../types';
 import { factService } from '../../services/factService';
@@ -36,6 +37,11 @@ import ReactMarkdown from 'react-markdown';
 import { ImageUploadField } from '../common/ImageUploadField';
 import { MarkdownToolbar } from '../common/MarkdownToolbar';
 import { normalizeImageUrl } from '../../lib/imageUtils';
+import { AdminDebugConsole } from './AdminDebugConsole';
+import { AIGenerationSkeleton } from './AIGenerationSkeleton';
+import { AIGenerationErrorState } from './AIGenerationErrorState';
+import { adminLogService } from '../../services/adminLogService';
+import { fetchWithExponentialBackoff, RetryProgress } from '../../lib/apiRetry';
 
 const COLOR_OPTIONS = [
   { name: 'gold', label: 'Gold', bg: 'bg-[#d9ad42]', text: 'text-[#d9ad42]' },
@@ -60,13 +66,15 @@ export const AIContentCreatorModal: React.FC<AIContentCreatorModalProps> = ({ is
   
   const [drafts, setDrafts] = useState<AIDraft[]>([]);
   const [selectedDraft, setSelectedDraft] = useState<AIDraft | null>(null);
-  const [activeTab, setActiveTab] = useState<'queue' | 'custom_generate' | 'scanner_info'>('queue');
+  const [activeTab, setActiveTab] = useState<'queue' | 'custom_generate' | 'scanner_info' | 'debug_console'>('queue');
   const [filterStatus, setFilterStatus] = useState<string>('pending');
   const [searchQuery, setSearchQuery] = useState<string>('');
   const [isFullscreen, setIsFullscreen] = useState<boolean>(false);
   const [loading, setLoading] = useState(false);
   const [scanning, setScanning] = useState(false);
   const [generating, setGenerating] = useState(false);
+  const [retryProgress, setRetryProgress] = useState<RetryProgress | null>(null);
+  const [generationError, setGenerationError] = useState<string | null>(null);
   const [previewMode, setPreviewMode] = useState(false);
   const [notification, setNotification] = useState<{ type: 'success' | 'error' | 'info'; message: string } | null>(null);
 
@@ -222,26 +230,46 @@ export const AIContentCreatorModal: React.FC<AIContentCreatorModalProps> = ({ is
     }
   };
 
-  const handleGenerateCustom = async (e: React.FormEvent) => {
-    e.preventDefault();
+  const handleGenerateCustom = async (e?: React.FormEvent) => {
+    if (e) e.preventDefault();
     if (!customTopic.trim()) return;
 
     setGenerating(true);
+    setGenerationError(null);
+    setRetryProgress(null);
     setNotification(null);
+
+    adminLogService.log('info', 'AI_GENERATE', `Starting single draft generation for topic: "${customTopic}"`, {
+      topic: customTopic,
+      category: customCategory,
+      focus: customFocus
+    }, '/api/admin/ai/generate-single');
+
     try {
       const token = await auth.currentUser?.getIdToken();
-      const res = await fetch('/api/admin/ai/generate-single', {
-        method: 'POST',
-        headers: { 
-          'Content-Type': 'application/json',
-          ...(token ? { 'Authorization': `Bearer ${token}` } : {})
+      const res = await fetchWithExponentialBackoff(
+        '/api/admin/ai/generate-single',
+        {
+          method: 'POST',
+          headers: { 
+            'Content-Type': 'application/json',
+            ...(token ? { 'Authorization': `Bearer ${token}` } : {})
+          },
+          body: JSON.stringify({
+            topic: customTopic,
+            category: customCategory,
+            focus: customFocus
+          })
         },
-        body: JSON.stringify({
-          topic: customTopic,
-          category: customCategory,
-          focus: customFocus
-        })
-      });
+        {
+          maxRetries: 3,
+          initialDelayMs: 1500,
+          onRetryProgress: (progress) => {
+            setRetryProgress(progress);
+            adminLogService.log('warn', 'AI_RETRY', `Retry attempt ${progress.attempt}/${progress.maxRetries} for: "${customTopic}" (${progress.statusMessage})`, progress, '/api/admin/ai/generate-single');
+          }
+        }
+      );
 
       let responseData: any = null;
       const contentType = res.headers.get('content-type') || '';
@@ -250,7 +278,7 @@ export const AIContentCreatorModal: React.FC<AIContentCreatorModalProps> = ({ is
       } else {
         const text = await res.text();
         throw new Error(res.status === 401 || res.status === 403 
-          ? 'Admin authorization required.' 
+          ? 'Admin authorization required. Please ensure you are logged in as an administrator.' 
           : `Server error (${res.status}): ${text.substring(0, 60)}`);
       }
 
@@ -266,6 +294,12 @@ export const AIContentCreatorModal: React.FC<AIContentCreatorModalProps> = ({ is
       await factService.createAIDraft(newDraft);
       setDrafts(prev => [newDraft, ...prev.filter(d => d.id !== newDraft.id)]);
       selectDraftForEditing(newDraft);
+
+      adminLogService.log('success', 'AI_GENERATE', `Successfully generated draft: "${newDraft.title}"`, {
+        id: newDraft.id,
+        category: newDraft.cat
+      }, '/api/admin/ai/generate-single', res.status);
+
       setNotification({
         type: 'success',
         message: `Verified draft created for: "${newDraft.title}"!`
@@ -274,12 +308,20 @@ export const AIContentCreatorModal: React.FC<AIContentCreatorModalProps> = ({ is
       await loadDrafts();
       setActiveTab('queue');
     } catch (err: any) {
+      const errMsg = err.message || 'Unknown generation error';
+      setGenerationError(errMsg);
+      adminLogService.log('error', 'AI_GENERATE', `Generation failed for "${customTopic}": ${errMsg}`, {
+        error: err.toString(),
+        stack: err.stack
+      }, '/api/admin/ai/generate-single');
+
       setNotification({
         type: 'error',
-        message: `Generation error: ${err.message}`
+        message: `Generation error: ${errMsg}`
       });
     } finally {
       setGenerating(false);
+      setRetryProgress(null);
     }
   };
 
@@ -582,6 +624,15 @@ export const AIContentCreatorModal: React.FC<AIContentCreatorModalProps> = ({ is
                 <ShieldCheck size={14} />
                 <span>2-Hour Anti-Noise Rules</span>
               </button>
+              <button
+                onClick={() => setActiveTab('debug_console')}
+                className={`px-3 py-1.5 rounded-lg font-bold transition-all flex items-center gap-1.5 ${
+                  activeTab === 'debug_console' ? 'bg-white shadow-sm text-ink text-rose-600' : 'text-ink3 hover:text-ink'
+                }`}
+              >
+                <Terminal size={14} className="text-rose-500" />
+                <span>Debug Logs</span>
+              </button>
             </div>
 
             {/* 2-Hour Timer Indicator */}
@@ -636,85 +687,101 @@ export const AIContentCreatorModal: React.FC<AIContentCreatorModalProps> = ({ is
             
             {activeTab === 'custom_generate' && (
               <div className="flex-1 p-8 overflow-y-auto max-w-2xl mx-auto space-y-6 animate-in fade-in duration-200">
-                <div className="text-center space-y-2">
-                  <div className="w-12 h-12 bg-gold/15 text-gold rounded-2xl flex items-center justify-center mx-auto mb-2 font-serif font-bold text-xl">
-                    ⚡
-                  </div>
-                  <h3 className="text-xl font-serif font-black text-ink">Generate Grounded Educational Draft</h3>
-                  <p className="text-xs text-ink3 max-w-md mx-auto">
-                    Type any current affair, recent government announcement, or exam topic. AI will search Google, verify facts against credible institutions, and write a full draft for your review.
-                  </p>
-                </div>
-
-                <form onSubmit={handleGenerateCustom} className="space-y-4 bg-white p-6 rounded-2xl border border-black/10 shadow-sm">
-                  <div className="space-y-1.5">
-                    <label className="text-xs font-bold uppercase tracking-widest text-ink3">Topic or Trend Headline *</label>
-                    <input
-                      type="text"
-                      value={customTopic}
-                      onChange={(e) => setCustomTopic(e.target.value)}
-                      placeholder="e.g., ISRO Proba-3 Coronagraph or UPSC Economy Inflation Basket..."
-                      className="w-full bg-paper2 border border-black/10 rounded-xl px-4 py-3 text-sm focus:border-gold outline-none font-medium"
-                      required
-                    />
-                  </div>
-
-                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                    <div className="space-y-1.5">
-                      <label className="text-xs font-bold uppercase tracking-widest text-ink3">Category</label>
-                      <select
-                        value={customCategory}
-                        onChange={(e) => setCustomCategory(e.target.value as Category)}
-                        className="w-full bg-paper2 border border-black/10 rounded-xl px-3 py-2.5 text-xs font-medium focus:border-gold outline-none"
-                      >
-                        <option value="science">SCIENCE</option>
-                        <option value="history">HISTORY</option>
-                        <option value="inventions">INVENTIONS</option>
-                        <option value="discoveries">DISCOVERIES</option>
-                        <option value="birthdays">BIRTHDAYS</option>
-                      </select>
+                {generating ? (
+                  <AIGenerationSkeleton
+                    topic={customTopic}
+                    category={customCategory}
+                    retryProgress={retryProgress}
+                  />
+                ) : generationError ? (
+                  <AIGenerationErrorState
+                    error={generationError}
+                    topic={customTopic}
+                    onRetry={() => handleGenerateCustom()}
+                    onOpenDebugLogs={() => setActiveTab('debug_console')}
+                    onCancel={() => setGenerationError(null)}
+                    isRetrying={generating}
+                  />
+                ) : (
+                  <>
+                    <div className="text-center space-y-2">
+                      <div className="w-12 h-12 bg-gold/15 text-gold rounded-2xl flex items-center justify-center mx-auto mb-2 font-serif font-bold text-xl">
+                        ⚡
+                      </div>
+                      <h3 className="text-xl font-serif font-black text-ink">Generate Grounded Educational Draft</h3>
+                      <p className="text-xs text-ink3 max-w-md mx-auto">
+                        Type any current affair, recent government announcement, or exam topic. AI will search Google, verify facts against credible institutions, and write a full draft for your review.
+                      </p>
                     </div>
 
-                    <div className="space-y-1.5">
-                      <label className="text-xs font-bold uppercase tracking-widest text-ink3">Exam Focus Target</label>
-                      <select
-                        value={customFocus}
-                        onChange={(e) => setCustomFocus(e.target.value)}
-                        className="w-full bg-paper2 border border-black/10 rounded-xl px-3 py-2.5 text-xs font-medium focus:border-gold outline-none"
+                    <form onSubmit={handleGenerateCustom} className="space-y-4 bg-white p-6 rounded-2xl border border-black/10 shadow-sm">
+                      <div className="space-y-1.5">
+                        <label className="text-xs font-bold uppercase tracking-widest text-ink3">Topic or Trend Headline *</label>
+                        <input
+                          type="text"
+                          value={customTopic}
+                          onChange={(e) => setCustomTopic(e.target.value)}
+                          placeholder="e.g., ISRO Proba-3 Coronagraph or UPSC Economy Inflation Basket..."
+                          className="w-full bg-paper2 border border-black/10 rounded-xl px-4 py-3 text-sm focus:border-gold outline-none font-medium"
+                          required
+                        />
+                      </div>
+
+                      <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                        <div className="space-y-1.5">
+                          <label className="text-xs font-bold uppercase tracking-widest text-ink3">Category</label>
+                          <select
+                            value={customCategory}
+                            onChange={(e) => setCustomCategory(e.target.value as Category)}
+                            className="w-full bg-paper2 border border-black/10 rounded-xl px-3 py-2.5 text-xs font-medium focus:border-gold outline-none"
+                          >
+                            <option value="science">SCIENCE</option>
+                            <option value="history">HISTORY</option>
+                            <option value="inventions">INVENTIONS</option>
+                            <option value="discoveries">DISCOVERIES</option>
+                            <option value="birthdays">BIRTHDAYS</option>
+                          </select>
+                        </div>
+
+                        <div className="space-y-1.5">
+                          <label className="text-xs font-bold uppercase tracking-widest text-ink3">Exam Focus Target</label>
+                          <select
+                            value={customFocus}
+                            onChange={(e) => setCustomFocus(e.target.value)}
+                            className="w-full bg-paper2 border border-black/10 rounded-xl px-3 py-2.5 text-xs font-medium focus:border-gold outline-none"
+                          >
+                            <option value="UPSC Civil Services & GS Papers">UPSC Civil Services (GS-I/II/III)</option>
+                            <option value="SSC CGL, CHSL & Railways">SSC CGL / CHSL & Railways</option>
+                            <option value="State PSC & Defense (NDA/CDS)">State PSCs & Defense</option>
+                            <option value="Static GK & General Knowledge">General Science & Static GK</option>
+                          </select>
+                        </div>
+                      </div>
+
+                      <div className="p-3 bg-amber-50 border border-gold/30 rounded-xl text-xs text-ink2 flex items-start gap-2">
+                        <ShieldCheck size={16} className="text-gold flex-shrink-0 mt-0.5" />
+                        <span>
+                          <strong>Veracity Filter Active:</strong> AI will check trusted news channels (PIB, The Hindu, Nature, ISRO) and automatically include fact-check verification details.
+                        </span>
+                      </div>
+
+                      <button
+                        type="submit"
+                        disabled={generating || !customTopic.trim()}
+                        className="w-full py-3 bg-ink text-white rounded-xl font-bold text-sm hover:bg-gold hover:text-ink transition-all flex items-center justify-center gap-2 shadow-md disabled:opacity-50"
                       >
-                        <option value="UPSC Civil Services & GS Papers">UPSC Civil Services (GS-I/II/III)</option>
-                        <option value="SSC CGL, CHSL & Railways">SSC CGL / CHSL & Railways</option>
-                        <option value="State PSC & Defense (NDA/CDS)">State PSCs & Defense</option>
-                        <option value="Static GK & General Knowledge">General Science & Static GK</option>
-                      </select>
-                    </div>
-                  </div>
-
-                  <div className="p-3 bg-amber-50 border border-gold/30 rounded-xl text-xs text-ink2 flex items-start gap-2">
-                    <ShieldCheck size={16} className="text-gold flex-shrink-0 mt-0.5" />
-                    <span>
-                      <strong>Veracity Filter Active:</strong> AI will check trusted news channels (PIB, The Hindu, Nature, ISRO) and automatically include fact-check verification details.
-                    </span>
-                  </div>
-
-                  <button
-                    type="submit"
-                    disabled={generating || !customTopic.trim()}
-                    className="w-full py-3 bg-ink text-white rounded-xl font-bold text-sm hover:bg-gold hover:text-ink transition-all flex items-center justify-center gap-2 shadow-md disabled:opacity-50"
-                  >
-                    {generating ? (
-                      <>
-                        <RefreshCw size={16} className="animate-spin text-gold" />
-                        <span>Verifying Facts & Generating Draft…</span>
-                      </>
-                    ) : (
-                      <>
                         <Sparkles size={16} className="text-gold" />
                         <span>Generate & Add to Review Queue</span>
-                      </>
-                    )}
-                  </button>
-                </form>
+                      </button>
+                    </form>
+                  </>
+                )}
+              </div>
+            )}
+
+            {activeTab === 'debug_console' && (
+              <div className="flex-1 p-6 overflow-y-auto max-w-5xl mx-auto w-full">
+                <AdminDebugConsole />
               </div>
             )}
 
