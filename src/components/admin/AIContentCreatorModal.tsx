@@ -360,8 +360,12 @@ export const AIContentCreatorModal: React.FC<AIContentCreatorModalProps> = ({ is
   };
 
   const handleAutoExtractVocabulary = async () => {
-    if (!editForm.full && !editForm.excerpt) {
-      alert("Please ensure the article has some content before extracting vocabulary.");
+    const contentText = editForm.full || editForm.excerpt || '';
+    if (!contentText.trim()) {
+      setNotification({
+        type: 'error',
+        message: "Please ensure the article has some content before extracting vocabulary."
+      });
       return;
     }
     setExtractingVocab(true);
@@ -374,41 +378,48 @@ export const AIContentCreatorModal: React.FC<AIContentCreatorModalProps> = ({ is
         method: 'POST',
         headers,
         body: JSON.stringify({
-          text: editForm.full || editForm.excerpt || '',
+          articleText: contentText,
+          text: contentText,
+          title: editForm.title || '',
           count: 4
         })
       });
 
       if (!res.ok) {
-        throw new Error(`Failed to extract vocabulary (${res.status})`);
+        const errJson = await res.json().catch(() => ({}));
+        throw new Error(errJson.error || `Server responded with status ${res.status}`);
       }
 
       const data = await res.json();
-      if (data.vocabulary && Array.isArray(data.vocabulary) && data.vocabulary.length > 0) {
+      const extractedList: VocabularyWord[] = data.vocabulary || data.words || [];
+      if (Array.isArray(extractedList) && extractedList.length > 0) {
         const existing = editForm.vocabulary || [];
         // Filter duplicates by word
-        const existingWords = new Set(existing.map(v => v.word.toLowerCase()));
-        const fresh = data.vocabulary.filter((v: VocabularyWord) => !existingWords.has(v.word.toLowerCase()));
+        const existingWords = new Set(existing.map(v => (v.word || '').toLowerCase().trim()));
+        const fresh = extractedList.filter((v: VocabularyWord) => v.word && !existingWords.has(v.word.toLowerCase().trim()));
         
-        setEditForm({
-          ...editForm,
-          vocabulary: [...existing, ...fresh]
-        });
+        const merged = [...existing, ...fresh];
+        setEditForm(prev => ({
+          ...prev,
+          vocabulary: merged
+        }));
 
         setNotification({
           type: 'success',
-          message: `Extracted ${fresh.length} new vocabulary word(s) successfully!`
+          message: fresh.length > 0
+            ? `Extracted ${fresh.length} new vocabulary word(s) successfully!`
+            : `Vocabulary words refreshed (${extractedList.length} total words found).`
         });
       } else {
         setNotification({
           type: 'info',
-          message: "No additional vocabulary words were extracted."
+          message: "No vocabulary words could be extracted from this text."
         });
       }
     } catch (err: any) {
       setNotification({
         type: 'error',
-        message: `Vocabulary extraction error: ${err.message}`
+        message: `Vocabulary extraction error: ${err.message || 'Unknown error'}`
       });
     } finally {
       setExtractingVocab(false);

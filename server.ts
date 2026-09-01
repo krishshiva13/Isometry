@@ -1492,22 +1492,25 @@ Provide:
 
 // Extract Article Vocabulary Endpoint (Extracts 3-6 rich English words from article text)
 app.post("/api/vocabulary/extract", async (req, res) => {
-  const { articleText, title } = req.body || {};
-  if (!articleText || typeof articleText !== "string") {
+  const { articleText, text, content, full, title, topic } = req.body || {};
+  const rawText = articleText || text || content || full;
+  const articleTitle = title || topic || "";
+
+  if (!rawText || typeof rawText !== "string" || !rawText.trim()) {
     return res.status(400).json({ error: "Article text is required" });
   }
 
   try {
-    const prompt = `Analyze this educational article${title ? ` titled "${title}"` : ""}:
+    const prompt = `Analyze this educational article${articleTitle ? ` titled "${articleTitle}"` : ""}:
 """
-${articleText.substring(0, 4000)}
+${rawText.substring(0, 4000)}
 """
 
 Extract 3 to 6 high-yield, interesting English vocabulary words or academic terms from the article that will help people learn and improve their English.
 For each word provide:
 - The exact word
 - Phonetic IPA pronunciation
-- Part of speech (noun, verb, adjective, adverb)
+- Part of speech (noun, verb, adjective, adverb, phrase)
 - Clear, simple English definition
 - Hindi meaning / translation
 - 2-4 synonyms
@@ -1518,7 +1521,7 @@ For each word provide:
       contents: prompt,
       allowSearchFallback: false,
       config: {
-        systemInstruction: "You are an English language educator. Respond ONLY with a valid JSON object containing an array of words.",
+        systemInstruction: "You are an expert English language educator. Respond ONLY with a valid JSON object containing an array of words.",
         responseMimeType: "application/json",
         responseSchema: {
           type: Type.OBJECT,
@@ -1549,7 +1552,8 @@ For each word provide:
     });
 
     const parsed = JSON.parse(response.text || "{}");
-    res.json({ success: true, words: parsed.words || [] });
+    const wordsList = parsed.words || [];
+    res.json({ success: true, words: wordsList, vocabulary: wordsList });
   } catch (error: any) {
     console.error("Vocabulary extract error:", error);
     res.status(500).json({ error: formatGeminiErrorMessage(error) });
