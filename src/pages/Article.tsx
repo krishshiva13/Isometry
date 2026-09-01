@@ -15,6 +15,7 @@ import { SaveToNotebookModal } from '../components/SaveToNotebookModal';
 import { notebookService } from '../services/notebookService';
 import { ArticleHeroImage } from '../components/common/ArticleHeroImage';
 import { ImageUploadField } from '../components/common/ImageUploadField';
+import { MarkdownToolbar } from '../components/common/MarkdownToolbar';
 import { normalizeImageUrl } from '../lib/imageUtils';
 import { recordFactRead } from '../components/DailyGoalTracker';
 
@@ -747,8 +748,17 @@ export const Article = () => {
                   </p>
                 </div>
 
+                {/* Formatting Toolbar with In-Article Image & Credit Inserter */}
+                <div className="font-sans not-prose">
+                  <MarkdownToolbar
+                    textareaRef={textareaRef}
+                    value={editData.full || ''}
+                    onChange={(newVal) => setEditData({ ...editData, full: newVal })}
+                  />
+                </div>
+
                 {/* Interactive Easy Text Color Injector */}
-                <div className="p-5 rounded-2xl bg-white border border-black/10 space-y-3 font-sans shadow-sm">
+                <div className="p-5 rounded-2xl bg-white border border-black/10 space-y-3 font-sans shadow-sm not-prose">
                   <div className="text-xs font-bold uppercase tracking-widest text-ink flex items-center gap-1.5">
                     <span className="w-2 h-2 rounded-full bg-gold animate-pulse"></span>
                     🎨 Click to Add Color to Heading or Important Words

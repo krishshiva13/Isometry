@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useState } from 'react';
 import { 
   List, 
   ListOrdered, 
@@ -9,9 +9,11 @@ import {
   Quote, 
   Lightbulb, 
   Link as LinkIcon, 
-  Code,
-  HelpCircle
+  Image as ImageIcon,
+  HelpCircle,
+  Sparkles
 } from 'lucide-react';
+import { InsertArticleImageModal } from './InsertArticleImageModal';
 
 interface MarkdownToolbarProps {
   textareaRef: React.RefObject<HTMLTextAreaElement | null>;
@@ -26,6 +28,71 @@ export const MarkdownToolbar: React.FC<MarkdownToolbarProps> = ({
   onChange,
   className = ''
 }) => {
+  const [isImageModalOpen, setIsImageModalOpen] = useState(false);
+  const [currentSelectedText, setCurrentSelectedText] = useState('');
+
+  const handleOpenImageModal = () => {
+    const textarea = textareaRef.current;
+    if (textarea) {
+      const start = textarea.selectionStart;
+      const end = textarea.selectionEnd;
+      setCurrentSelectedText(value.substring(start, end));
+    } else {
+      setCurrentSelectedText('');
+    }
+    setIsImageModalOpen(true);
+  };
+
+  const handleInsertImage = (
+    markdownTag: string, 
+    placement: 'cursor' | 'after_intro' | 'middle' | 'end'
+  ) => {
+    const textarea = textareaRef.current;
+    let newValue = value;
+    let newCursorPos = 0;
+
+    if (placement === 'cursor' && textarea) {
+      const start = textarea.selectionStart;
+      const end = textarea.selectionEnd;
+      newValue = value.substring(0, start) + markdownTag + value.substring(end);
+      newCursorPos = start + markdownTag.length;
+    } else if (placement === 'after_intro') {
+      // Find the first paragraph break (\n\n)
+      const firstBreak = value.indexOf('\n\n');
+      if (firstBreak !== -1) {
+        newValue = value.substring(0, firstBreak + 2) + markdownTag.trim() + '\n\n' + value.substring(firstBreak + 2);
+        newCursorPos = firstBreak + 2 + markdownTag.trim().length + 2;
+      } else {
+        newValue = value + markdownTag;
+        newCursorPos = newValue.length;
+      }
+    } else if (placement === 'middle') {
+      // Find a paragraph break near the 50% mark
+      const midPoint = Math.floor(value.length / 2);
+      const nextBreak = value.indexOf('\n\n', midPoint);
+      if (nextBreak !== -1) {
+        newValue = value.substring(0, nextBreak + 2) + markdownTag.trim() + '\n\n' + value.substring(nextBreak + 2);
+        newCursorPos = nextBreak + 2 + markdownTag.trim().length + 2;
+      } else {
+        newValue = value + markdownTag;
+        newCursorPos = newValue.length;
+      }
+    } else {
+      // End of article
+      newValue = value.trimEnd() + markdownTag;
+      newCursorPos = newValue.length;
+    }
+
+    onChange(newValue);
+
+    setTimeout(() => {
+      if (textarea) {
+        textarea.focus();
+        textarea.setSelectionRange(newCursorPos, newCursorPos);
+      }
+    }, 50);
+  };
+
   const insertFormatting = (prefix: string, suffix: string = '', placeholder: string = 'text') => {
     const textarea = textareaRef.current;
     if (!textarea) return;
@@ -63,13 +130,11 @@ export const MarkdownToolbar: React.FC<MarkdownToolbarProps> = ({
     const selectedText = value.substring(start, end);
 
     if (selectedText.trim().length > 0) {
-      // Convert selected lines to bullet points
       const lines = selectedText.split('\n');
       const bulleted = lines.map(line => line.startsWith('- ') ? line : `- ${line}`).join('\n');
       const newValue = value.substring(0, start) + bulleted + value.substring(end);
       onChange(newValue);
     } else {
-      // Insert sample bullet list
       const sample = '\n- First key point\n- Second key point\n- Third key point\n';
       const newValue = value.substring(0, start) + sample + value.substring(end);
       onChange(newValue);
@@ -89,7 +154,6 @@ export const MarkdownToolbar: React.FC<MarkdownToolbarProps> = ({
     const selectedText = value.substring(start, end);
 
     if (selectedText.trim().length > 0) {
-      // Convert selected lines to numbered list
       const lines = selectedText.split('\n');
       const numbered = lines.map((line, idx) => {
         const clean = line.replace(/^\d+\.\s*/, '');
@@ -98,7 +162,6 @@ export const MarkdownToolbar: React.FC<MarkdownToolbarProps> = ({
       const newValue = value.substring(0, start) + numbered + value.substring(end);
       onChange(newValue);
     } else {
-      // Insert sample numbered list
       const sample = '\n1. First milestone\n2. Second milestone\n3. Third milestone\n';
       const newValue = value.substring(0, start) + sample + value.substring(end);
       onChange(newValue);
@@ -130,6 +193,20 @@ export const MarkdownToolbar: React.FC<MarkdownToolbarProps> = ({
     <div className={`space-y-1.5 ${className}`}>
       {/* Toolbar Buttons */}
       <div className="flex flex-wrap items-center gap-1 p-1.5 bg-paper2 rounded-xl border border-black/10 text-ink">
+        
+        {/* 🖼️ Prominent In-Article Image Inserter Button */}
+        <button
+          type="button"
+          onClick={handleOpenImageModal}
+          title="Insert In-Article Image with Photo Credits"
+          className="flex items-center gap-1.5 px-3 py-1 bg-gradient-to-r from-gold/25 to-amber-100 hover:from-gold/35 hover:to-amber-200 text-ink font-bold text-xs rounded-lg border border-gold/40 transition-all shadow-2xs group"
+        >
+          <ImageIcon size={14} className="text-gold group-hover:scale-110 transition-transform" />
+          <span>🖼️ Insert Image & Credits</span>
+        </button>
+
+        <div className="w-px h-4 bg-black/10 mx-0.5" />
+
         <button
           type="button"
           onClick={insertBulletList}
@@ -219,15 +296,23 @@ export const MarkdownToolbar: React.FC<MarkdownToolbarProps> = ({
         </button>
       </div>
 
-      {/* Formatting Guide Helper */}
+      {/* Helper guide */}
       <div className="flex items-center justify-between text-[11px] text-ink3 px-1 font-sans">
-        <div className="flex items-center gap-1.5">
+        <div className="flex items-center gap-1.5 flex-wrap">
           <HelpCircle size={12} className="text-gold flex-shrink-0" />
           <span>
-            <strong>How to make lists:</strong> Start any line with <code className="bg-paper2 px-1 py-0.5 rounded font-mono text-[10px] text-ink font-bold">- </code> for bullets, or <code className="bg-paper2 px-1 py-0.5 rounded font-mono text-[10px] text-ink font-bold">1. </code> for numbered items.
+            <strong>In-Article Images:</strong> Click <code className="bg-paper2 px-1 py-0.5 rounded font-mono text-[10px] text-ink font-bold">🖼️ Insert Image & Credits</code> to upload or link images anywhere with custom photo attribution.
           </span>
         </div>
       </div>
+
+      {/* Modal Dialog */}
+      <InsertArticleImageModal
+        isOpen={isImageModalOpen}
+        onClose={() => setIsImageModalOpen(false)}
+        onInsert={handleInsertImage}
+        initialSelectedText={currentSelectedText}
+      />
     </div>
   );
 };

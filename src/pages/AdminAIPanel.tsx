@@ -37,6 +37,7 @@ import { useAuth } from '../contexts/AuthContext';
 import { auth } from '../lib/firebase';
 import ReactMarkdown from 'react-markdown';
 import { ImageUploadField } from '../components/common/ImageUploadField';
+import { MarkdownToolbar } from '../components/common/MarkdownToolbar';
 import { normalizeImageUrl } from '../lib/imageUtils';
 import { AdminDebugConsole } from '../components/admin/AdminDebugConsole';
 import { AIGenerationSkeleton } from '../components/admin/AIGenerationSkeleton';
@@ -1965,9 +1966,16 @@ export const AdminAIPanel = () => {
                               Full Article Content (Markdown) *
                             </label>
                             <div className="text-[11px] text-ink3">
-                              Supports headings, bold text, bullet points
+                              Supports headings, bold text, bullet points & in-between images with credits
                             </div>
                           </div>
+
+                          {/* Markdown Toolbar with In-Article Image Inserter */}
+                          <MarkdownToolbar
+                            textareaRef={textareaRef}
+                            value={editForm.full || ''}
+                            onChange={(val) => setEditForm({ ...editForm, full: val })}
+                          />
 
                           {/* Color Palette */}
                           <div className="p-3 bg-white rounded-xl border border-black/5 space-y-2">
