@@ -415,8 +415,9 @@ CONTENT REQUIREMENTS:
 3. Include visual color highlight tags inside the markdown: [gold]concept[/gold], [coral]dates[/coral], [teal]key bodies[/teal], [indigo]terms[/indigo].
 4. Include 3-5 Practice MCQs with options, correct answer index (0-3), and detailed explanation suitable for UPSC Prelims / SSC CGL exams.
 5. Include 2-4 Bilingual Vocabulary / Key Terms with English term, Hindi translation (e.g. राजकोषीय घाटा), and concise 1-sentence meaning.
-6. Provide a concise WhatsApp / Telegram study note capsule with emojis.
-7. Return 1 to 3 verified drafts in clean JSON format.`;
+6. Include 3-5 English Vocabulary Words from the article for language learners with phonetic pronunciation (e.g. /ˈkætəlɪst/), part of speech (noun/verb/adjective), concise English definition, Hindi meaning, and an example sentence.
+7. Provide a concise WhatsApp / Telegram study note capsule with emojis.
+8. Return 1 to 3 verified drafts in clean JSON format.`;
 
     const synthesisResult = await safeGenerateContent({
       preferredModel: "gemini-3.7-flash",
@@ -483,6 +484,26 @@ CONTENT REQUIREMENTS:
                     meaning: { type: Type.STRING }
                   },
                   required: ["termEn", "termHi", "meaning"]
+                }
+              },
+              vocabulary: {
+                type: Type.ARRAY,
+                description: "3-5 English vocabulary words with pronunciation, part of speech, definition, Hindi meaning, and example sentence for language learners",
+                items: {
+                  type: Type.OBJECT,
+                  properties: {
+                    word: { type: Type.STRING },
+                    phonetic: { type: Type.STRING },
+                    partOfSpeech: { type: Type.STRING },
+                    meaning: { type: Type.STRING },
+                    hindiMeaning: { type: Type.STRING },
+                    exampleSentence: { type: Type.STRING },
+                    synonyms: {
+                      type: Type.ARRAY,
+                      items: { type: Type.STRING }
+                    }
+                  },
+                  required: ["word", "meaning"]
                 }
               },
               socialPostDigest: { type: Type.STRING, description: "Ready-to-share Telegram / WhatsApp study capsule with emojis and bullet points" },
@@ -692,7 +713,8 @@ CONTENT REQUIREMENTS:
 4. Provide a detailed fact-check verification summary stating how facts were verified against official sources.
 5. Provide 3-5 Practice MCQs with 4 options, the zero-based index of the correct answer (0-3), detailed explanation, and exam category (UPSC/SSC/RRB/State PSCs).
 6. Provide 2-4 Bilingual Vocabulary Terms (English term, Hindi translation, meaning).
-7. Provide a concise WhatsApp / Telegram study digest with emojis.
+7. Provide 3-5 English Vocabulary Words from the text with phonetics, part of speech, clear definitions, Hindi translations, and example sentences to help learners improve their English.
+8. Provide a concise WhatsApp / Telegram study digest with emojis.
 8. Map category appropriately: "history", "science", "inventions", "discoveries", or "birthdays".
 9. Return a valid JSON array of drafts.`;
 
@@ -761,6 +783,26 @@ CONTENT REQUIREMENTS:
                     meaning: { type: Type.STRING }
                   },
                   required: ["termEn", "termHi", "meaning"]
+                }
+              },
+              vocabulary: {
+                type: Type.ARRAY,
+                description: "3-5 English vocabulary words with pronunciation, part of speech, definition, Hindi meaning, and example sentence for language learners",
+                items: {
+                  type: Type.OBJECT,
+                  properties: {
+                    word: { type: Type.STRING },
+                    phonetic: { type: Type.STRING },
+                    partOfSpeech: { type: Type.STRING },
+                    meaning: { type: Type.STRING },
+                    hindiMeaning: { type: Type.STRING },
+                    exampleSentence: { type: Type.STRING },
+                    synonyms: {
+                      type: Type.ARRAY,
+                      items: { type: Type.STRING }
+                    }
+                  },
+                  required: ["word", "meaning"]
                 }
               },
               socialPostDigest: { type: Type.STRING, description: "Ready-to-share Telegram / WhatsApp study capsule with emojis and bullet points" },
@@ -1158,6 +1200,25 @@ REQUIREMENTS:
                 required: ["termEn", "termHi", "meaning"]
               }
             },
+            vocabulary: {
+              type: Type.ARRAY,
+              items: {
+                type: Type.OBJECT,
+                properties: {
+                  word: { type: Type.STRING },
+                  phonetic: { type: Type.STRING },
+                  partOfSpeech: { type: Type.STRING },
+                  meaning: { type: Type.STRING },
+                  hindiMeaning: { type: Type.STRING },
+                  exampleSentence: { type: Type.STRING },
+                  synonyms: {
+                    type: Type.ARRAY,
+                    items: { type: Type.STRING }
+                  }
+                },
+                required: ["word", "meaning"]
+              }
+            },
             socialPostDigest: { type: Type.STRING },
             imageUrl: { type: Type.STRING },
             imageAlt: { type: Type.STRING },
@@ -1373,6 +1434,126 @@ app.get("/sitemap.xml", async (req, res) => {
 <urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">
 ${urlElements}
 </urlset>`);
+});
+
+// Vocabulary Definition Endpoint (Dynamic AI Word Lookup)
+app.post("/api/vocabulary/define", async (req, res) => {
+  const { word, contextSentence } = req.body || {};
+  if (!word || typeof word !== "string" || !word.trim()) {
+    return res.status(400).json({ error: "Word is required" });
+  }
+
+  const cleanWord = word.trim();
+  try {
+    const prompt = `Define the English word "${cleanWord}" clearly for students and language learners.${
+      contextSentence ? ` In context of this sentence: "${contextSentence}"` : ""
+    }
+Provide:
+- Phonetic pronunciation (IPA, e.g. /ˈkætəlɪst/)
+- Part of speech (noun, verb, adjective, adverb, idiom)
+- Simple, highly accurate English definition (1-2 sentences)
+- Hindi translation / meaning
+- 2-4 Synonyms
+- Natural example sentence showing how to use the word`;
+
+    const response = await safeGenerateContent({
+      preferredModel: "gemini-3.7-flash",
+      contents: prompt,
+      allowSearchFallback: false,
+      config: {
+        systemInstruction: "You are an expert English lexicographer and language teacher. Respond ONLY with a valid JSON object matching the schema.",
+        responseMimeType: "application/json",
+        responseSchema: {
+          type: Type.OBJECT,
+          properties: {
+            word: { type: Type.STRING },
+            phonetic: { type: Type.STRING },
+            partOfSpeech: { type: Type.STRING },
+            meaning: { type: Type.STRING },
+            hindiMeaning: { type: Type.STRING },
+            exampleSentence: { type: Type.STRING },
+            synonyms: {
+              type: Type.ARRAY,
+              items: { type: Type.STRING }
+            }
+          },
+          required: ["word", "meaning"]
+        }
+      }
+    });
+
+    const parsed = JSON.parse(response.text || "{}");
+    res.json({ success: true, vocabularyWord: { ...parsed, word: cleanWord } });
+  } catch (error: any) {
+    console.error("Vocabulary define error:", error);
+    res.status(500).json({ error: formatGeminiErrorMessage(error) });
+  }
+});
+
+// Extract Article Vocabulary Endpoint (Extracts 3-6 rich English words from article text)
+app.post("/api/vocabulary/extract", async (req, res) => {
+  const { articleText, title } = req.body || {};
+  if (!articleText || typeof articleText !== "string") {
+    return res.status(400).json({ error: "Article text is required" });
+  }
+
+  try {
+    const prompt = `Analyze this educational article${title ? ` titled "${title}"` : ""}:
+"""
+${articleText.substring(0, 4000)}
+"""
+
+Extract 3 to 6 high-yield, interesting English vocabulary words or academic terms from the article that will help people learn and improve their English.
+For each word provide:
+- The exact word
+- Phonetic IPA pronunciation
+- Part of speech (noun, verb, adjective, adverb)
+- Clear, simple English definition
+- Hindi meaning / translation
+- 2-4 synonyms
+- An example sentence (using the context of the article if possible)`;
+
+    const response = await safeGenerateContent({
+      preferredModel: "gemini-3.7-flash",
+      contents: prompt,
+      allowSearchFallback: false,
+      config: {
+        systemInstruction: "You are an English language educator. Respond ONLY with a valid JSON object containing an array of words.",
+        responseMimeType: "application/json",
+        responseSchema: {
+          type: Type.OBJECT,
+          properties: {
+            words: {
+              type: Type.ARRAY,
+              items: {
+                type: Type.OBJECT,
+                properties: {
+                  word: { type: Type.STRING },
+                  phonetic: { type: Type.STRING },
+                  partOfSpeech: { type: Type.STRING },
+                  meaning: { type: Type.STRING },
+                  hindiMeaning: { type: Type.STRING },
+                  exampleSentence: { type: Type.STRING },
+                  synonyms: {
+                    type: Type.ARRAY,
+                    items: { type: Type.STRING }
+                  }
+                },
+                required: ["word", "meaning"]
+              }
+            }
+          },
+          required: ["words"]
+        }
+      }
+    });
+
+    const parsed = JSON.parse(response.text || "{}");
+    res.json({ success: true, words: parsed.words || [] });
+  } catch (error: any) {
+    console.error("Vocabulary extract error:", error);
+    res.status(500).json({ error: formatGeminiErrorMessage(error) });
+  }
 });
 
 app.post("/api/quiz/generate", async (req, res) => {

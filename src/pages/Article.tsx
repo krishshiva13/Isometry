@@ -17,6 +17,8 @@ import { ArticleHeroImage } from '../components/common/ArticleHeroImage';
 import { ImageUploadField } from '../components/common/ImageUploadField';
 import { MarkdownToolbar } from '../components/common/MarkdownToolbar';
 import { EmbeddedRelatedCard } from '../components/common/EmbeddedRelatedCard';
+import { InlineVocabWord } from '../components/common/InlineVocabWord';
+import { ArticleVocabularySection } from '../components/common/ArticleVocabularySection';
 import { normalizeImageUrl } from '../lib/imageUtils';
 import { recordFactRead } from '../components/DailyGoalTracker';
 
@@ -83,10 +85,27 @@ const COLOR_OPTIONS = [
   { name: 'purple', label: 'Purple', bg: 'bg-purple-600', text: 'text-purple-600' }
 ];
 
+const parseVocabTag = (attrString: string, word: string) => {
+  const getAttr = (key: string) => {
+    const m = attrString.match(new RegExp(`${key}="([^"]*)"`));
+    return m ? m[1] : undefined;
+  };
+  return {
+    word,
+    meaning: getAttr('meaning'),
+    phonetic: getAttr('phonetic'),
+    pos: getAttr('pos') || getAttr('partOfSpeech'),
+    hindi: getAttr('hindi') || getAttr('hindiMeaning'),
+    example: getAttr('example') || getAttr('exampleSentence'),
+    synonyms: getAttr('synonyms') ? getAttr('synonyms')!.split(',') : undefined
+  };
+};
+
 const renderHighlightedText = (text: string) => {
   if (!text) return null;
   
-  const regex = /\[(gold|coral|teal|indigo|red|green|blue|slate|purple)\](.*?)\[\/\1\]/gi;
+  // Regex to match both [color]...[/color] and :::vocab[word]{...}:::
+  const regex = /(?:\[(gold|coral|teal|indigo|red|green|blue|slate|purple)\](.*?)\[\/\1\])|(?:::vocab\[(.*?)\](?:\{(.*?)\})?:::)/gi;
   const elements: (string | React.ReactNode)[] = [];
   let lastIndex = 0;
   let match;
@@ -95,29 +114,51 @@ const renderHighlightedText = (text: string) => {
   
   while ((match = localRegex.exec(text)) !== null) {
     const matchIndex = match.index;
-    const color = match[1].toLowerCase();
-    const content = match[2];
     
     if (matchIndex > lastIndex) {
       elements.push(text.substring(lastIndex, matchIndex));
     }
-    
-    let textColorClass = "text-gold";
-    if (color === "coral") textColorClass = "text-coral font-bold";
-    else if (color === "teal") textColorClass = "text-teal font-bold";
-    else if (color === "indigo") textColorClass = "text-indigo font-bold";
-    else if (color === "red") textColorClass = "text-rose-600 font-bold";
-    else if (color === "green") textColorClass = "text-emerald-600 font-bold";
-    else if (color === "blue") textColorClass = "text-blue-600 font-bold";
-    else if (color === "slate") textColorClass = "text-slate-600 font-bold";
-    else if (color === "purple") textColorClass = "text-purple-600 font-bold";
-    else textColorClass = "text-gold font-bold";
-    
-    elements.push(
-      <span key={matchIndex} className={textColorClass}>
-        {content}
-      </span>
-    );
+
+    if (match[1]) {
+      // Color highlight match
+      const color = match[1].toLowerCase();
+      const content = match[2];
+      
+      let textColorClass = "text-gold";
+      if (color === "coral") textColorClass = "text-coral font-bold";
+      else if (color === "teal") textColorClass = "text-teal font-bold";
+      else if (color === "indigo") textColorClass = "text-indigo font-bold";
+      else if (color === "red") textColorClass = "text-rose-600 font-bold";
+      else if (color === "green") textColorClass = "text-emerald-600 font-bold";
+      else if (color === "blue") textColorClass = "text-blue-600 font-bold";
+      else if (color === "slate") textColorClass = "text-slate-600 font-bold";
+      else if (color === "purple") textColorClass = "text-purple-600 font-bold";
+      else textColorClass = "text-gold font-bold";
+      
+      elements.push(
+        <span key={`highlight-${matchIndex}`} className={textColorClass}>
+          {content}
+        </span>
+      );
+    } else if (match[3]) {
+      // Vocabulary directive match
+      const word = match[3];
+      const attrStr = match[4] || '';
+      const vocabData = parseVocabTag(attrStr, word);
+      
+      elements.push(
+        <InlineVocabWord
+          key={`vocab-${matchIndex}`}
+          word={vocabData.word}
+          meaning={vocabData.meaning}
+          phonetic={vocabData.phonetic}
+          pos={vocabData.pos}
+          hindi={vocabData.hindi}
+          example={vocabData.example}
+          synonyms={vocabData.synonyms}
+        />
+      );
+    }
     
     lastIndex = localRegex.lastIndex;
   }
@@ -1091,6 +1132,14 @@ export const Article = () => {
             ) : (
               <>
                 <ReactMarkdown components={renderers}>{fact.full}</ReactMarkdown>
+
+                {/* 🔤 Daily English Vocabulary Builder Section */}
+                <ArticleVocabularySection
+                  vocabulary={fact.vocabulary}
+                  bilingualTerms={fact.bilingualTerms}
+                  articleTitle={fact.title}
+                  articleId={fact.id}
+                />
 
                 {/* 📚 SAFEGUARDED RECOMMENDED READING & AFFILIATE PRODUCTS SHOWCASE */}
                 {(() => {

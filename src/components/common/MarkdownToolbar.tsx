@@ -16,6 +16,8 @@ import {
 } from 'lucide-react';
 import { InsertArticleImageModal } from './InsertArticleImageModal';
 import { InsertRelatedArticleModal } from './InsertRelatedArticleModal';
+import { InsertVocabularyModal } from './InsertVocabularyModal';
+import { VocabularyWord } from '../../types';
 
 interface MarkdownToolbarProps {
   textareaRef: React.RefObject<HTMLTextAreaElement | null>;
@@ -23,6 +25,7 @@ interface MarkdownToolbarProps {
   onChange: (val: string) => void;
   className?: string;
   currentArticleId?: string;
+  onAddVocabularyWord?: (vocab: VocabularyWord) => void;
 }
 
 export const MarkdownToolbar: React.FC<MarkdownToolbarProps> = ({
@@ -30,10 +33,12 @@ export const MarkdownToolbar: React.FC<MarkdownToolbarProps> = ({
   value,
   onChange,
   className = '',
-  currentArticleId
+  currentArticleId,
+  onAddVocabularyWord
 }) => {
   const [isImageModalOpen, setIsImageModalOpen] = useState(false);
   const [isRelatedModalOpen, setIsRelatedModalOpen] = useState(false);
+  const [isVocabModalOpen, setIsVocabModalOpen] = useState(false);
   const [currentSelectedText, setCurrentSelectedText] = useState('');
 
   const handleOpenImageModal = () => {
@@ -46,6 +51,41 @@ export const MarkdownToolbar: React.FC<MarkdownToolbarProps> = ({
       setCurrentSelectedText('');
     }
     setIsImageModalOpen(true);
+  };
+
+  const handleOpenVocabModal = () => {
+    const textarea = textareaRef.current;
+    if (textarea) {
+      const start = textarea.selectionStart;
+      const end = textarea.selectionEnd;
+      setCurrentSelectedText(value.substring(start, end).trim());
+    } else {
+      setCurrentSelectedText('');
+    }
+    setIsVocabModalOpen(true);
+  };
+
+  const handleInsertVocabulary = (markdownSnippet: string, vocabObj?: VocabularyWord) => {
+    const textarea = textareaRef.current;
+    if (textarea) {
+      const start = textarea.selectionStart;
+      const end = textarea.selectionEnd;
+      const before = value.substring(0, start);
+      const after = value.substring(end);
+      const newValue = before + markdownSnippet + after;
+      onChange(newValue);
+
+      setTimeout(() => {
+        textarea.focus();
+        textarea.setSelectionRange(start + markdownSnippet.length, start + markdownSnippet.length);
+      }, 20);
+    } else {
+      onChange(value + (value ? '\n\n' : '') + markdownSnippet);
+    }
+
+    if (vocabObj && onAddVocabularyWord) {
+      onAddVocabularyWord(vocabObj);
+    }
   };
 
   const handleInsertImage = (
@@ -268,6 +308,17 @@ export const MarkdownToolbar: React.FC<MarkdownToolbarProps> = ({
           <span>📖 Related Post</span>
         </button>
 
+        {/* 🔤 English Vocabulary Word Inserter Button */}
+        <button
+          type="button"
+          onClick={handleOpenVocabModal}
+          title="Insert English Vocabulary Word & Meaning (Learners Feature)"
+          className="flex items-center gap-1.5 px-3 py-1 bg-gradient-to-r from-purple-50 to-indigo-100 hover:from-purple-100 hover:to-indigo-200 text-ink font-bold text-xs rounded-lg border border-indigo-500/30 transition-all shadow-2xs group"
+        >
+          <span className="text-sm group-hover:scale-110 transition-transform">🔤</span>
+          <span>Add Vocabulary</span>
+        </button>
+
         <div className="w-px h-4 bg-black/10 mx-0.5" />
 
         <button
@@ -364,7 +415,7 @@ export const MarkdownToolbar: React.FC<MarkdownToolbarProps> = ({
         <div className="flex items-center gap-2 flex-wrap">
           <HelpCircle size={12} className="text-gold flex-shrink-0" />
           <span>
-            <strong>Pro Tip:</strong> Click <code className="bg-paper2 px-1 py-0.5 rounded font-mono text-[10px] text-ink font-bold">🖼️ Insert Image</code> or <code className="bg-paper2 px-1 py-0.5 rounded font-mono text-[10px] text-ink font-bold">📖 Related Post</code> to embed media & "Read Also" cards anywhere in the article.
+            <strong>Pro Tip:</strong> Click <code className="bg-paper2 px-1 py-0.5 rounded font-mono text-[10px] text-ink font-bold">🖼️ Insert Image</code>, <code className="bg-paper2 px-1 py-0.5 rounded font-mono text-[10px] text-ink font-bold">📖 Related Post</code>, or <code className="bg-paper2 px-1 py-0.5 rounded font-mono text-[10px] text-ink font-bold">🔤 Add Vocabulary</code> to enhance learning.
           </span>
         </div>
       </div>
@@ -383,6 +434,14 @@ export const MarkdownToolbar: React.FC<MarkdownToolbarProps> = ({
         onClose={() => setIsRelatedModalOpen(false)}
         onInsert={handleInsertRelatedArticle}
         currentArticleId={currentArticleId}
+      />
+
+      {/* Vocabulary Modal Dialog */}
+      <InsertVocabularyModal
+        isOpen={isVocabModalOpen}
+        onClose={() => setIsVocabModalOpen(false)}
+        onInsert={handleInsertVocabulary}
+        initialWord={currentSelectedText}
       />
     </div>
   );

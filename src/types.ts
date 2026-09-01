@@ -25,6 +25,16 @@ export interface BilingualTerm {
   meaning: string;
 }
 
+export interface VocabularyWord {
+  word: string;
+  phonetic?: string; // e.g. "/prəˈfaʊnd/"
+  partOfSpeech?: 'noun' | 'verb' | 'adjective' | 'adverb' | 'idiom' | string;
+  meaning: string;
+  hindiMeaning?: string;
+  synonyms?: string[];
+  exampleSentence?: string;
+}
+
 export type TopicPillar = 'day_in_history' | 'science_discovery' | 'science' | 'national_important_day' | 'national_days' | 'exam_gk' | 'current_affairs' | 'all_round' | string;
 
 export interface Fact {
@@ -48,6 +58,7 @@ export interface Fact {
   pyqTags?: string[];
   quizMCQs?: QuizMCQ[];
   bilingualTerms?: BilingualTerm[];
+  vocabulary?: VocabularyWord[];
   socialPostDigest?: string;
   searchKeywords?: string[];
   targetKeyword?: string;
@@ -214,6 +225,7 @@ export interface AIDraft {
   eventDay?: number;
   quizMCQs?: QuizMCQ[];
   bilingualTerms?: BilingualTerm[];
+  vocabulary?: VocabularyWord[];
   socialPostDigest?: string;
   searchKeywords?: string[];
   targetKeyword?: string;

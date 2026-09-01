@@ -9,7 +9,36 @@ export const INITIAL_FACTS: Fact[] = [
     year: 1989,
     excerpt: 'On November 9, 1989, the Berlin Wall fell after 28 years of dividing East and West Germany. Thousands of people climbed and demolished the wall, marking the end of the Cold War.',
     featured: true,
-    full: `The Berlin Wall stood for 28 years as the most powerful symbol of the Cold War. Built in 1961 by East Germany to prevent mass emigration to the West, it stretched 155 km around West Berlin.\n\nOn November 9, 1989, the East German government announced citizens could freely cross the border. Crowds overwhelmed the checkpoints and began tearing down the wall with hammers and their bare hands. It was broadcast live on television worldwide.\n\nThe Wall's fall was a pivotal moment that led to German reunification in October 1990 and symbolized the collapse of communist regimes across Eastern Europe. Today, small remnants of the wall stand as memorials in Berlin.`
+    vocabulary: [
+      {
+        word: 'Pivotal',
+        phonetic: '/ˈpɪv.ə.təl/',
+        partOfSpeech: 'adjective',
+        meaning: 'Of crucial importance in relation to the development or success of something else.',
+        hindiMeaning: 'महत्वपूर्ण, निर्णायक',
+        exampleSentence: 'The fall of the Berlin Wall was a pivotal moment in modern European history.',
+        synonyms: ['crucial', 'decisive', 'vital', 'momentous']
+      },
+      {
+        word: 'Reunification',
+        phonetic: '/ˌriː.juː.nɪ.fɪˈkeɪ.ʃən/',
+        partOfSpeech: 'noun',
+        meaning: 'The process of being brought together again as a single political or geographical entity.',
+        hindiMeaning: 'पुनर्मिलन, एकीकरण',
+        exampleSentence: 'German reunification occurred swiftly following the collapse of the border restrictions.',
+        synonyms: ['reunion', 'reintegration', 'merger']
+      },
+      {
+        word: 'Remnant',
+        phonetic: '/ˈrem.nənt/',
+        partOfSpeech: 'noun',
+        meaning: 'A small remaining quantity of something.',
+        hindiMeaning: 'अवशेष, बचा हुआ भाग',
+        exampleSentence: 'Small remnants of the wall stand as historical memorials today.',
+        synonyms: ['fragment', 'residue', 'vestige', 'relic']
+      }
+    ],
+    full: `The Berlin Wall stood for 28 years as the most powerful symbol of the Cold War. Built in 1961 by East Germany to prevent mass emigration to the West, it stretched 155 km around West Berlin.\n\nOn November 9, 1989, the East German government announced citizens could freely cross the border. Crowds overwhelmed the checkpoints and began tearing down the wall with hammers and their bare hands. It was broadcast live on television worldwide.\n\nThe Wall's fall was a :::vocab[pivotal]{meaning="Of crucial importance in relation to the development or success of something else." phonetic="/ˈpɪv.ə.təl/" pos="adjective" hindi="महत्वपूर्ण, निर्णायक" example="The fall of the Berlin Wall was a pivotal moment in modern European history." synonyms="crucial,decisive,vital"}::: moment that led to German :::vocab[reunification]{meaning="The process of being brought together again as a single political entity." phonetic="/ˌriː.juː.nɪ.fɪˈkeɪ.ʃən/" pos="noun" hindi="पुनर्मिलन, एकीकरण" example="German reunification occurred swiftly following the collapse of the border." synonyms="reunion,reintegration"}::: in October 1990 and symbolized the collapse of communist regimes across Eastern Europe. Today, small :::vocab[remnants]{meaning="A small remaining quantity or fragment of something." phonetic="/ˈrem.nənt/" pos="noun" hindi="अवशेष, बचा हुआ भाग" example="Small remnants of the wall stand as historical memorials today." synonyms="vestige,relic,fragment"}::: of the wall stand as memorials in Berlin.`
   },
   {
     id: 'seed-moon-landing',
@@ -19,7 +48,27 @@ export const INITIAL_FACTS: Fact[] = [
     year: 1969,
     excerpt: 'Neil Armstrong and Buzz Aldrin became the first humans to walk on the Moon on July 20, 1969. Armstrong\'s words "one small step for man" echoed around the world.',
     featured: true,
-    full: `The Apollo 11 mission, launched July 16, 1969, achieved President Kennedy's bold goal of landing humans on the Moon before the decade ended.\n\nNeil Armstrong descended the lunar module ladder at 10:56 PM EDT on July 20, 1969. His first words: "That's one small step for man, one giant leap for mankind."\n\nThe crew: Neil Armstrong (commander), Buzz Aldrin (lunar module pilot), and Michael Collins (command module pilot), who orbited the Moon while the others explored the surface.\n\nAstronauts collected 47.5 pounds of lunar material and planted the American flag. An estimated 600 million people worldwide watched live — the largest TV audience in history at the time.`
+    vocabulary: [
+      {
+        word: 'Leap',
+        phonetic: '/liːp/',
+        partOfSpeech: 'noun / verb',
+        meaning: 'A sudden, major, or momentous transition, jump, or advancement.',
+        hindiMeaning: 'बड़ी छलांग, महत्वपूर्ण प्रगति',
+        exampleSentence: 'One small step for man, one giant leap for mankind.',
+        synonyms: ['bound', 'jump', 'surge', 'breakthrough']
+      },
+      {
+        word: 'Lunar',
+        phonetic: '/ˈluː.nər/',
+        partOfSpeech: 'adjective',
+        meaning: 'Relating to or resembling the Moon.',
+        hindiMeaning: 'चंद्रमा से संबंधित, चंद्र',
+        exampleSentence: 'The astronauts collected valuable lunar rock specimens.',
+        synonyms: ['moon-related', 'celestial', 'astral']
+      }
+    ],
+    full: `The Apollo 11 mission, launched July 16, 1969, achieved President Kennedy's bold goal of landing humans on the Moon before the decade ended.\n\nNeil Armstrong descended the lunar module ladder at 10:56 PM EDT on July 20, 1969. His first words: "That's one small step for man, one giant :::vocab[leap]{meaning="A sudden, major, or momentous advancement or transition." phonetic="/liːp/" pos="noun" hindi="बड़ी छलांग, प्रगति" example="One small step for man, one giant leap for mankind." synonyms="breakthrough,surge,jump"}::: for mankind."\n\nThe crew: Neil Armstrong (commander), Buzz Aldrin (lunar module pilot), and Michael Collins (command module pilot), who orbited the Moon while the others explored the surface.\n\nAstronauts collected 47.5 pounds of :::vocab[lunar]{meaning="Relating to or resembling the Moon." phonetic="/ˈluː.nər/" pos="adjective" hindi="चंद्रमा से संबंधित" example="The astronauts collected valuable lunar rock specimens." synonyms="moon-related,celestial"}::: material and planted the American flag. An estimated 600 million people worldwide watched live — the largest TV audience in history at the time.`
   },
   {
     id: 'seed-great-wall',

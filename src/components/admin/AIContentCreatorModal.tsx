@@ -29,7 +29,7 @@ import {
   Zap,
   Terminal
 } from 'lucide-react';
-import { AIDraft, Category, Fact, AIScannerStatus, AffiliateProduct } from '../../types';
+import { AIDraft, Category, Fact, AIScannerStatus, AffiliateProduct, VocabularyWord } from '../../types';
 import { factService } from '../../services/factService';
 import { useAuth } from '../../contexts/AuthContext';
 import { auth } from '../../lib/firebase';
@@ -37,6 +37,7 @@ import ReactMarkdown from 'react-markdown';
 import { ImageUploadField } from '../common/ImageUploadField';
 import { MarkdownToolbar } from '../common/MarkdownToolbar';
 import { EmbeddedRelatedCard } from '../common/EmbeddedRelatedCard';
+import { ArticleVocabularySection } from '../common/ArticleVocabularySection';
 import { normalizeImageUrl } from '../../lib/imageUtils';
 import { AdminDebugConsole } from './AdminDebugConsole';
 import { AIGenerationSkeleton } from './AIGenerationSkeleton';
@@ -96,6 +97,7 @@ export const AIContentCreatorModal: React.FC<AIContentCreatorModalProps> = ({ is
 
   // Edit draft form state
   const [editForm, setEditForm] = useState<Partial<AIDraft>>({});
+  const [extractingVocab, setExtractingVocab] = useState(false);
   const [publishType, setPublishType] = useState<'immediate' | 'schedule'>('immediate');
   const [scheduleTime, setScheduleTime] = useState(() => {
     const d = new Date();
@@ -357,6 +359,62 @@ export const AIContentCreatorModal: React.FC<AIContentCreatorModalProps> = ({ is
     }, 50);
   };
 
+  const handleAutoExtractVocabulary = async () => {
+    if (!editForm.full && !editForm.excerpt) {
+      alert("Please ensure the article has some content before extracting vocabulary.");
+      return;
+    }
+    setExtractingVocab(true);
+    try {
+      const idToken = auth?.currentUser ? await auth.currentUser.getIdToken() : '';
+      const headers: Record<string, string> = { 'Content-Type': 'application/json' };
+      if (idToken) headers['Authorization'] = `Bearer ${idToken}`;
+
+      const res = await fetch('/api/vocabulary/extract', {
+        method: 'POST',
+        headers,
+        body: JSON.stringify({
+          text: editForm.full || editForm.excerpt || '',
+          count: 4
+        })
+      });
+
+      if (!res.ok) {
+        throw new Error(`Failed to extract vocabulary (${res.status})`);
+      }
+
+      const data = await res.json();
+      if (data.vocabulary && Array.isArray(data.vocabulary) && data.vocabulary.length > 0) {
+        const existing = editForm.vocabulary || [];
+        // Filter duplicates by word
+        const existingWords = new Set(existing.map(v => v.word.toLowerCase()));
+        const fresh = data.vocabulary.filter((v: VocabularyWord) => !existingWords.has(v.word.toLowerCase()));
+        
+        setEditForm({
+          ...editForm,
+          vocabulary: [...existing, ...fresh]
+        });
+
+        setNotification({
+          type: 'success',
+          message: `Extracted ${fresh.length} new vocabulary word(s) successfully!`
+        });
+      } else {
+        setNotification({
+          type: 'info',
+          message: "No additional vocabulary words were extracted."
+        });
+      }
+    } catch (err: any) {
+      setNotification({
+        type: 'error',
+        message: `Vocabulary extraction error: ${err.message}`
+      });
+    } finally {
+      setExtractingVocab(false);
+    }
+  };
+
   const handleSaveDraftChanges = async () => {
     if (!selectedDraft) return;
     setLoading(true);
@@ -376,6 +434,7 @@ export const AIContentCreatorModal: React.FC<AIContentCreatorModalProps> = ({ is
         examRelevance: editForm.examRelevance || '',
         quizMCQs: editForm.quizMCQs || [],
         bilingualTerms: editForm.bilingualTerms || [],
+        vocabulary: editForm.vocabulary || [],
         socialPostDigest: editForm.socialPostDigest || '',
         affiliateProducts: editForm.affiliateProducts || [],
         trustedSources: editForm.trustedSources || []
@@ -429,6 +488,7 @@ export const AIContentCreatorModal: React.FC<AIContentCreatorModalProps> = ({ is
         eventDay: editForm.eventDay || new Date().getDate(),
         quizMCQs: editForm.quizMCQs || [],
         bilingualTerms: editForm.bilingualTerms || [],
+        vocabulary: editForm.vocabulary || [],
         socialPostDigest: editForm.socialPostDigest || '',
         affiliateProducts: editForm.affiliateProducts || [],
         examRelevance: editForm.examRelevance || '',
@@ -1179,6 +1239,13 @@ export const AIContentCreatorModal: React.FC<AIContentCreatorModalProps> = ({ is
                                 {editForm.full || ''}
                               </ReactMarkdown>
                             </div>
+
+                            {/* Vocabulary Section in Preview */}
+                            <ArticleVocabularySection
+                              vocabulary={editForm.vocabulary}
+                              bilingualTerms={editForm.bilingualTerms}
+                              articleTitle={editForm.title || ''}
+                            />
                           </div>
                         ) : (
                           <div className="space-y-6 max-w-4xl mx-auto">
@@ -1298,6 +1365,169 @@ export const AIContentCreatorModal: React.FC<AIContentCreatorModalProps> = ({ is
                                 placeholder="Type or format your article here using bullet points, numbered lists, headers, etc."
                                 className="w-full bg-paper2 border border-black/10 rounded-xl p-4 text-xs font-serif leading-relaxed text-ink h-80 focus:border-gold outline-none"
                               />
+                            </div>
+
+                            {/* 🔤 English Vocabulary Builder Section */}
+                            <div className="bg-white p-5 rounded-2xl border border-black/10 space-y-4">
+                              <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 border-b border-black/5 pb-3">
+                                <div>
+                                  <h4 className="font-serif font-bold text-sm text-ink flex items-center gap-2">
+                                    <span className="text-base">🔤</span>
+                                    <span>English Vocabulary Builder & Definitions</span>
+                                    <span className="text-[10px] font-mono uppercase bg-gold/15 text-gold px-2 py-0.5 rounded-full font-bold">
+                                      {(editForm.vocabulary || []).length} Words
+                                    </span>
+                                  </h4>
+                                  <p className="text-[11px] text-ink3 mt-0.5">
+                                    Helps readers learn English words from this article with pronunciation, Hindi meanings & example sentences.
+                                  </p>
+                                </div>
+
+                                <div className="flex items-center gap-2">
+                                  <button
+                                    type="button"
+                                    onClick={handleAutoExtractVocabulary}
+                                    disabled={extractingVocab || (!editForm.full && !editForm.excerpt)}
+                                    className="flex items-center gap-1.5 px-3 py-1.5 bg-gold/10 hover:bg-gold/20 text-ink text-xs font-bold rounded-xl border border-gold/30 transition-all disabled:opacity-50"
+                                  >
+                                    <Sparkles size={13} className={extractingVocab ? "animate-spin text-gold" : "text-gold"} />
+                                    <span>{extractingVocab ? "Extracting Words..." : "✨ AI Auto-Extract"}</span>
+                                  </button>
+
+                                  <button
+                                    type="button"
+                                    onClick={() => {
+                                      const current = editForm.vocabulary || [];
+                                      setEditForm({
+                                        ...editForm,
+                                        vocabulary: [
+                                          ...current,
+                                          {
+                                            word: '',
+                                            meaning: '',
+                                            phonetic: '',
+                                            partOfSpeech: 'noun',
+                                            hindiMeaning: '',
+                                            exampleSentence: ''
+                                          }
+                                        ]
+                                      });
+                                    }}
+                                    className="flex items-center gap-1 px-3 py-1.5 bg-paper2 hover:bg-black/5 text-ink text-xs font-bold rounded-xl border border-black/10 transition-all"
+                                  >
+                                    <Plus size={13} />
+                                    <span>Add Word</span>
+                                  </button>
+                                </div>
+                              </div>
+
+                              {/* Vocabulary Words List */}
+                              {editForm.vocabulary && editForm.vocabulary.length > 0 ? (
+                                <div className="space-y-3">
+                                  {editForm.vocabulary.map((vocabItem, vIdx) => (
+                                    <div key={vIdx} className="bg-paper2 p-3.5 rounded-xl border border-black/5 space-y-2.5">
+                                      <div className="flex items-center justify-between gap-2">
+                                        <div className="flex items-center gap-2 flex-1">
+                                          <span className="text-[10px] font-mono text-ink3 font-bold">#{vIdx + 1}</span>
+                                          <input
+                                            type="text"
+                                            value={vocabItem.word}
+                                            onChange={(e) => {
+                                              const updated = [...(editForm.vocabulary || [])];
+                                              updated[vIdx] = { ...updated[vIdx], word: e.target.value };
+                                              setEditForm({ ...editForm, vocabulary: updated });
+                                            }}
+                                            placeholder="Word (e.g. Breakthrough)"
+                                            className="font-bold text-xs text-ink bg-white border border-black/10 rounded-lg px-2.5 py-1.5 focus:border-gold outline-none w-40"
+                                          />
+                                          <input
+                                            type="text"
+                                            value={vocabItem.phonetic || ''}
+                                            onChange={(e) => {
+                                              const updated = [...(editForm.vocabulary || [])];
+                                              updated[vIdx] = { ...updated[vIdx], phonetic: e.target.value };
+                                              setEditForm({ ...editForm, vocabulary: updated });
+                                            }}
+                                            placeholder="/breɪkθruː/"
+                                            className="text-[11px] font-mono text-ink3 bg-white border border-black/10 rounded-lg px-2 py-1.5 focus:border-gold outline-none w-28"
+                                          />
+                                          <select
+                                            value={vocabItem.partOfSpeech || 'noun'}
+                                            onChange={(e) => {
+                                              const updated = [...(editForm.vocabulary || [])];
+                                              updated[vIdx] = { ...updated[vIdx], partOfSpeech: e.target.value };
+                                              setEditForm({ ...editForm, vocabulary: updated });
+                                            }}
+                                            className="text-[11px] bg-white border border-black/10 rounded-lg px-2 py-1.5 focus:border-gold outline-none"
+                                          >
+                                            <option value="noun">noun</option>
+                                            <option value="verb">verb</option>
+                                            <option value="adjective">adjective</option>
+                                            <option value="adverb">adverb</option>
+                                            <option value="phrase">phrase</option>
+                                          </select>
+                                          <input
+                                            type="text"
+                                            value={vocabItem.hindiMeaning || ''}
+                                            onChange={(e) => {
+                                              const updated = [...(editForm.vocabulary || [])];
+                                              updated[vIdx] = { ...updated[vIdx], hindiMeaning: e.target.value };
+                                              setEditForm({ ...editForm, vocabulary: updated });
+                                            }}
+                                            placeholder="Hindi meaning (e.g. महत्वपूर्ण खोज)"
+                                            className="text-xs text-amber-900 bg-amber-50/50 border border-amber-200/60 rounded-lg px-2.5 py-1.5 focus:border-gold outline-none flex-1 min-w-[120px]"
+                                          />
+                                        </div>
+                                        <button
+                                          type="button"
+                                          onClick={() => {
+                                            const updated = (editForm.vocabulary || []).filter((_, i) => i !== vIdx);
+                                            setEditForm({ ...editForm, vocabulary: updated });
+                                          }}
+                                          className="p-1.5 text-rose-500 hover:bg-rose-50 rounded-lg transition-colors flex-shrink-0"
+                                          title="Remove word"
+                                        >
+                                          <Trash2 size={14} />
+                                        </button>
+                                      </div>
+
+                                      <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+                                        <input
+                                          type="text"
+                                          value={vocabItem.meaning}
+                                          onChange={(e) => {
+                                            const updated = [...(editForm.vocabulary || [])];
+                                            updated[vIdx] = { ...updated[vIdx], meaning: e.target.value };
+                                            setEditForm({ ...editForm, vocabulary: updated });
+                                          }}
+                                          placeholder="English definition / meaning"
+                                          className="text-xs text-ink bg-white border border-black/10 rounded-lg px-2.5 py-1.5 focus:border-gold outline-none w-full"
+                                        />
+                                        <input
+                                          type="text"
+                                          value={vocabItem.exampleSentence || ''}
+                                          onChange={(e) => {
+                                            const updated = [...(editForm.vocabulary || [])];
+                                            updated[vIdx] = { ...updated[vIdx], exampleSentence: e.target.value };
+                                            setEditForm({ ...editForm, vocabulary: updated });
+                                          }}
+                                          placeholder="Example sentence using this word..."
+                                          className="text-xs italic text-ink2 bg-white border border-black/10 rounded-lg px-2.5 py-1.5 focus:border-gold outline-none w-full"
+                                        />
+                                      </div>
+                                    </div>
+                                  ))}
+                                </div>
+                              ) : (
+                                <div className="p-6 bg-paper2 rounded-xl border border-dashed border-black/10 text-center space-y-2">
+                                  <p className="text-xs text-ink3">
+                                    No English vocabulary words attached to this draft yet.
+                                  </p>
+                                  <p className="text-[11px] text-ink3/80">
+                                    Click <strong>"AI Auto-Extract"</strong> to automatically discover key vocabulary words with pronunciations and Hindi meanings, or click <strong>"Add Word"</strong>.
+                                  </p>
+                                </div>
+                              )}
                             </div>
 
                             {/* Images & Publishing Schedule */}
