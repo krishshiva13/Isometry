@@ -219,7 +219,7 @@ function getCooldownRemaining(): number {
   return Math.max(0, diff);
 }
 
-// Helper function: Robust Gemini call with multi-model failover, rate-limit (429) & tool fallbacks
+// Helper function: Robust Gemini call with supported models, exponential backoff, rate-limit (429) & tool fallbacks
 async function safeGenerateContent(params: {
   contents: any;
   config?: any;
@@ -229,9 +229,8 @@ async function safeGenerateContent(params: {
   const ai = getGeminiClient();
   const rawModelList = [
     params.preferredModel,
-    "gemini-2.5-flash",
-    "gemini-2.5-flash-lite",
     "gemini-3.7-flash",
+    "gemini-flash-latest",
     "gemini-3.1-flash-lite"
   ].filter((m): m is string => Boolean(m));
   
@@ -240,46 +239,53 @@ async function safeGenerateContent(params: {
   let lastError: any = null;
 
   for (const model of modelsToTry) {
-    try {
-      const response = await ai.models.generateContent({
-        model,
-        contents: params.contents,
-        config: params.config
-      });
-      return {
-        text: response.text || "",
-        rawResponse: response,
-        usedSearch: !!(params.config?.tools && params.config.tools.length > 0)
-      };
-    } catch (err: any) {
-      lastError = err;
-      const errMsg = (err?.message || String(err)).toLowerCase();
-      console.warn(`[Gemini API] Model ${model} encountered issue: ${err.message || err}`);
+    // Retry up to 2 times per model with exponential backoff on 429/503
+    for (let attempt = 0; attempt < 2; attempt++) {
+      try {
+        const response = await ai.models.generateContent({
+          model,
+          contents: params.contents,
+          config: params.config
+        });
+        return {
+          text: response.text || "",
+          rawResponse: response,
+          usedSearch: !!(params.config?.tools && params.config.tools.length > 0)
+        };
+      } catch (err: any) {
+        lastError = err;
+        const errMsg = (err?.message || String(err)).toLowerCase();
+        console.warn(`[Gemini API] Model ${model} (attempt ${attempt + 1}) encountered issue: ${err.message || err}`);
 
-      // If search tool might have caused quota or high-demand error, try tool-less fallback immediately
-      if (params.allowSearchFallback && params.config?.tools) {
-        try {
-          console.log(`[Gemini API] Attempting fallback generation without search tools for ${model}...`);
-          const fallbackConfig = { ...params.config };
-          delete fallbackConfig.tools;
-          const fallbackResponse = await ai.models.generateContent({
-            model,
-            contents: params.contents,
-            config: fallbackConfig
-          });
-          return {
-            text: fallbackResponse.text || "",
-            rawResponse: fallbackResponse,
-            usedSearch: false
-          };
-        } catch (toolFallbackErr: any) {
-          console.warn(`[Gemini API] Tool-less fallback with ${model} failed: ${toolFallbackErr.message || toolFallbackErr}`);
+        // If search tool might have caused quota or high-demand error, try tool-less fallback immediately
+        if (params.allowSearchFallback && params.config?.tools) {
+          try {
+            console.log(`[Gemini API] Attempting fallback generation without search tools for ${model}...`);
+            const fallbackConfig = { ...params.config };
+            delete fallbackConfig.tools;
+            const fallbackResponse = await ai.models.generateContent({
+              model,
+              contents: params.contents,
+              config: fallbackConfig
+            });
+            return {
+              text: fallbackResponse.text || "",
+              rawResponse: fallbackResponse,
+              usedSearch: false
+            };
+          } catch (toolFallbackErr: any) {
+            console.warn(`[Gemini API] Tool-less fallback with ${model} failed: ${toolFallbackErr.message || toolFallbackErr}`);
+          }
         }
-      }
 
-      // If 429/503, pause briefly and allow loop to try the next model immediately
-      if (errMsg.includes("429") || errMsg.includes("503") || errMsg.includes("quota") || errMsg.includes("resource_exhausted") || errMsg.includes("unavailable")) {
-        await new Promise(r => setTimeout(r, 600));
+        // If 429/503/high-demand/quota, pause with exponential delay before retry
+        if (errMsg.includes("429") || errMsg.includes("503") || errMsg.includes("quota") || errMsg.includes("resource_exhausted") || errMsg.includes("unavailable") || errMsg.includes("high demand")) {
+          const delay = (attempt + 1) * 1200 + Math.floor(Math.random() * 500);
+          await new Promise(r => setTimeout(r, delay));
+        } else {
+          // If not a retryable rate limit error (e.g. invalid param), don't retry same model
+          break;
+        }
       }
     }
   }
@@ -911,6 +917,10 @@ app.post("/api/auth/sync-profile", async (req, res) => {
     return res.status(400).json({ error: "Missing uid" });
   }
 
+  const userEmail = (email || "").toLowerCase();
+  const isAdminUser = Boolean(userEmail && ADMIN_EMAILS.includes(userEmail));
+  const assignedRole = isAdminUser ? "admin" : "user";
+
   if (serverDb) {
     try {
       const userRef = doc(serverDb, "users", uid);
@@ -919,14 +929,23 @@ app.post("/api/auth/sync-profile", async (req, res) => {
         email: email || null,
         displayName: displayName || null,
         photoURL: photoURL || null,
+        role: assignedRole,
         updatedAt: new Date().toISOString()
       }, { merge: true });
+
+      if (isAdminUser) {
+        const adminRef = doc(serverDb, "admins", uid);
+        await setDoc(adminRef, {
+          uid,
+          assignedAt: new Date().toISOString()
+        }, { merge: true });
+      }
     } catch (e) {
       console.warn("Could not sync user profile to DB:", e);
     }
   }
 
-  res.json({ success: true });
+  res.json({ success: true, role: assignedRole });
 });
 
 // Get Preset 15 Google Search Keywords
@@ -1205,9 +1224,72 @@ app.get("/api/admin/ai/drafts", requireAdmin, (req, res) => {
   res.json(drafts);
 });
 
-app.delete("/api/admin/ai/drafts/:id", requireAdmin, (req, res) => {
+app.post("/api/admin/ai/drafts", requireAdmin, async (req, res) => {
+  const draft = req.body;
+  if (!draft || !draft.title) {
+    return res.status(400).json({ error: "Invalid draft content" });
+  }
+
+  const id = draft.id || `draft-${Date.now()}`;
+  const draftData = {
+    ...draft,
+    id,
+    status: draft.status || 'pending',
+    createdAt: draft.createdAt || new Date().toISOString(),
+    updatedAt: new Date().toISOString()
+  };
+
+  inMemoryAIDrafts.set(id, draftData);
+
+  if (serverDb) {
+    try {
+      await setDoc(doc(serverDb, "ai_drafts", id), draftData, { merge: true });
+    } catch (e) {
+      console.warn("Could not save draft to serverDb:", e);
+    }
+  }
+
+  res.json(draftData);
+});
+
+app.put("/api/admin/ai/drafts/:id", requireAdmin, async (req, res) => {
+  const { id } = req.params;
+  const updates = req.body || {};
+  const existing = inMemoryAIDrafts.get(id) || {};
+
+  const updatedDraft = {
+    ...existing,
+    ...updates,
+    id,
+    updatedAt: new Date().toISOString()
+  };
+
+  inMemoryAIDrafts.set(id, updatedDraft);
+
+  if (serverDb) {
+    try {
+      await setDoc(doc(serverDb, "ai_drafts", id), updatedDraft, { merge: true });
+    } catch (e) {
+      console.warn("Could not update draft in serverDb:", e);
+    }
+  }
+
+  res.json(updatedDraft);
+});
+
+app.delete("/api/admin/ai/drafts/:id", requireAdmin, async (req, res) => {
   const { id } = req.params;
   inMemoryAIDrafts.delete(id);
+  
+  if (serverDb) {
+    try {
+      const { deleteDoc } = await import("firebase/firestore");
+      await deleteDoc(doc(serverDb, "ai_drafts", id));
+    } catch (e) {
+      // Ignored
+    }
+  }
+
   res.json({ success: true });
 });
 

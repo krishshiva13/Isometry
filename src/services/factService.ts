@@ -366,8 +366,11 @@ export const factService = {
           createdAt: data.createdAt?.toDate ? data.createdAt.toDate().toISOString() : (data.createdAt || new Date().toISOString())
         } as AIDraft;
       });
-    } catch (error) {
-      console.warn("Could not fetch AI drafts from firestore, will fallback to server store if available", error);
+    } catch (error: any) {
+      // Permission denied is expected for guests / non-admins before login
+      if (error?.code !== 'permission-denied') {
+        console.warn("Could not fetch AI drafts from firestore, using server store:", error);
+      }
     }
 
     // Also fetch server-side memory store drafts so newly scanned items are immediately available
@@ -388,10 +391,6 @@ export const factService = {
           for (const d of serverDrafts) {
             if (!map.has(d.id)) {
               map.set(d.id, d);
-              // Auto-persist new server draft to Firestore in background if admin
-              if (auth.currentUser?.email?.toLowerCase() === 'krish02shiva@gmail.com') {
-                this.createAIDraft(d).catch(() => {});
-              }
             }
           }
           return Array.from(map.values()).sort((a, b) => 
@@ -413,59 +412,111 @@ export const factService = {
       try {
         await this.createAIDraft(draft);
       } catch (err) {
-        console.warn("Failed to persist scanned draft to firestore:", draft.id, err);
+        // Silently handled
       }
     }
   },
 
   async createAIDraft(draft: Partial<AIDraft>) {
     const path = "ai_drafts";
+    const id = draft.id || `draft-${Date.now()}`;
+    const cleaned = cleanForFirestore({
+      ...draft,
+      id,
+      status: draft.status || 'pending',
+      createdAt: serverTimestamp(),
+      updatedAt: serverTimestamp()
+    });
+
+    // 1. Save to server backend
     try {
-      const id = draft.id || `draft-${Date.now()}`;
-      const docRef = doc(db, path, id);
-      const cleaned = cleanForFirestore({
-        ...draft,
-        id,
-        status: draft.status || 'pending',
-        createdAt: serverTimestamp(),
-        updatedAt: serverTimestamp()
-      });
-      await setDoc(docRef, cleaned, { merge: true });
-      return id;
-    } catch (error) {
-      handleFirestoreError(error, OperationType.CREATE, path);
+      const token = await auth.currentUser?.getIdToken();
+      if (token) {
+        await fetch('/api/admin/ai/drafts', {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            'Authorization': `Bearer ${token}`
+          },
+          body: JSON.stringify(cleaned)
+        });
+      }
+    } catch (apiErr) {
+      // Server fallback error
     }
+
+    // 2. Save to Firestore if admin
+    try {
+      const docRef = doc(db, path, id);
+      await setDoc(docRef, cleaned, { merge: true });
+    } catch (error: any) {
+      if (error?.code !== 'permission-denied') {
+        handleFirestoreError(error, OperationType.CREATE, path);
+      }
+    }
+    return id;
   },
 
   async updateAIDraft(id: string, updates: Partial<AIDraft>) {
     const path = `ai_drafts/${id}`;
+    const cleaned = cleanForFirestore({
+      ...updates,
+      updatedAt: serverTimestamp()
+    });
+
+    // 1. Update on server backend
+    try {
+      const token = await auth.currentUser?.getIdToken();
+      if (token) {
+        await fetch(`/api/admin/ai/drafts/${id}`, {
+          method: 'PUT',
+          headers: {
+            'Content-Type': 'application/json',
+            'Authorization': `Bearer ${token}`
+          },
+          body: JSON.stringify(cleaned)
+        });
+      }
+    } catch (e) {
+      // Server fallback
+    }
+
+    // 2. Update in Firestore if admin
     try {
       const docRef = doc(db, "ai_drafts", id);
-      const cleaned = cleanForFirestore({
-        ...updates,
-        updatedAt: serverTimestamp()
-      });
       await updateDoc(docRef, cleaned);
-    } catch (error) {
-      handleFirestoreError(error, OperationType.UPDATE, path);
+    } catch (error: any) {
+      if (error?.code !== 'permission-denied') {
+        handleFirestoreError(error, OperationType.UPDATE, path);
+      }
     }
   },
 
   async deleteAIDraft(id: string) {
     const path = `ai_drafts/${id}`;
+    // 1. Delete on server backend
+    try {
+      const token = await auth.currentUser?.getIdToken();
+      if (token) {
+        await fetch(`/api/admin/ai/drafts/${id}`, {
+          method: 'DELETE',
+          headers: {
+            'Authorization': `Bearer ${token}`
+          }
+        });
+      }
+    } catch (e) {
+      // Server fallback
+    }
+
+    // 2. Delete in Firestore
     try {
       const docRef = doc(db, "ai_drafts", id);
       await deleteDoc(docRef);
-      // Clean up server-side cache as well
-      const token = await auth.currentUser?.getIdToken();
-      fetch(`/api/admin/ai/drafts/${id}`, {
-        method: 'DELETE',
-        headers: {
-          ...(token ? { 'Authorization': `Bearer ${token}` } : {})
-        }
-      }).catch(() => {});
-    } catch (error) {
-      handleFirestoreError(error, OperationType.DELETE, path);
+    } catch (error: any) {
+      if (error?.code !== 'permission-denied') {
+        handleFirestoreError(error, OperationType.DELETE, path);
+      }
     }
   },
 
