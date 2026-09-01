@@ -10,25 +10,30 @@ import {
   Lightbulb, 
   Link as LinkIcon, 
   Image as ImageIcon,
+  BookOpen,
   HelpCircle,
   Sparkles
 } from 'lucide-react';
 import { InsertArticleImageModal } from './InsertArticleImageModal';
+import { InsertRelatedArticleModal } from './InsertRelatedArticleModal';
 
 interface MarkdownToolbarProps {
   textareaRef: React.RefObject<HTMLTextAreaElement | null>;
   value: string;
   onChange: (val: string) => void;
   className?: string;
+  currentArticleId?: string;
 }
 
 export const MarkdownToolbar: React.FC<MarkdownToolbarProps> = ({
   textareaRef,
   value,
   onChange,
-  className = ''
+  className = '',
+  currentArticleId
 }) => {
   const [isImageModalOpen, setIsImageModalOpen] = useState(false);
+  const [isRelatedModalOpen, setIsRelatedModalOpen] = useState(false);
   const [currentSelectedText, setCurrentSelectedText] = useState('');
 
   const handleOpenImageModal = () => {
@@ -79,6 +84,53 @@ export const MarkdownToolbar: React.FC<MarkdownToolbarProps> = ({
       }
     } else {
       // End of article
+      newValue = value.trimEnd() + markdownTag;
+      newCursorPos = newValue.length;
+    }
+
+    onChange(newValue);
+
+    setTimeout(() => {
+      if (textarea) {
+        textarea.focus();
+        textarea.setSelectionRange(newCursorPos, newCursorPos);
+      }
+    }, 50);
+  };
+
+  const handleInsertRelatedArticle = (
+    markdownTag: string,
+    placement: 'cursor' | 'after_intro' | 'middle' | 'end'
+  ) => {
+    const textarea = textareaRef.current;
+    let newValue = value;
+    let newCursorPos = 0;
+
+    if (placement === 'cursor' && textarea) {
+      const start = textarea.selectionStart;
+      const end = textarea.selectionEnd;
+      newValue = value.substring(0, start) + markdownTag + value.substring(end);
+      newCursorPos = start + markdownTag.length;
+    } else if (placement === 'after_intro') {
+      const firstBreak = value.indexOf('\n\n');
+      if (firstBreak !== -1) {
+        newValue = value.substring(0, firstBreak + 2) + markdownTag.trim() + '\n\n' + value.substring(firstBreak + 2);
+        newCursorPos = firstBreak + 2 + markdownTag.trim().length + 2;
+      } else {
+        newValue = value + markdownTag;
+        newCursorPos = newValue.length;
+      }
+    } else if (placement === 'middle') {
+      const midPoint = Math.floor(value.length / 2);
+      const nextBreak = value.indexOf('\n\n', midPoint);
+      if (nextBreak !== -1) {
+        newValue = value.substring(0, nextBreak + 2) + markdownTag.trim() + '\n\n' + value.substring(nextBreak + 2);
+        newCursorPos = nextBreak + 2 + markdownTag.trim().length + 2;
+      } else {
+        newValue = value + markdownTag;
+        newCursorPos = newValue.length;
+      }
+    } else {
       newValue = value.trimEnd() + markdownTag;
       newCursorPos = newValue.length;
     }
@@ -205,6 +257,17 @@ export const MarkdownToolbar: React.FC<MarkdownToolbarProps> = ({
           <span>🖼️ Insert Image & Credits</span>
         </button>
 
+        {/* 📖 Prominent Related Article Inserter Button */}
+        <button
+          type="button"
+          onClick={() => setIsRelatedModalOpen(true)}
+          title="Insert Related Article / Story Box in Content"
+          className="flex items-center gap-1.5 px-3 py-1 bg-gradient-to-r from-teal-50 to-emerald-100 hover:from-teal-100 hover:to-emerald-200 text-ink font-bold text-xs rounded-lg border border-teal-500/30 transition-all shadow-2xs group"
+        >
+          <BookOpen size={14} className="text-emerald-700 group-hover:scale-110 transition-transform" />
+          <span>📖 Related Post</span>
+        </button>
+
         <div className="w-px h-4 bg-black/10 mx-0.5" />
 
         <button
@@ -298,20 +361,28 @@ export const MarkdownToolbar: React.FC<MarkdownToolbarProps> = ({
 
       {/* Helper guide */}
       <div className="flex items-center justify-between text-[11px] text-ink3 px-1 font-sans">
-        <div className="flex items-center gap-1.5 flex-wrap">
+        <div className="flex items-center gap-2 flex-wrap">
           <HelpCircle size={12} className="text-gold flex-shrink-0" />
           <span>
-            <strong>In-Article Images:</strong> Click <code className="bg-paper2 px-1 py-0.5 rounded font-mono text-[10px] text-ink font-bold">🖼️ Insert Image & Credits</code> to upload or link images anywhere with custom photo attribution.
+            <strong>Pro Tip:</strong> Click <code className="bg-paper2 px-1 py-0.5 rounded font-mono text-[10px] text-ink font-bold">🖼️ Insert Image</code> or <code className="bg-paper2 px-1 py-0.5 rounded font-mono text-[10px] text-ink font-bold">📖 Related Post</code> to embed media & "Read Also" cards anywhere in the article.
           </span>
         </div>
       </div>
 
-      {/* Modal Dialog */}
+      {/* Image Modal Dialog */}
       <InsertArticleImageModal
         isOpen={isImageModalOpen}
         onClose={() => setIsImageModalOpen(false)}
         onInsert={handleInsertImage}
         initialSelectedText={currentSelectedText}
+      />
+
+      {/* Related Article Modal Dialog */}
+      <InsertRelatedArticleModal
+        isOpen={isRelatedModalOpen}
+        onClose={() => setIsRelatedModalOpen(false)}
+        onInsert={handleInsertRelatedArticle}
+        currentArticleId={currentArticleId}
       />
     </div>
   );

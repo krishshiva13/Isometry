@@ -16,6 +16,7 @@ import { notebookService } from '../services/notebookService';
 import { ArticleHeroImage } from '../components/common/ArticleHeroImage';
 import { ImageUploadField } from '../components/common/ImageUploadField';
 import { MarkdownToolbar } from '../components/common/MarkdownToolbar';
+import { EmbeddedRelatedCard } from '../components/common/EmbeddedRelatedCard';
 import { normalizeImageUrl } from '../lib/imageUtils';
 import { recordFactRead } from '../components/DailyGoalTracker';
 
@@ -128,6 +129,45 @@ const renderHighlightedText = (text: string) => {
   return elements.length > 0 ? elements : text;
 };
 
+const parseRelatedTag = (str: string) => {
+  if (typeof str !== 'string') return null;
+  const trimmed = str.trim();
+  const match = trimmed.match(/:::related\[(.*?)\](?:\{(.*?)\})?:::/);
+  if (match) {
+    const rawIdOrUrl = match[1] || '';
+    const attrString = match[2] || '';
+    
+    const getAttr = (key: string) => {
+      const attrMatch = attrString.match(new RegExp(`${key}="([^"]*)"`));
+      return attrMatch ? attrMatch[1] : undefined;
+    };
+
+    return {
+      id: rawIdOrUrl,
+      title: getAttr('title'),
+      excerpt: getAttr('excerpt'),
+      category: getAttr('cat') || getAttr('category'),
+      imageUrl: getAttr('image') || getAttr('imageUrl'),
+      variant: (getAttr('variant') as 'card' | 'callout' | 'compact') || 'card'
+    };
+  }
+
+  const cardMatch = trimmed.match(/\[related-card:(.*?)\]/);
+  if (cardMatch) {
+    const parts = cardMatch[1].split('|');
+    return {
+      id: parts[0] || '',
+      title: parts[1] || undefined,
+      excerpt: parts[2] || undefined,
+      category: parts[3] || undefined,
+      imageUrl: parts[4] || undefined,
+      variant: 'card' as const
+    };
+  }
+
+  return null;
+};
+
 const renderers = {
   h1: ({ children }: any) => {
     const text = typeof children === 'string' ? children : '';
@@ -154,13 +194,65 @@ const renderers = {
     );
   },
   p: ({ children }: any) => {
+    // Check if the entire paragraph is a related article directive
+    if (typeof children === 'string') {
+      const parsed = parseRelatedTag(children);
+      if (parsed) {
+        return (
+          <EmbeddedRelatedCard
+            factId={parsed.id}
+            title={parsed.title}
+            excerpt={parsed.excerpt}
+            category={parsed.category}
+            imageUrl={parsed.imageUrl}
+            styleVariant={parsed.variant}
+          />
+        );
+      }
+    } else if (Array.isArray(children) && children.length === 1 && typeof children[0] === 'string') {
+      const parsed = parseRelatedTag(children[0]);
+      if (parsed) {
+        return (
+          <EmbeddedRelatedCard
+            factId={parsed.id}
+            title={parsed.title}
+            excerpt={parsed.excerpt}
+            category={parsed.category}
+            imageUrl={parsed.imageUrl}
+            styleVariant={parsed.variant}
+          />
+        );
+      }
+    }
+
     const formattedChildren = React.Children.map(children, child => {
       if (typeof child === 'string') {
+        const parsed = parseRelatedTag(child);
+        if (parsed) {
+          return (
+            <EmbeddedRelatedCard
+              key={parsed.id}
+              factId={parsed.id}
+              title={parsed.title}
+              excerpt={parsed.excerpt}
+              category={parsed.category}
+              imageUrl={parsed.imageUrl}
+              styleVariant={parsed.variant}
+            />
+          );
+        }
         return renderHighlightedText(child);
       }
       return child;
     });
     return <p className="leading-relaxed text-ink2 mb-6">{formattedChildren}</p>;
+  },
+  blockquote: ({ children }: any) => {
+    return (
+      <blockquote className="my-6 p-4.5 rounded-2xl bg-paper2 border-l-4 border-gold text-ink not-prose font-sans text-sm shadow-2xs">
+        {children}
+      </blockquote>
+    );
   },
   li: ({ children }: any) => {
     const formattedChildren = React.Children.map(children, child => {
@@ -754,6 +846,7 @@ export const Article = () => {
                     textareaRef={textareaRef}
                     value={editData.full || ''}
                     onChange={(newVal) => setEditData({ ...editData, full: newVal })}
+                    currentArticleId={id}
                   />
                 </div>
 

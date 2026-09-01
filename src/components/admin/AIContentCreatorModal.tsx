@@ -36,6 +36,7 @@ import { auth } from '../../lib/firebase';
 import ReactMarkdown from 'react-markdown';
 import { ImageUploadField } from '../common/ImageUploadField';
 import { MarkdownToolbar } from '../common/MarkdownToolbar';
+import { EmbeddedRelatedCard } from '../common/EmbeddedRelatedCard';
 import { normalizeImageUrl } from '../../lib/imageUtils';
 import { AdminDebugConsole } from './AdminDebugConsole';
 import { AIGenerationSkeleton } from './AIGenerationSkeleton';
@@ -1122,7 +1123,61 @@ export const AIContentCreatorModal: React.FC<AIContentCreatorModalProps> = ({ is
                             )}
 
                             <div className="prose prose-sm max-w-none text-ink leading-relaxed font-serif">
-                              <ReactMarkdown>{editForm.full || ''}</ReactMarkdown>
+                              <ReactMarkdown
+                                components={{
+                                  img: ({ src, alt }: any) => {
+                                    const parts = alt ? alt.split('|') : [];
+                                    const altText = parts[0] ? parts[0].trim() : '';
+                                    const credit = parts[1] ? parts[1].trim() : '';
+                                    const cleanSrc = normalizeImageUrl(src);
+                                    return (
+                                      <span className="block my-6 space-y-2 not-prose">
+                                        <span className="block w-full rounded-2xl overflow-hidden shadow-md border border-black/5 bg-paper2">
+                                          <img 
+                                            src={cleanSrc} 
+                                            alt={altText || 'Media'} 
+                                            className="w-full h-auto object-cover max-h-[400px]" 
+                                            referrerPolicy="no-referrer"
+                                          />
+                                        </span>
+                                        {(altText || credit) && (
+                                          <span className="block text-center font-sans text-xs text-ink3 leading-normal px-2">
+                                            {altText && <span className="text-ink2 font-medium">{altText}</span>}
+                                            {altText && credit && <span className="mx-1.5 opacity-30">|</span>}
+                                            {credit && <span className="italic">{credit}</span>}
+                                          </span>
+                                        )}
+                                      </span>
+                                    );
+                                  },
+                                  p: ({ children }: any) => {
+                                    const str = typeof children === 'string' ? children : (Array.isArray(children) && children.length === 1 && typeof children[0] === 'string' ? children[0] : null);
+                                    if (str) {
+                                      const match = str.trim().match(/:::related\[(.*?)\](?:\{(.*?)\})?:::/);
+                                      if (match) {
+                                        const attrString = match[2] || '';
+                                        const getAttr = (key: string) => {
+                                          const attrMatch = attrString.match(new RegExp(`${key}="([^"]*)"`));
+                                          return attrMatch ? attrMatch[1] : undefined;
+                                        };
+                                        return (
+                                          <EmbeddedRelatedCard
+                                            factId={match[1] || ''}
+                                            title={getAttr('title')}
+                                            excerpt={getAttr('excerpt')}
+                                            category={getAttr('cat')}
+                                            imageUrl={getAttr('image')}
+                                            styleVariant={(getAttr('variant') as any) || 'card'}
+                                          />
+                                        );
+                                      }
+                                    }
+                                    return <p className="leading-relaxed mb-4">{children}</p>;
+                                  }
+                                }}
+                              >
+                                {editForm.full || ''}
+                              </ReactMarkdown>
                             </div>
                           </div>
                         ) : (
