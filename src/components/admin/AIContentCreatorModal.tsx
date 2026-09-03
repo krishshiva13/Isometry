@@ -406,9 +406,11 @@ export const AIContentCreatorModal: React.FC<AIContentCreatorModalProps> = ({ is
 
         setNotification({
           type: 'success',
-          message: fresh.length > 0
-            ? `Extracted ${fresh.length} new vocabulary word(s) successfully!`
-            : `Vocabulary words refreshed (${extractedList.length} total words found).`
+          message: data.message 
+            ? `${data.message} (${fresh.length > 0 ? fresh.length : extractedList.length} words added)`
+            : (fresh.length > 0
+                ? `Extracted ${fresh.length} new vocabulary word(s) successfully!`
+                : `Vocabulary words refreshed (${extractedList.length} total words found).`)
         });
       } else {
         setNotification({

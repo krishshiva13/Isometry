@@ -6,6 +6,7 @@ import dotenv from "dotenv";
 import { initializeApp } from "firebase/app";
 import { getFirestore, collection, getDocs, setDoc, doc, query, orderBy, limit } from "firebase/firestore";
 import fs from "fs";
+import { extractVocabularyFallback, lookupWordFallback } from "./server/vocabularyFallback";
 
 dotenv.config();
 
@@ -49,6 +50,19 @@ app.use("/api/", (req, res, next) => {
   next();
 });
 
+// Flexible check for configured Gemini API key in server environment
+function hasGeminiApiKey(): boolean {
+  const apiKey = (
+    process.env.GEMINI_API_KEY ||
+    process.env.GOOGLE_API_KEY ||
+    process.env.VITE_GEMINI_API_KEY ||
+    process.env.API_KEY ||
+    process.env.GOOGLE_GENAI_API_KEY ||
+    ""
+  ).trim();
+  return apiKey.length > 0;
+}
+
 // Get or initialize Gemini AI Client with flexible key discovery & validation
 function getGeminiClient(): GoogleGenAI {
   const apiKey = (
@@ -56,6 +70,7 @@ function getGeminiClient(): GoogleGenAI {
     process.env.GOOGLE_API_KEY ||
     process.env.VITE_GEMINI_API_KEY ||
     process.env.API_KEY ||
+    process.env.GOOGLE_GENAI_API_KEY ||
     ""
   ).trim();
 
@@ -1436,7 +1451,7 @@ ${urlElements}
 </urlset>`);
 });
 
-// Vocabulary Definition Endpoint (Dynamic AI Word Lookup)
+// Vocabulary Definition Endpoint (Dynamic AI Word Lookup with Resilient Educational Dictionary Fallback)
 app.post("/api/vocabulary/define", async (req, res) => {
   const { word, contextSentence } = req.body || {};
   if (!word || typeof word !== "string" || !word.trim()) {
@@ -1444,10 +1459,13 @@ app.post("/api/vocabulary/define", async (req, res) => {
   }
 
   const cleanWord = word.trim();
-  try {
-    const prompt = `Define the English word "${cleanWord}" clearly for students and language learners.${
-      contextSentence ? ` In context of this sentence: "${contextSentence}"` : ""
-    }
+
+  // 1. If Gemini API key is configured, attempt high-precision AI generation first
+  if (hasGeminiApiKey()) {
+    try {
+      const prompt = `Define the English word "${cleanWord}" clearly for students and language learners.${
+        contextSentence ? ` In context of this sentence: "${contextSentence}"` : ""
+      }
 Provide:
 - Phonetic pronunciation (IPA, e.g. /ˈkætəlɪst/)
 - Part of speech (noun, verb, adjective, adverb, idiom)
@@ -1456,41 +1474,56 @@ Provide:
 - 2-4 Synonyms
 - Natural example sentence showing how to use the word`;
 
-    const response = await safeGenerateContent({
-      preferredModel: "gemini-3.7-flash",
-      contents: prompt,
-      allowSearchFallback: false,
-      config: {
-        systemInstruction: "You are an expert English lexicographer and language teacher. Respond ONLY with a valid JSON object matching the schema.",
-        responseMimeType: "application/json",
-        responseSchema: {
-          type: Type.OBJECT,
-          properties: {
-            word: { type: Type.STRING },
-            phonetic: { type: Type.STRING },
-            partOfSpeech: { type: Type.STRING },
-            meaning: { type: Type.STRING },
-            hindiMeaning: { type: Type.STRING },
-            exampleSentence: { type: Type.STRING },
-            synonyms: {
-              type: Type.ARRAY,
-              items: { type: Type.STRING }
-            }
-          },
-          required: ["word", "meaning"]
+      const response = await safeGenerateContent({
+        preferredModel: "gemini-3.7-flash",
+        contents: prompt,
+        allowSearchFallback: false,
+        config: {
+          systemInstruction: "You are an expert English lexicographer and language teacher. Respond ONLY with a valid JSON object matching the schema.",
+          responseMimeType: "application/json",
+          responseSchema: {
+            type: Type.OBJECT,
+            properties: {
+              word: { type: Type.STRING },
+              phonetic: { type: Type.STRING },
+              partOfSpeech: { type: Type.STRING },
+              meaning: { type: Type.STRING },
+              hindiMeaning: { type: Type.STRING },
+              exampleSentence: { type: Type.STRING },
+              synonyms: {
+                type: Type.ARRAY,
+                items: { type: Type.STRING }
+              }
+            },
+            required: ["word", "meaning"]
+          }
         }
-      }
-    });
+      });
 
-    const parsed = JSON.parse(response.text || "{}");
-    res.json({ success: true, vocabularyWord: { ...parsed, word: cleanWord } });
-  } catch (error: any) {
-    console.error("Vocabulary define error:", error);
-    res.status(500).json({ error: formatGeminiErrorMessage(error) });
+      const parsed = JSON.parse(response.text || "{}");
+      if (parsed && parsed.meaning) {
+        return res.json({ success: true, vocabularyWord: { ...parsed, word: cleanWord }, source: "gemini" });
+      }
+    } catch (error: any) {
+      console.warn("Gemini define failed, falling back to dictionary:", error.message || error);
+    }
+  }
+
+  // 2. Resilient fallback lookup (works without GEMINI_API_KEY)
+  try {
+    const fallbackWord = await lookupWordFallback(cleanWord, contextSentence);
+    return res.json({
+      success: true,
+      vocabularyWord: fallbackWord,
+      source: "educational-dictionary"
+    });
+  } catch (err: any) {
+    console.error("Vocabulary define fallback error:", err);
+    return res.status(500).json({ error: "Failed to retrieve word definition." });
   }
 });
 
-// Extract Article Vocabulary Endpoint (Extracts 3-6 rich English words from article text)
+// Extract Article Vocabulary Endpoint (Extracts 3-6 rich English words from article text with Resilient Fallback)
 app.post("/api/vocabulary/extract", async (req, res) => {
   const { articleText, text, content, full, title, topic } = req.body || {};
   const rawText = articleText || text || content || full;
@@ -1500,8 +1533,10 @@ app.post("/api/vocabulary/extract", async (req, res) => {
     return res.status(400).json({ error: "Article text is required" });
   }
 
-  try {
-    const prompt = `Analyze this educational article${articleTitle ? ` titled "${articleTitle}"` : ""}:
+  // 1. If Gemini API key is configured, attempt AI contextual extraction first
+  if (hasGeminiApiKey()) {
+    try {
+      const prompt = `Analyze this educational article${articleTitle ? ` titled "${articleTitle}"` : ""}:
 """
 ${rawText.substring(0, 4000)}
 """
@@ -1516,47 +1551,66 @@ For each word provide:
 - 2-4 synonyms
 - An example sentence (using the context of the article if possible)`;
 
-    const response = await safeGenerateContent({
-      preferredModel: "gemini-3.7-flash",
-      contents: prompt,
-      allowSearchFallback: false,
-      config: {
-        systemInstruction: "You are an expert English language educator. Respond ONLY with a valid JSON object containing an array of words.",
-        responseMimeType: "application/json",
-        responseSchema: {
-          type: Type.OBJECT,
-          properties: {
-            words: {
-              type: Type.ARRAY,
-              items: {
-                type: Type.OBJECT,
-                properties: {
-                  word: { type: Type.STRING },
-                  phonetic: { type: Type.STRING },
-                  partOfSpeech: { type: Type.STRING },
-                  meaning: { type: Type.STRING },
-                  hindiMeaning: { type: Type.STRING },
-                  exampleSentence: { type: Type.STRING },
-                  synonyms: {
-                    type: Type.ARRAY,
-                    items: { type: Type.STRING }
-                  }
-                },
-                required: ["word", "meaning"]
+      const response = await safeGenerateContent({
+        preferredModel: "gemini-3.7-flash",
+        contents: prompt,
+        allowSearchFallback: false,
+        config: {
+          systemInstruction: "You are an expert English language educator. Respond ONLY with a valid JSON object containing an array of words.",
+          responseMimeType: "application/json",
+          responseSchema: {
+            type: Type.OBJECT,
+            properties: {
+              words: {
+                type: Type.ARRAY,
+                items: {
+                  type: Type.OBJECT,
+                  properties: {
+                    word: { type: Type.STRING },
+                    phonetic: { type: Type.STRING },
+                    partOfSpeech: { type: Type.STRING },
+                    meaning: { type: Type.STRING },
+                    hindiMeaning: { type: Type.STRING },
+                    exampleSentence: { type: Type.STRING },
+                    synonyms: {
+                      type: Type.ARRAY,
+                      items: { type: Type.STRING }
+                    }
+                  },
+                  required: ["word", "meaning"]
+                }
               }
-            }
-          },
-          required: ["words"]
+            },
+            required: ["words"]
+          }
         }
-      }
-    });
+      });
 
-    const parsed = JSON.parse(response.text || "{}");
-    const wordsList = parsed.words || [];
-    res.json({ success: true, words: wordsList, vocabulary: wordsList });
-  } catch (error: any) {
-    console.error("Vocabulary extract error:", error);
-    res.status(500).json({ error: formatGeminiErrorMessage(error) });
+      const parsed = JSON.parse(response.text || "{}");
+      const wordsList = parsed.words || [];
+      if (Array.isArray(wordsList) && wordsList.length > 0) {
+        return res.json({ success: true, words: wordsList, vocabulary: wordsList, source: "gemini" });
+      }
+    } catch (error: any) {
+      console.warn("Gemini vocabulary extraction failed, using educational dictionary fallback:", error.message || error);
+    }
+  }
+
+  // 2. Intelligent educational dictionary fallback (works instantly even when GEMINI_API_KEY is not configured!)
+  try {
+    const fallbackWords = await extractVocabularyFallback(rawText, articleTitle, 4);
+    return res.json({
+      success: true,
+      words: fallbackWords,
+      vocabulary: fallbackWords,
+      source: "educational-dictionary",
+      message: hasGeminiApiKey()
+        ? undefined
+        : "Extracted words using built-in educational vocabulary engine. (Tip: Set GEMINI_API_KEY in Secrets for customized AI analysis)"
+    });
+  } catch (err: any) {
+    console.error("Vocabulary extract fallback error:", err);
+    return res.status(500).json({ error: "Failed to extract vocabulary words from article." });
   }
 });
 
