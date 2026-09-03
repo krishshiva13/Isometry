@@ -20,8 +20,20 @@ export const Header = () => {
   const [isAICreatorOpen, setIsAICreatorOpen] = useState(false);
   const [isReminderModalOpen, setIsReminderModalOpen] = useState(false);
   const [isProgressModalOpen, setIsProgressModalOpen] = useState(false);
+  const [isProfileOpen, setIsProfileOpen] = useState(false);
+  const profileMenuRef = React.useRef<HTMLDivElement>(null);
   const { user, isAdmin } = useAuth();
   const navigate = useNavigate();
+
+  React.useEffect(() => {
+    const handleClickOutside = (event: MouseEvent) => {
+      if (profileMenuRef.current && !profileMenuRef.current.contains(event.target as Node)) {
+        setIsProfileOpen(false);
+      }
+    };
+    document.addEventListener('mousedown', handleClickOutside);
+    return () => document.removeEventListener('mousedown', handleClickOutside);
+  }, []);
 
   const handleLogout = async () => {
     await authService.logout();
@@ -117,34 +129,16 @@ export const Header = () => {
             </nav>
           </div>
 
-          {/* Quick Study Hub Buttons + Admin + Auth */}
-          <div className="flex items-center gap-1.5 sm:gap-2">
-            {/* Direct Prominent Study Links */}
-            <div className="hidden md:flex items-center gap-1.5 bg-paper2 p-1 rounded-full border border-black/5">
-              <Link
-                to="/notebook"
-                className="flex items-center gap-1 px-3 py-1 bg-white hover:bg-gold/20 text-ink rounded-full text-xs font-bold transition-all border border-black/5 shadow-2xs group"
-                title="Student Notebook - Saved Notes"
-              >
-                <span>📓</span>
-                <span className="group-hover:text-gold transition-colors">Notebook</span>
-              </Link>
-              <Link
-                to="/flashcards"
-                className="flex items-center gap-1 px-3 py-1 bg-white hover:bg-purple-100 text-ink rounded-full text-xs font-bold transition-all border border-black/5 shadow-2xs group"
-                title="Smart Spaced Flashcards"
-              >
-                <span>🧠</span>
-                <span className="group-hover:text-purple-700 transition-colors">Flashcards</span>
-              </Link>
-            </div>
-
+          {/* Quick Study Hub Controls + Admin + Auth */}
+          <div className="flex items-center gap-1.5 sm:gap-2 shrink-0">
+            {/* Search Button */}
             <button 
               onClick={() => setIsSearchOpen(true)}
-              className="flex items-center gap-1.5 bg-paper2 border border-black/10 rounded-full px-3 py-1.5 text-xs text-ink3 hover:border-ink3 transition-all"
+              className="flex items-center gap-1.5 bg-paper2 hover:bg-paper3 border border-black/10 dark:border-white/10 rounded-full px-2.5 sm:px-3 py-1.5 text-xs text-ink3 hover:text-ink transition-all shrink-0"
+              title="Search facts, people, events…"
             >
               <Search size={14} />
-              <span className="hidden sm:inline">Search…</span>
+              <span className="hidden xl:inline">Search…</span>
             </button>
 
             {/* 🌓 Theme Switcher (Paper vs Dark) */}
@@ -153,7 +147,7 @@ export const Header = () => {
             {/* 🔔 Daily Study & Quiz Push Notification Reminders */}
             <button
               onClick={() => setIsReminderModalOpen(true)}
-              className="flex items-center justify-center w-8 h-8 rounded-full bg-paper2 hover:bg-paper3 border border-black/10 text-ink3 hover:text-gold transition-colors"
+              className="flex items-center justify-center w-8 h-8 rounded-full bg-paper2 hover:bg-paper3 border border-black/10 dark:border-white/10 text-ink3 hover:text-gold transition-colors shrink-0"
               title="Daily Study & Quiz Push Reminders (FCM)"
               aria-label="Daily study reminders"
             >
@@ -163,126 +157,180 @@ export const Header = () => {
             {/* 📊 User Learning Progress & Recharts Dashboard */}
             <button
               onClick={() => setIsProgressModalOpen(true)}
-              className="flex items-center gap-1.5 bg-paper2 hover:bg-gold/15 text-ink border border-black/10 rounded-full px-2.5 py-1.5 text-xs font-bold transition-all shadow-2xs"
+              className="flex items-center gap-1.5 bg-paper2 hover:bg-gold/15 text-ink border border-black/10 dark:border-white/10 rounded-full px-2.5 py-1.5 text-xs font-bold transition-all shadow-2xs shrink-0"
               title="View Learning Streaks & Performance Dashboard"
             >
               <Flame size={13} className="text-coral" />
-              <span className="hidden md:inline">Analytics</span>
+              <span className="hidden xl:inline">Analytics</span>
             </button>
 
+            {/* Admin Controls */}
             {isAdmin && (
               <>
                 <button 
                   onClick={() => setIsAICreatorOpen(true)}
-                  className="flex items-center gap-1.5 bg-gradient-to-r from-gold/20 via-amber-500/15 to-gold/20 hover:from-gold/30 hover:to-amber-500/30 text-ink border border-gold/40 font-bold text-xs px-2.5 py-1.5 sm:px-3 sm:py-1.5 rounded-full transition-all shadow-sm"
+                  className="flex items-center gap-1.5 bg-gold/15 hover:bg-gold/25 text-ink border border-gold/40 font-bold text-xs px-2.5 py-1.5 rounded-full transition-all shrink-0 shadow-2xs"
                   title="Open Admin AI Content Creator Studio"
                 >
                   <Sparkles size={13} className="text-gold animate-pulse" />
-                  <span className="hidden xl:inline">AI Content Creator</span>
-                  <span className="xl:hidden">AI Creator</span>
+                  <span className="hidden xl:inline">AI Studio</span>
                 </button>
 
                 <button 
                   onClick={() => setIsCreateModalOpen(true)}
-                  className="flex items-center gap-1 bg-gold/10 hover:bg-gold/20 text-gold border border-gold/20 font-bold text-xs px-2.5 py-1.5 sm:px-3 sm:py-1.5 rounded-full transition-all"
+                  className="flex items-center gap-1 bg-gold hover:bg-gold-l text-black font-bold text-xs px-2.5 sm:px-3 py-1.5 rounded-full transition-all shrink-0 shadow-sm"
                   title="Create Manual Fact"
                 >
-                  <Plus size={13} />
-                  <span className="hidden sm:inline">Add Fact</span>
+                  <Plus size={14} />
+                  <span>Add Fact</span>
                 </button>
               </>
             )}
 
+            {/* User Profile / Account Menu */}
             {user ? (
-              <div className="flex items-center gap-2 relative group">
-                <button className="flex items-center gap-2 bg-white border border-black/10 rounded-full pl-1.5 pr-2.5 py-1 hover:border-gold transition-all">
+              <div ref={profileMenuRef} className="relative shrink-0">
+                <button 
+                  onClick={() => setIsProfileOpen(!isProfileOpen)}
+                  className={cn(
+                    "flex items-center gap-1.5 sm:gap-2 bg-paper2 hover:bg-paper3 border rounded-full pl-1 sm:pl-1.5 pr-2 sm:pr-2.5 py-1 transition-all shrink-0 shadow-2xs",
+                    isAdmin ? "border-gold/60 hover:border-gold" : "border-black/10 dark:border-white/10 hover:border-ink3",
+                    isProfileOpen && "ring-2 ring-gold/40"
+                  )}
+                  title="Your Profile & Account Menu"
+                  aria-label="User Profile and Account Menu"
+                >
                   {user.photoURL ? (
-                    <img src={user.photoURL} className="w-5 h-5 rounded-full" alt="User" />
+                    <img src={user.photoURL} className="w-6 h-6 rounded-full object-cover" alt="User" />
                   ) : (
-                    <div className="w-5 h-5 rounded-full bg-gold/10 text-gold flex items-center justify-center">
-                      <UserIcon size={12} />
+                    <div className="w-6 h-6 rounded-full bg-gold/20 text-gold flex items-center justify-center font-bold text-xs">
+                      {(user.displayName?.[0] || user.email?.[0] || 'U').toUpperCase()}
                     </div>
                   )}
-                  <span className="text-xs font-bold text-ink truncate max-w-[60px] hidden sm:inline">
+                  <span className="text-xs font-bold text-ink truncate max-w-[70px] hidden md:inline">
                     {user.displayName || (user.email?.split('@')[0]) || 'User'}
                   </span>
-                  {isAdmin && <Shield size={11} className="text-gold" />}
+                  {isAdmin && (
+                    <span className="bg-gold text-black text-[9px] font-mono font-black px-1.5 py-0.2 rounded-full hidden sm:inline">
+                      ADMIN
+                    </span>
+                  )}
+                  <ChevronDown size={12} className={cn("text-ink3 transition-transform", isProfileOpen && "rotate-180")} />
                 </button>
                 
                 {/* Dropdown menu */}
-                <div className="absolute right-0 top-full pt-2 opacity-0 invisible group-hover:opacity-100 group-hover:visible transition-all z-50">
-                  <div className="bg-white border border-black/10 rounded-2xl shadow-xl p-2 min-w-[220px]">
-                    <div className="px-3 py-2 border-b border-black/5 mb-1">
-                      <div className="text-sm font-bold text-ink truncate">{user.displayName || 'Curious Learner'}</div>
-                      <div className="text-[10px] text-ink3 font-mono">{user.email || user.phoneNumber}</div>
-                      {isAdmin && (
-                        <div className="mt-1 text-[10px] font-bold text-gold uppercase tracking-wider flex items-center gap-1">
-                          <Shield size={10} /> Verified Admin
+                {isProfileOpen && (
+                  <div className="absolute right-0 top-full pt-2 z-50 animate-in fade-in-50 zoom-in-95 duration-150">
+                    <div className="bg-white border border-black/10 dark:border-white/15 rounded-2xl shadow-xl p-2 min-w-[230px]">
+                      <div className="px-3 py-2.5 border-b border-black/5 dark:border-white/10 mb-1">
+                        <div className="flex items-center justify-between gap-2">
+                          <span className="text-sm font-bold text-ink truncate">{user.displayName || 'Curious Learner'}</span>
+                          {isAdmin && (
+                            <span className="text-[9px] bg-gold text-black font-bold px-1.5 py-0.5 rounded-full uppercase">
+                              Admin
+                            </span>
+                          )}
                         </div>
-                      )}
-                    </div>
+                        <div className="text-[11px] text-ink3 font-mono truncate">{user.email || user.phoneNumber}</div>
+                      </div>
 
-                    <button
-                      onClick={() => setIsProgressModalOpen(true)}
-                      className="w-full flex items-center gap-2 px-3 py-2 text-xs font-bold text-ink hover:bg-paper2 rounded-lg transition-colors text-left"
-                    >
-                      <BarChart3 size={14} className="text-gold" />
-                      <span>Progress & Analytics</span>
-                    </button>
-
-                    <button
-                      onClick={() => setIsReminderModalOpen(true)}
-                      className="w-full flex items-center gap-2 px-3 py-2 text-xs font-bold text-ink hover:bg-paper2 rounded-lg transition-colors text-left"
-                    >
-                      <Bell size={14} className="text-coral" />
-                      <span>Push Reminders</span>
-                    </button>
-
-                    <Link
-                      to="/notebook"
-                      className="w-full flex items-center gap-2 px-3 py-2 text-xs font-bold text-ink hover:bg-paper2 rounded-lg transition-colors"
-                    >
-                      <span>📓</span> My Student Notebook
-                    </Link>
-
-                    <Link
-                      to="/flashcards"
-                      className="w-full flex items-center gap-2 px-3 py-2 text-xs font-bold text-ink hover:bg-paper2 rounded-lg transition-colors"
-                    >
-                      <span>🧠</span> My Flashcard Decks
-                    </Link>
-
-                    {isAdmin && (
                       <button
-                        onClick={() => setIsAICreatorOpen(true)}
-                        className="w-full flex items-center gap-2 px-3 py-2 text-xs font-bold text-ink hover:bg-gold/10 rounded-lg transition-colors text-left"
+                        onClick={() => {
+                          setIsProfileOpen(false);
+                          setIsProgressModalOpen(true);
+                        }}
+                        className="w-full flex items-center gap-2.5 px-3 py-2 text-xs font-bold text-ink hover:bg-paper2 rounded-xl transition-colors text-left"
                       >
-                        <Sparkles size={14} className="text-gold" />
-                        <span>AI Content Studio</span>
+                        <BarChart3 size={15} className="text-gold" />
+                        <span>Progress & Streaks</span>
                       </button>
-                    )}
 
-                    <button 
-                      onClick={handleLogout}
-                      className="w-full flex items-center gap-2 px-3 py-2 text-xs text-coral hover:bg-coral/5 rounded-lg transition-colors font-bold"
-                    >
-                      <LogOut size={14} /> Logout
-                    </button>
+                      <button
+                        onClick={() => {
+                          setIsProfileOpen(false);
+                          setIsReminderModalOpen(true);
+                        }}
+                        className="w-full flex items-center gap-2.5 px-3 py-2 text-xs font-bold text-ink hover:bg-paper2 rounded-xl transition-colors text-left"
+                      >
+                        <Bell size={15} className="text-coral" />
+                        <span>Push Reminders</span>
+                      </button>
+
+                      <Link
+                        to="/notebook"
+                        onClick={() => setIsProfileOpen(false)}
+                        className="w-full flex items-center gap-2.5 px-3 py-2 text-xs font-bold text-ink hover:bg-paper2 rounded-xl transition-colors"
+                      >
+                        <span>📓</span>
+                        <span>My Student Notebook</span>
+                      </Link>
+
+                      <Link
+                        to="/flashcards"
+                        onClick={() => setIsProfileOpen(false)}
+                        className="w-full flex items-center gap-2.5 px-3 py-2 text-xs font-bold text-ink hover:bg-paper2 rounded-xl transition-colors"
+                      >
+                        <span>🧠</span>
+                        <span>My Flashcard Decks</span>
+                      </Link>
+
+                      {isAdmin && (
+                        <>
+                          <div className="my-1 border-t border-black/5 dark:border-white/10" />
+                          <button
+                            onClick={() => {
+                              setIsProfileOpen(false);
+                              setIsCreateModalOpen(true);
+                            }}
+                            className="w-full flex items-center gap-2.5 px-3 py-2 text-xs font-bold text-gold hover:bg-gold/10 rounded-xl transition-colors text-left"
+                          >
+                            <Plus size={15} />
+                            <span>Create New Fact</span>
+                          </button>
+                          <button
+                            onClick={() => {
+                              setIsProfileOpen(false);
+                              setIsAICreatorOpen(true);
+                            }}
+                            className="w-full flex items-center gap-2.5 px-3 py-2 text-xs font-bold text-ink hover:bg-gold/10 rounded-xl transition-colors text-left"
+                          >
+                            <Sparkles size={15} className="text-gold" />
+                            <span>AI Studio Generator</span>
+                          </button>
+                        </>
+                      )}
+
+                      <div className="my-1 border-t border-black/5 dark:border-white/10" />
+
+                      <button 
+                        onClick={() => {
+                          setIsProfileOpen(false);
+                          handleLogout();
+                        }}
+                        className="w-full flex items-center gap-2.5 px-3 py-2 text-xs text-coral hover:bg-coral/10 rounded-xl transition-colors font-bold"
+                      >
+                        <LogOut size={15} />
+                        <span>Logout</span>
+                      </button>
+                    </div>
                   </div>
-                </div>
+                )}
               </div>
             ) : (
               <button 
                 onClick={() => setIsAuthModalOpen(true)}
-                className="bg-ink text-white px-3.5 py-1.5 rounded-full text-xs font-bold hover:bg-gold transition-all"
+                className="flex items-center gap-1.5 bg-ink text-white dark:bg-white dark:text-black px-3.5 py-1.5 rounded-full text-xs font-bold hover:bg-gold dark:hover:bg-gold transition-all shrink-0 shadow-xs"
+                title="Sign In or Register"
               >
-                Sign In
+                <UserIcon size={13} />
+                <span>Sign In</span>
               </button>
             )}
 
+            {/* Mobile Hamburger Toggle */}
             <button 
               onClick={() => setIsMenuOpen(!isMenuOpen)}
-              className="lg:hidden p-1.5 text-ink hover:bg-paper2 rounded-lg"
+              className="lg:hidden p-1.5 text-ink hover:bg-paper2 rounded-lg shrink-0"
               aria-label="Toggle navigation menu"
             >
               {isMenuOpen ? <X size={22} /> : <Menu size={22} />}
@@ -328,8 +376,105 @@ export const Header = () => {
       {isMenuOpen && (
         <div className="lg:hidden fixed inset-x-0 top-16 z-[199] bg-paper border-b border-black/10 p-4 shadow-xl fade-in max-h-[85vh] overflow-y-auto">
           <div className="flex flex-col gap-1">
+            {/* Mobile User Profile Section */}
+            <div className="p-3.5 rounded-2xl bg-paper2 border border-black/10 dark:border-white/10 mb-3 shadow-2xs">
+              {user ? (
+                <div className="space-y-3">
+                  <div className="flex items-center justify-between">
+                    <div className="flex items-center gap-2.5">
+                      {user.photoURL ? (
+                        <img src={user.photoURL} className="w-9 h-9 rounded-full object-cover" alt="User" />
+                      ) : (
+                        <div className="w-9 h-9 rounded-full bg-gold/20 text-gold flex items-center justify-center font-bold text-sm">
+                          {(user.displayName?.[0] || user.email?.[0] || 'U').toUpperCase()}
+                        </div>
+                      )}
+                      <div>
+                        <div className="text-sm font-bold text-ink leading-tight">
+                          {user.displayName || 'Curious Learner'}
+                        </div>
+                        <div className="text-[11px] text-ink3 font-mono">
+                          {user.email || user.phoneNumber}
+                        </div>
+                      </div>
+                    </div>
+                    {isAdmin && (
+                      <span className="bg-gold text-black text-[9px] font-bold px-2 py-0.5 rounded-full uppercase font-mono">
+                        Admin
+                      </span>
+                    )}
+                  </div>
+
+                  {isAdmin && (
+                    <div className="flex gap-2 pt-1">
+                      <button
+                        onClick={() => {
+                          setIsMenuOpen(false);
+                          setIsCreateModalOpen(true);
+                        }}
+                        className="flex-1 flex items-center justify-center gap-1.5 py-2 rounded-xl bg-gold hover:bg-gold-l text-black font-bold text-xs shadow-xs"
+                      >
+                        <Plus size={14} />
+                        <span>Add Fact</span>
+                      </button>
+                      <button
+                        onClick={() => {
+                          setIsMenuOpen(false);
+                          setIsAICreatorOpen(true);
+                        }}
+                        className="flex-1 flex items-center justify-center gap-1.5 py-2 rounded-xl bg-gold/20 border border-gold/40 text-ink font-bold text-xs"
+                      >
+                        <Sparkles size={14} className="text-gold" />
+                        <span>AI Studio</span>
+                      </button>
+                    </div>
+                  )}
+
+                  <div className="flex justify-between items-center pt-2 border-t border-black/5 dark:border-white/5 text-xs">
+                    <button
+                      onClick={() => {
+                        setIsMenuOpen(false);
+                        setIsProgressModalOpen(true);
+                      }}
+                      className="font-bold text-gold hover:underline flex items-center gap-1"
+                    >
+                      <BarChart3 size={14} />
+                      <span>View My Progress</span>
+                    </button>
+                    <button
+                      onClick={() => {
+                        setIsMenuOpen(false);
+                        handleLogout();
+                      }}
+                      className="text-coral font-bold hover:underline flex items-center gap-1"
+                    >
+                      <LogOut size={14} />
+                      <span>Logout</span>
+                    </button>
+                  </div>
+                </div>
+              ) : (
+                <div className="flex items-center justify-between gap-3">
+                  <div>
+                    <div className="text-sm font-bold text-ink">Welcome to FActHub</div>
+                    <div className="text-[11px] text-ink3">Sign in to track reading streaks & sync notes</div>
+                  </div>
+                  <button
+                    onClick={() => {
+                      setIsMenuOpen(false);
+                      setIsAuthModalOpen(true);
+                    }}
+                    className="bg-gold hover:bg-gold-l text-black px-4 py-2 rounded-xl text-xs font-bold shadow-xs flex items-center gap-1.5 shrink-0"
+                  >
+                    <UserIcon size={14} />
+                    <span>Sign In</span>
+                  </button>
+                </div>
+              )}
+            </div>
+
             {/* Mobile Theme & Quick Reminders Bar */}
-            <div className="flex items-center justify-between p-3 rounded-2xl bg-paper2 border border-black/5 mb-3">
+            <div className="flex items-center justify-between p-3 rounded-2xl bg-paper2 border border-black/5 dark:border-white/5 mb-3">
               <div className="flex items-center gap-2">
                 <span className="text-xs font-bold text-ink">Theme:</span>
                 <ThemeSwitcher variant="full" />
@@ -340,7 +485,7 @@ export const Header = () => {
                   setIsMenuOpen(false);
                   setIsReminderModalOpen(true);
                 }}
-                className="flex items-center gap-1.5 px-3 py-1.5 bg-white rounded-xl text-xs font-bold text-ink border border-black/10 shadow-2xs"
+                className="flex items-center gap-1.5 px-3 py-1.5 bg-white border border-black/10 dark:border-white/10 rounded-xl text-xs font-bold text-ink shadow-2xs"
               >
                 <Bell size={13} className="text-gold" />
                 <span>Reminders</span>
@@ -358,23 +503,10 @@ export const Header = () => {
                 <BarChart3 size={17} className="text-gold" />
                 <span>Learning Analytics & Streaks</span>
               </div>
-              <span className="text-[10px] font-mono bg-white px-2 py-0.5 rounded-full font-bold">
+              <span className="text-[10px] font-mono bg-white text-black px-2 py-0.5 rounded-full font-bold">
                 DASHBOARD
               </span>
             </button>
-
-            {isAdmin && (
-              <button
-                onClick={() => {
-                  setIsMenuOpen(false);
-                  setIsAICreatorOpen(true);
-                }}
-                className="flex items-center gap-2 p-3 rounded-xl bg-gold/15 text-ink font-bold text-sm text-left mb-2"
-              >
-                <Sparkles size={16} className="text-gold" />
-                <span>AI Content Creator Studio</span>
-              </button>
-            )}
 
             <div className="px-2 py-1 text-[10px] font-mono uppercase tracking-wider text-ink3 font-bold">
               Study & Personal Hub

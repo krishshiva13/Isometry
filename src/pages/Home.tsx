@@ -150,7 +150,7 @@ export const Home = () => {
       <Ticker facts={facts} />
 
       {/* Hero Section */}
-      <section className="relative bg-ink pt-16 pb-12 px-4 sm:px-6 lg:px-8 overflow-hidden">
+      <section className="relative bg-[#0c0c0b] text-white pt-16 pb-12 px-4 sm:px-6 lg:px-8 overflow-hidden border-b border-black/10 dark:border-white/10">
         <div className="hero-grid-bg opacity-10" />
         <div className="max-w-7xl mx-auto relative z-10 grid lg:grid-cols-3 gap-12 items-center">
           <div className="lg:col-span-2 space-y-6">
@@ -162,11 +162,11 @@ export const Home = () => {
               Every Fact Has a<br />
               <span className="text-gold-l italic">Story Worth Knowing</span>
             </h1>
-            <p className="text-white/60 text-lg max-w-xl leading-relaxed">
+            <p className="text-white/80 text-lg max-w-xl leading-relaxed">
               Explore history's greatest moments, science breakthroughs, brilliant inventions, amazing discoveries, and the brilliant minds that shaped our world.
             </p>
             <div className="flex flex-wrap gap-4 pt-4">
-              <Link to="/category/history" className="bg-gold hover:bg-gold-l text-ink px-8 py-3 rounded-full font-bold transition-all transform hover:-translate-y-1">
+              <Link to="/category/history" className="bg-gold hover:bg-gold-l text-black font-bold px-8 py-3 rounded-full transition-all transform hover:-translate-y-1 shadow-md">
                 ⏳ Explore History
               </Link>
               <Link to="/quiz" className="bg-white/10 hover:bg-white/20 border border-white/20 text-white px-8 py-3 rounded-full font-bold transition-all">
@@ -178,7 +178,7 @@ export const Home = () => {
           <div className="hidden lg:block bg-white/5 border border-white/10 rounded-2xl p-6 backdrop-blur-sm self-stretch max-h-[480px] overflow-y-auto">
             <div className="font-mono text-[0.7rem] text-gold-l uppercase tracking-widest mb-6 flex justify-between items-center">
               <span>✦ Today in History</span>
-              {todayEvents.length > 0 && <span className="bg-gold text-ink text-[9px] font-bold px-1.5 py-0.5 rounded-full">{todayEvents.length} Active</span>}
+              {todayEvents.length > 0 && <span className="bg-gold text-black text-[9px] font-bold px-1.5 py-0.5 rounded-full">{todayEvents.length} Active</span>}
             </div>
             
             <div className="space-y-6">
@@ -251,9 +251,9 @@ export const Home = () => {
             {mainFeat && (
               <Link
                 to={`/article/${mainFeat.id}`}
-                className="lg:col-span-2 lg:row-span-2 relative bg-ink rounded-fact p-8 flex flex-col justify-end min-h-[400px] group overflow-hidden"
+                className="lg:col-span-2 lg:row-span-2 relative bg-[#0c0c0b] text-white rounded-fact p-8 flex flex-col justify-end min-h-[400px] group overflow-hidden border border-black/10 dark:border-white/10 shadow-fact"
               >
-                <div className="absolute top-0 right-0 text-[10rem] font-serif font-black text-white/[0.03] leading-none select-none pointer-events-none">
+                <div className="absolute top-0 right-0 text-[10rem] font-serif font-black text-white/[0.04] leading-none select-none pointer-events-none">
                   {mainFeat.year < 0 ? 'BC' : mainFeat.year}
                 </div>
                 <div className="relative z-10 space-y-4">
@@ -264,7 +264,7 @@ export const Home = () => {
                   <h3 className="text-white text-3xl font-serif font-bold leading-tight group-hover:text-gold-l transition-colors">
                     {mainFeat.title}
                   </h3>
-                  <p className="text-white/50 text-sm leading-relaxed max-w-lg">
+                  <p className="text-white/70 text-sm leading-relaxed max-w-lg">
                     {mainFeat.excerpt}
                   </p>
                   <div className="text-gold-l font-mono text-xs pt-4">
@@ -431,12 +431,12 @@ export const Home = () => {
       </section>
 
       {/* Birthdays Section */}
-      <section className="py-16 px-4 bg-ink text-paper">
+      <section className="py-16 px-4 bg-[#0c0c0b] text-white border-t border-black/10 dark:border-white/10">
         <div className="max-w-7xl mx-auto">
           <div className="flex items-end justify-between mb-10 gap-4">
             <div>
               <h2 className="text-2xl font-serif font-bold text-white">🎂 Famous Birthdays</h2>
-              <p className="text-sm text-white/50">Brilliant minds — sorted by date</p>
+              <p className="text-sm text-white/70">Brilliant minds — sorted by date</p>
             </div>
             <Link to="/birthdays" className="text-sm font-bold text-gold-l hover:underline">All birthdays →</Link>
           </div>
@@ -448,7 +448,7 @@ export const Home = () => {
                   {b.init}
                 </div>
                 <div className="font-serif font-bold text-sm leading-tight text-white group-hover:text-gold-l transition-colors">{b.name}</div>
-                <div className="font-mono text-[0.65rem] text-white/40 mt-1">Born {b.year}</div>
+                <div className="font-mono text-[0.65rem] text-white/50 mt-1">Born {b.year}</div>
                 <div className="text-[0.6rem] font-bold uppercase tracking-widest mt-2" style={{ color: b.color }}>{b.field}</div>
               </div>
             ))}
@@ -459,16 +459,16 @@ export const Home = () => {
       {/* Newsletter */}
       <section className="bg-gold py-16 px-4 text-center">
         <div className="max-w-xl mx-auto space-y-6">
-          <h2 className="text-3xl font-serif font-black text-ink">📬 Get Your Daily Fact</h2>
-          <p className="text-ink/70">One amazing fact every morning. Free forever.</p>
+          <h2 className="text-3xl font-serif font-black text-black">📬 Get Your Daily Fact</h2>
+          <p className="text-black/80 font-medium">One amazing fact every morning. Free forever.</p>
           <form className="flex flex-col sm:flex-row gap-2" onSubmit={(e) => { e.preventDefault(); alert("Subscribed!"); }}>
             <input 
               type="email" 
               placeholder="Your email address" 
-              className="flex-1 px-6 py-3 rounded-full bg-white text-ink outline-none"
+              className="flex-1 px-6 py-3 rounded-full bg-white text-black outline-none border border-black/10"
               required
             />
-            <button className="bg-ink text-white px-8 py-3 rounded-full font-bold hover:bg-ink2 transition-all">
+            <button className="bg-black text-white px-8 py-3 rounded-full font-bold hover:bg-neutral-800 transition-all">
               Subscribe
             </button>
           </form>

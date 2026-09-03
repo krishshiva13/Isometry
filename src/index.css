@@ -33,27 +33,54 @@
 
 /* High-Contrast Dark Theme Overrides */
 html.dark {
-  --color-paper: #121212;
-  --color-paper2: #1c1c1c;
-  --color-paper3: #2a2a2a;
+  --color-paper: #0c0c0b;
+  --color-paper2: #161614;
+  --color-paper3: #22221f;
   --color-ink: #f7f7f4;
   --color-ink2: #d6d3cc;
   --color-ink3: #a39f95;
-  --color-gold: #f0c84a;
-  --color-gold-l: #352a0a;
+  --color-gold: #f59e0b;
+  --color-gold-l: #fcd34d;
   --color-teal: #2dd4bf;
-  --color-teal-l: #0d3834;
-  --color-coral: #f87171;
-  --color-coral-l: #3f1414;
-  --color-indigo: #a5b4fc;
-  --color-indigo-l: #1e244d;
+  --color-teal-l: #99f6e4;
+  --color-coral: #fb7185;
+  --color-coral-l: #fecdd3;
+  --color-indigo: #818cf8;
+  --color-indigo-l: #c7d2fe;
   --color-sage: #4ade80;
-  --color-sage-l: #12381f;
+  --color-sage-l: #bbf7d0;
   color-scheme: dark;
 }
 
-html.dark .bg-white {
-  background-color: #1a1a1a !important;
+/* Ensure any element using bg-ink remains a deep dark, high-contrast canvas in dark mode */
+html.dark .bg-ink,
+.dark .bg-ink {
+  background-color: #0c0c0b !important;
+}
+
+/* In dark mode, ensure text inside bg-ink retains high contrast */
+html.dark .bg-ink .text-paper,
+.dark .bg-ink .text-paper {
+  color: #f7f7f4 !important;
+}
+
+/* Solid white cards become dark charcoal in dark mode */
+html.dark .bg-white:not([class*="bg-white/"]):not([class*="dark:bg-"]) {
+  background-color: #171715 !important;
+}
+
+/* Retain translucent white utility overlays in dark mode */
+html.dark .bg-white\/5 {
+  background-color: rgba(255, 255, 255, 0.05) !important;
+}
+html.dark .bg-white\/10 {
+  background-color: rgba(255, 255, 255, 0.10) !important;
+}
+html.dark .bg-white\/15 {
+  background-color: rgba(255, 255, 255, 0.15) !important;
+}
+html.dark .bg-white\/20 {
+  background-color: rgba(255, 255, 255, 0.20) !important;
 }
 
 html.dark .border-black\/5 {
@@ -61,11 +88,37 @@ html.dark .border-black\/5 {
 }
 
 html.dark .border-black\/10 {
-  border-color: rgba(255, 255, 255, 0.14) !important;
+  border-color: rgba(255, 255, 255, 0.15) !important;
 }
 
 html.dark .border-black\/20 {
-  border-color: rgba(255, 255, 255, 0.22) !important;
+  border-color: rgba(255, 255, 255, 0.25) !important;
+}
+
+/* Ensure gold primary action buttons remain readable with dark text */
+html.dark .bg-gold,
+html.dark .bg-gold-l {
+  color: #0c0c0b !important;
+}
+
+/* Prose article readability in dark mode */
+html.dark .prose {
+  --tw-prose-body: #d6d3cc;
+  --tw-prose-headings: #f7f7f4;
+  --tw-prose-lead: #a39f95;
+  --tw-prose-links: #f59e0b;
+  --tw-prose-bold: #ffffff;
+  --tw-prose-counters: #a39f95;
+  --tw-prose-bullets: #a39f95;
+  --tw-prose-hr: rgba(255, 255, 255, 0.15);
+  --tw-prose-quotes: #f7f7f4;
+  --tw-prose-quote-borders: #f59e0b;
+  --tw-prose-captions: #a39f95;
+  --tw-prose-code: #fcd34d;
+  --tw-prose-pre-code: #f7f7f4;
+  --tw-prose-pre-bg: #1a1a18;
+  --tw-prose-th-borders: rgba(255, 255, 255, 0.15);
+  --tw-prose-td-borders: rgba(255, 255, 255, 0.1);
 }
 
 @layer base {
