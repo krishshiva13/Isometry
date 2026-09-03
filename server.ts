@@ -1,5 +1,6 @@
 import express from "express";
 import path from "path";
+import compression from "compression";
 import { createServer as createViteServer } from "vite";
 import { GoogleGenAI, Type } from "@google/genai";
 import dotenv from "dotenv";
@@ -12,6 +13,9 @@ dotenv.config();
 
 const app = express();
 const PORT = process.env.PORT ? parseInt(process.env.PORT, 10) : 3000;
+
+// High-speed response compression for fast page load & low latency
+app.use(compression());
 
 // Security Hardening: Disable fingerprinting headers and apply defense-in-depth headers
 app.disable("x-powered-by");
@@ -1705,18 +1709,44 @@ app.all("/api/*", (req, res) => {
   res.status(404).json({ error: `API endpoint not found: ${req.method} ${req.originalUrl}` });
 });
 
-// Middleware for Vite
+// Middleware for Vite & Production Static Serving
 async function startServer() {
-  if (process.env.NODE_ENV !== "production") {
+  const distCandidate1 = path.join(process.cwd(), "dist");
+  const distCandidate2 = typeof __dirname !== "undefined" ? __dirname : "";
+  const distPath = fs.existsSync(path.join(distCandidate1, "index.html"))
+    ? distCandidate1
+    : distCandidate2 && fs.existsSync(path.join(distCandidate2, "index.html"))
+    ? distCandidate2
+    : "";
+
+  const isProduction = process.env.NODE_ENV === "production" || Boolean(distPath && fs.existsSync(path.join(distPath, "index.html")));
+
+  if (!isProduction) {
+    console.log("[Server] Starting in Development mode with Vite middleware...");
     const vite = await createViteServer({
       server: { middlewareMode: true },
       appType: "spa",
     });
     app.use(vite.middlewares);
   } else {
-    const distPath = path.join(process.cwd(), "dist");
-    app.use(express.static(distPath));
+    console.log(`[Server] Serving production static assets from: ${distPath}`);
+    // Cache immutable hashed build assets for 1 year
+    app.use(
+      "/assets",
+      express.static(path.join(distPath, "assets"), {
+        maxAge: "1y",
+        immutable: true,
+      })
+    );
+    // Cache general static files (favicon, manifest, etc.) for 1 hour
+    app.use(
+      express.static(distPath, {
+        maxAge: "1h",
+      })
+    );
+    // Instant index.html fallback for client SPA routes
     app.get("*", (req, res) => {
+      res.setHeader("Cache-Control", "no-cache");
       res.sendFile(path.join(distPath, "index.html"));
     });
   }
