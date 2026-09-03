@@ -801,6 +801,20 @@ export const Article = () => {
             {/* 🛠️ Student Toolkit Action Bar */}
             <div className="flex flex-wrap items-center gap-2.5 pt-2 pb-2 not-prose">
               <button
+                onClick={() => {
+                  const player = document.getElementById('audio-narration-player');
+                  player?.scrollIntoView({ behavior: 'smooth' });
+                  // If play button is inside player, focus it
+                  player?.querySelector('button')?.click();
+                }}
+                className="flex items-center gap-1.5 px-3.5 py-2 rounded-2xl bg-paper2 hover:bg-gold/15 text-ink font-bold text-xs border border-black/10 transition-all shadow-xs"
+                title="Listen to text-to-speech audio of this fact"
+              >
+                <Volume2 size={14} className="text-teal" />
+                <span>Listen (TTS)</span>
+              </button>
+
+              <button
                 onClick={() => setShowSaveNotebookModal(true)}
                 className="flex items-center gap-1.5 px-3.5 py-2 rounded-2xl bg-paper2 hover:bg-gold/15 text-ink font-bold text-xs border border-black/10 transition-all shadow-xs"
               >
@@ -846,6 +860,7 @@ export const Article = () => {
               content={fact.full || fact.excerpt}
               excerpt={fact.excerpt}
               category={fact.cat}
+              examRelevance={fact.examRelevance}
             />
 
             <ArticleHeroImage

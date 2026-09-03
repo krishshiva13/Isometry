@@ -1,6 +1,8 @@
 @import url('https://fonts.googleapis.com/css2?family=Playfair+Display:ital,wght@0,700;0,900;1,700&family=DM+Sans:opsz,wght@9..40,300;9..40,400;9..40,500;9..40,600&family=DM+Mono:wght@400;500&display=swap');
 @import "tailwindcss";
 
+@custom-variant dark (&:where(.dark, .dark *));
+
 @theme {
   --font-serif: "Playfair Display", Georgia, serif;
   --font-sans: "DM Sans", ui-sans-serif, system-ui, sans-serif;
@@ -29,9 +31,46 @@
   --shadow-fact-lg: 0 8px 40px rgba(15,14,11,.14);
 }
 
+/* High-Contrast Dark Theme Overrides */
+html.dark {
+  --color-paper: #121212;
+  --color-paper2: #1c1c1c;
+  --color-paper3: #2a2a2a;
+  --color-ink: #f7f7f4;
+  --color-ink2: #d6d3cc;
+  --color-ink3: #a39f95;
+  --color-gold: #f0c84a;
+  --color-gold-l: #352a0a;
+  --color-teal: #2dd4bf;
+  --color-teal-l: #0d3834;
+  --color-coral: #f87171;
+  --color-coral-l: #3f1414;
+  --color-indigo: #a5b4fc;
+  --color-indigo-l: #1e244d;
+  --color-sage: #4ade80;
+  --color-sage-l: #12381f;
+  color-scheme: dark;
+}
+
+html.dark .bg-white {
+  background-color: #1a1a1a !important;
+}
+
+html.dark .border-black\/5 {
+  border-color: rgba(255, 255, 255, 0.08) !important;
+}
+
+html.dark .border-black\/10 {
+  border-color: rgba(255, 255, 255, 0.14) !important;
+}
+
+html.dark .border-black\/20 {
+  border-color: rgba(255, 255, 255, 0.22) !important;
+}
+
 @layer base {
   body {
-    @apply font-sans bg-paper text-ink leading-relaxed overflow-x-hidden;
+    @apply font-sans bg-paper text-ink leading-relaxed overflow-x-hidden transition-colors duration-200;
   }
 }
 

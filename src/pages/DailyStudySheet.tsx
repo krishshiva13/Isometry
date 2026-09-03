@@ -1,13 +1,15 @@
 import React, { useState, useEffect } from 'react';
 import { Helmet } from 'react-helmet-async';
-import { Printer, Download, BookOpen, CheckCircle, Sparkles, ArrowLeft } from 'lucide-react';
+import { Printer, Download, BookOpen, CheckCircle, Sparkles, ArrowLeft, FileText } from 'lucide-react';
 import { Link } from 'react-router-dom';
 import { factService } from '../services/factService';
 import { Fact } from '../types';
 import { INITIAL_FACTS } from '../seed';
+import { exportStudySheetToPdf } from '../lib/pdfExport';
 
 export const DailyStudySheet: React.FC = () => {
   const [facts, setFacts] = useState<Fact[]>([]);
+  const [isExporting, setIsExporting] = useState(false);
   const todayFormatted = new Date().toLocaleDateString('en-US', {
     weekday: 'long',
     year: 'numeric',
@@ -31,15 +33,46 @@ export const DailyStudySheet: React.FC = () => {
     window.print();
   };
 
+  const handleExportPdf = () => {
+    setIsExporting(true);
+    try {
+      exportStudySheetToPdf({
+        dateString: todayFormatted,
+        facts: facts.length > 0 ? facts : INITIAL_FACTS.slice(0, 6),
+        vocabulary: [
+          { english: 'Satyagraha', hindi: 'सत्याग्रह', context: 'Insistence on truth; non-violent resistance pioneered by Gandhi.' },
+          { english: 'Diwani Rights', hindi: 'दीवानी अधिकार', context: 'Right to collect land revenue granted via Treaty of Allahabad (1765).' },
+          { english: 'Cryogenic Engine', hindi: 'क्रायोजेनिक इंजन', context: 'Rocket engine utilizing liquid hydrogen (-253°C) and liquid oxygen.' }
+        ],
+        mcqs: [
+          {
+            question: 'Q1. In which year was Sir C.V. Raman awarded the Nobel Prize in Physics for his discovery of light scattering?',
+            options: ['(A) 1928', '(B) 1930', '(C) 1935', '(D) 1942'],
+            answer: 'B'
+          },
+          {
+            question: 'Q2. Which Treaty concluded the Battle of Buxar (1764) and conferred Diwani Rights of Bengal to the East India Company?',
+            options: ['(A) Treaty of Purandar', '(B) Treaty of Allahabad', '(C) Treaty of Salbai', '(D) Treaty of Madras'],
+            answer: 'B'
+          }
+        ]
+      });
+    } catch (e) {
+      console.error('PDF export failed', e);
+    } finally {
+      setTimeout(() => setIsExporting(false), 800);
+    }
+  };
+
   return (
     <div className="min-h-screen bg-paper py-8 px-4 sm:px-6 lg:px-8">
       <Helmet>
         <title>Daily 1-Click Printable PDF Study Sheet | FActHub</title>
-        <meta name="description" content="Print or save as PDF today's curated Day in History study sheet, practice questions, and bilingual vocabulary table." />
+        <meta name="description" content="Print or save as PDF today's curated Day in History study sheet, practice questions, and bilingual vocabulary table with facthub.in watermark." />
       </Helmet>
 
       {/* Screen-only top action bar */}
-      <div className="max-w-4xl mx-auto mb-6 flex items-center justify-between gap-4 print:hidden">
+      <div className="max-w-4xl mx-auto mb-6 flex flex-col sm:flex-row sm:items-center justify-between gap-4 print:hidden">
         <Link
           to="/"
           className="flex items-center gap-1.5 text-xs font-bold text-ink2 hover:text-ink transition-colors"
@@ -48,13 +81,23 @@ export const DailyStudySheet: React.FC = () => {
           <span>Back to Home</span>
         </Link>
 
-        <div className="flex items-center gap-3">
+        <div className="flex flex-wrap items-center gap-2.5">
+          <button
+            onClick={handleExportPdf}
+            disabled={isExporting}
+            className="flex items-center gap-2 bg-ink hover:bg-black text-paper font-bold px-4 py-2.5 rounded-2xl text-xs transition-all shadow-md active:scale-98 disabled:opacity-50"
+            title="Download formatted vector PDF document with official facthub.in watermark"
+          >
+            <Download size={15} className="text-gold" />
+            <span>{isExporting ? 'Generating PDF...' : 'Download Formatted PDF'}</span>
+          </button>
+
           <button
             onClick={handlePrint}
-            className="flex items-center gap-2 bg-gold hover:bg-gold/90 text-ink font-bold px-5 py-2.5 rounded-2xl text-xs transition-all shadow-md active:scale-98"
+            className="flex items-center gap-2 bg-paper2 hover:bg-paper3 text-ink font-bold px-4 py-2.5 rounded-2xl text-xs transition-all border border-black/10 shadow-xs active:scale-98"
           >
-            <Printer size={16} />
-            <span>Print / Save as PDF</span>
+            <Printer size={15} />
+            <span>Browser Print</span>
           </button>
         </div>
       </div>

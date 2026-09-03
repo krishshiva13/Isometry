@@ -1,12 +1,15 @@
 import React, { useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
-import { Search, Menu, X, User as UserIcon, LogOut, Shield, Plus, Sparkles, Bookmark, Brain, Flame, ChevronDown, BookOpen, Clock, Calendar, Scale, Zap } from 'lucide-react';
+import { Search, Menu, X, User as UserIcon, LogOut, Shield, Plus, Sparkles, Bookmark, Brain, Flame, ChevronDown, BookOpen, Clock, Calendar, Scale, Zap, Bell, BarChart2, BarChart3 } from 'lucide-react';
 import { cn } from '../lib/utils';
 import { authService } from '../services/authService';
 import { AuthModal } from './AuthModal';
 import { useAuth } from '../contexts/AuthContext';
 import { CreateFactModal } from './admin/CreateFactModal';
 import { AIContentCreatorModal } from './admin/AIContentCreatorModal';
+import { ThemeSwitcher } from './common/ThemeSwitcher';
+import { NotificationReminderModal } from './common/NotificationReminderModal';
+import { UserProfileProgressModal } from './UserProfileProgressModal';
 
 export const Header = () => {
   const [isMenuOpen, setIsMenuOpen] = useState(false);
@@ -15,6 +18,8 @@ export const Header = () => {
   const [isAuthModalOpen, setIsAuthModalOpen] = useState(false);
   const [isCreateModalOpen, setIsCreateModalOpen] = useState(false);
   const [isAICreatorOpen, setIsAICreatorOpen] = useState(false);
+  const [isReminderModalOpen, setIsReminderModalOpen] = useState(false);
+  const [isProgressModalOpen, setIsProgressModalOpen] = useState(false);
   const { user, isAdmin } = useAuth();
   const navigate = useNavigate();
 
@@ -142,6 +147,29 @@ export const Header = () => {
               <span className="hidden sm:inline">Search…</span>
             </button>
 
+            {/* 🌓 Theme Switcher (Paper vs Dark) */}
+            <ThemeSwitcher />
+
+            {/* 🔔 Daily Study & Quiz Push Notification Reminders */}
+            <button
+              onClick={() => setIsReminderModalOpen(true)}
+              className="flex items-center justify-center w-8 h-8 rounded-full bg-paper2 hover:bg-paper3 border border-black/10 text-ink3 hover:text-gold transition-colors"
+              title="Daily Study & Quiz Push Reminders (FCM)"
+              aria-label="Daily study reminders"
+            >
+              <Bell size={14} />
+            </button>
+
+            {/* 📊 User Learning Progress & Recharts Dashboard */}
+            <button
+              onClick={() => setIsProgressModalOpen(true)}
+              className="flex items-center gap-1.5 bg-paper2 hover:bg-gold/15 text-ink border border-black/10 rounded-full px-2.5 py-1.5 text-xs font-bold transition-all shadow-2xs"
+              title="View Learning Streaks & Performance Dashboard"
+            >
+              <Flame size={13} className="text-coral" />
+              <span className="hidden md:inline">Analytics</span>
+            </button>
+
             {isAdmin && (
               <>
                 <button 
@@ -193,6 +221,22 @@ export const Header = () => {
                         </div>
                       )}
                     </div>
+
+                    <button
+                      onClick={() => setIsProgressModalOpen(true)}
+                      className="w-full flex items-center gap-2 px-3 py-2 text-xs font-bold text-ink hover:bg-paper2 rounded-lg transition-colors text-left"
+                    >
+                      <BarChart3 size={14} className="text-gold" />
+                      <span>Progress & Analytics</span>
+                    </button>
+
+                    <button
+                      onClick={() => setIsReminderModalOpen(true)}
+                      className="w-full flex items-center gap-2 px-3 py-2 text-xs font-bold text-ink hover:bg-paper2 rounded-lg transition-colors text-left"
+                    >
+                      <Bell size={14} className="text-coral" />
+                      <span>Push Reminders</span>
+                    </button>
 
                     <Link
                       to="/notebook"
@@ -270,10 +314,55 @@ export const Header = () => {
         }}
       />
 
+      <NotificationReminderModal
+        isOpen={isReminderModalOpen}
+        onClose={() => setIsReminderModalOpen(false)}
+      />
+
+      <UserProfileProgressModal
+        isOpen={isProgressModalOpen}
+        onClose={() => setIsProgressModalOpen(false)}
+      />
+
       {/* Mobile Nav */}
       {isMenuOpen && (
         <div className="lg:hidden fixed inset-x-0 top-16 z-[199] bg-paper border-b border-black/10 p-4 shadow-xl fade-in max-h-[85vh] overflow-y-auto">
           <div className="flex flex-col gap-1">
+            {/* Mobile Theme & Quick Reminders Bar */}
+            <div className="flex items-center justify-between p-3 rounded-2xl bg-paper2 border border-black/5 mb-3">
+              <div className="flex items-center gap-2">
+                <span className="text-xs font-bold text-ink">Theme:</span>
+                <ThemeSwitcher variant="full" />
+              </div>
+
+              <button
+                onClick={() => {
+                  setIsMenuOpen(false);
+                  setIsReminderModalOpen(true);
+                }}
+                className="flex items-center gap-1.5 px-3 py-1.5 bg-white rounded-xl text-xs font-bold text-ink border border-black/10 shadow-2xs"
+              >
+                <Bell size={13} className="text-gold" />
+                <span>Reminders</span>
+              </button>
+            </div>
+
+            <button
+              onClick={() => {
+                setIsMenuOpen(false);
+                setIsProgressModalOpen(true);
+              }}
+              className="flex items-center justify-between p-3 rounded-2xl bg-gold/15 text-ink font-bold text-sm text-left mb-2 border border-gold/20"
+            >
+              <div className="flex items-center gap-2.5">
+                <BarChart3 size={17} className="text-gold" />
+                <span>Learning Analytics & Streaks</span>
+              </div>
+              <span className="text-[10px] font-mono bg-white px-2 py-0.5 rounded-full font-bold">
+                DASHBOARD
+              </span>
+            </button>
+
             {isAdmin && (
               <button
                 onClick={() => {

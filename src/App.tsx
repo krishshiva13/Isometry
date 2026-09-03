@@ -1,4 +1,4 @@
-import React, { Suspense, lazy } from 'react';
+import React, { Suspense, lazy, useEffect } from 'react';
 import { BrowserRouter as Router, Routes, Route } from 'react-router-dom';
 import { Header } from './components/Header';
 import { Footer } from './components/Footer';
@@ -6,6 +6,7 @@ import { AuthProvider } from './contexts/AuthContext';
 import { HelmetProvider } from 'react-helmet-async';
 import { AnalyticsTracker } from './components/AnalyticsTracker';
 import { OfflineToast } from './components/OfflineToast';
+import { notificationService } from './services/notificationService';
 
 const Home = lazy(() => import('./pages/Home').then(m => ({ default: m.Home })));
 const Article = lazy(() => import('./pages/Article').then(m => ({ default: m.Article })));
@@ -36,6 +37,28 @@ const LoadingSpinner = () => (
 );
 
 export default function App() {
+  useEffect(() => {
+    // 1. Initialize Theme from localStorage
+    try {
+      const savedTheme = localStorage.getItem('facthub_theme');
+      if (savedTheme === 'dark') {
+        document.documentElement.classList.add('dark');
+      } else {
+        document.documentElement.classList.remove('dark');
+      }
+    } catch {
+      // fallback
+    }
+
+    // 2. Check scheduled notifications if enabled
+    notificationService.checkAndTriggerScheduledReminders();
+    const interval = setInterval(() => {
+      notificationService.checkAndTriggerScheduledReminders();
+    }, 1000 * 60 * 30); // check every 30 mins
+
+    return () => clearInterval(interval);
+  }, []);
+
   return (
     <HelmetProvider>
       <Router>

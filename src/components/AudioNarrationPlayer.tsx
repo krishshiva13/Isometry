@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { Volume2, VolumeX, Play, Pause, RotateCcw, FastForward, Globe, Sparkles } from 'lucide-react';
+import { Volume2, VolumeX, Play, Pause, RotateCcw, FastForward, Globe, Sparkles, Settings2 } from 'lucide-react';
 import { cn } from '../lib/utils';
 
 interface AudioNarrationPlayerProps {
@@ -8,6 +8,7 @@ interface AudioNarrationPlayerProps {
   content: string;
   category?: string;
   hindiSummary?: string;
+  examRelevance?: string;
 }
 
 export const AudioNarrationPlayer: React.FC<AudioNarrationPlayerProps> = ({
@@ -15,7 +16,8 @@ export const AudioNarrationPlayer: React.FC<AudioNarrationPlayerProps> = ({
   excerpt,
   content,
   category,
-  hindiSummary
+  hindiSummary,
+  examRelevance,
 }) => {
   const [isPlaying, setIsPlaying] = useState(false);
   const [isPaused, setIsPaused] = useState(false);
@@ -24,12 +26,15 @@ export const AudioNarrationPlayer: React.FC<AudioNarrationPlayerProps> = ({
   const [isSupported, setIsSupported] = useState(true);
   const [availableVoices, setAvailableVoices] = useState<SpeechSynthesisVoice[]>([]);
   const [selectedVoice, setSelectedVoice] = useState<SpeechSynthesisVoice | null>(null);
+  const [showVoicePicker, setShowVoicePicker] = useState(false);
   const [progress, setProgress] = useState(0);
+  const [currentSentence, setCurrentSentence] = useState<string>('');
 
-  const utteranceRef = useRef<SpeechSynthesisUtterance | null>(null);
-  const progressIntervalRef = useRef<any>(null);
+  const sentencesRef = useRef<string[]>([]);
+  const currentSentenceIdxRef = useRef<number>(0);
+  const keepAliveIntervalRef = useRef<any>(null);
 
-  // Check speech synthesis support & load voices
+  // Initialize SpeechSynthesis support & voices
   useEffect(() => {
     if (typeof window === 'undefined' || !('speechSynthesis' in window)) {
       setIsSupported(false);
@@ -39,11 +44,20 @@ export const AudioNarrationPlayer: React.FC<AudioNarrationPlayerProps> = ({
     const updateVoices = () => {
       const voices = window.speechSynthesis.getVoices();
       setAvailableVoices(voices);
-      
-      // Auto-select preferred voice for chosen language
-      const match = voices.find(v => language === 'hi' ? v.lang.startsWith('hi') : (v.lang.startsWith('en') && (v.name.includes('Google') || v.name.includes('Natural') || v.name.includes('Samantha') || v.default)));
-      if (match) setSelectedVoice(match);
-      else if (voices.length > 0) setSelectedVoice(voices[0]);
+
+      // Find preferred natural voice
+      if (!selectedVoice && voices.length > 0) {
+        const langVoices = voices.filter(v => language === 'hi' ? v.lang.startsWith('hi') : v.lang.startsWith('en'));
+        const preferred = langVoices.find(v => 
+          v.name.includes('Google') || 
+          v.name.includes('Natural') || 
+          v.name.includes('Samantha') || 
+          v.name.includes('Daniel') ||
+          v.default
+        ) || langVoices[0] || voices[0];
+
+        setSelectedVoice(preferred);
+      }
     };
 
     updateVoices();
@@ -55,26 +69,87 @@ export const AudioNarrationPlayer: React.FC<AudioNarrationPlayerProps> = ({
       if (typeof window !== 'undefined' && 'speechSynthesis' in window) {
         window.speechSynthesis.cancel();
       }
-      if (progressIntervalRef.current) clearInterval(progressIntervalRef.current);
+      if (keepAliveIntervalRef.current) clearInterval(keepAliveIntervalRef.current);
     };
   }, [language]);
 
-  // Clean content of markdown tags for spoken audio
-  const getSpokenText = () => {
+  // Clean Markdown & format text into manageable sentences for SpeechSynthesis
+  const prepareSentences = (): string[] => {
+    let rawText = '';
     if (language === 'hi' && hindiSummary) {
-      return `${title}। ${hindiSummary}`;
+      rawText = `${title}। ${hindiSummary}`;
+    } else {
+      const cleanBody = content
+        .replace(/\[(gold|coral|teal|indigo|red|green|blue|slate|purple)\]/gi, '')
+        .replace(/\[\/(gold|coral|teal|indigo|red|green|blue|slate|purple)\]/gi, '')
+        .replace(/#{1,6}\s+/g, '')
+        .replace(/(\*\*|\*|__|_)/g, '')
+        .replace(/\[([^\]]+)\]\([^)]+\)/g, '$1')
+        .replace(/`{1,3}[^`]*`{1,3}/g, '')
+        .replace(/<[^>]*>/g, '');
+
+      rawText = `${title}. ${excerpt || ''}. ${cleanBody}`;
+      if (examRelevance) {
+        rawText += ` Key exam highlight: ${examRelevance}`;
+      }
     }
 
-    const cleanBody = content
-      .replace(/\[(gold|coral|teal|indigo|red|green|blue|slate|purple)\]/gi, '')
-      .replace(/\[\/(gold|coral|teal|indigo|red|green|blue|slate|purple)\]/gi, '')
-      .replace(/#{1,6}\s+/g, '')
-      .replace(/(\*\*|\*|__|_)/g, '')
-      .replace(/\[([^\]]+)\]\([^)]+\)/g, '$1')
-      .replace(/`{1,3}[^`]*`{1,3}/g, '')
-      .slice(0, 1800); // Speak first rich ~300 words smoothly
+    // Split by sentence boundaries (. ? ! । \n)
+    const rawSentences = rawText
+      .split(/(?<=[.?!।\n])\s+/)
+      .map(s => s.trim())
+      .filter(s => s.length > 0 && !s.startsWith('http'));
 
-    return `${title}. ${excerpt || ''}. ${cleanBody}`;
+    return rawSentences.length > 0 ? rawSentences : [title];
+  };
+
+  // Speak next chunk in sequence
+  const speakSentence = (index: number) => {
+    if (index >= sentencesRef.current.length) {
+      setIsPlaying(false);
+      setIsPaused(false);
+      setProgress(100);
+      setCurrentSentence('');
+      if (keepAliveIntervalRef.current) clearInterval(keepAliveIntervalRef.current);
+      return;
+    }
+
+    currentSentenceIdxRef.current = index;
+    const text = sentencesRef.current[index];
+    setCurrentSentence(text);
+    setProgress(Math.round((index / sentencesRef.current.length) * 100));
+
+    const utterance = new SpeechSynthesisUtterance(text);
+    utterance.rate = rate;
+    utterance.pitch = 1.0;
+
+    if (selectedVoice) {
+      utterance.voice = selectedVoice;
+      utterance.lang = selectedVoice.lang;
+    } else {
+      utterance.lang = language === 'hi' ? 'hi-IN' : 'en-US';
+    }
+
+    utterance.onend = () => {
+      // Small pause between sentences
+      setTimeout(() => {
+        if (currentSentenceIdxRef.current === index) {
+          speakSentence(index + 1);
+        }
+      }, 120);
+    };
+
+    utterance.onerror = (e) => {
+      console.warn('Speech synthesis segment warning:', e);
+      // Auto advance on non-fatal error
+      if (index + 1 < sentencesRef.current.length) {
+        speakSentence(index + 1);
+      } else {
+        setIsPlaying(false);
+      }
+    };
+
+    window.speechSynthesis.speak(utterance);
   };
 
   const handlePlay = () => {
@@ -88,56 +163,21 @@ export const AudioNarrationPlayer: React.FC<AudioNarrationPlayerProps> = ({
     }
 
     window.speechSynthesis.cancel();
+    sentencesRef.current = prepareSentences();
+    currentSentenceIdxRef.current = 0;
+    setIsPlaying(true);
+    setIsPaused(false);
 
-    const textToSpeak = getSpokenText();
-    const utterance = new SpeechSynthesisUtterance(textToSpeak);
-    utteranceRef.current = utterance;
+    // Chrome long-speech pause workaround: ping resume every 10s
+    if (keepAliveIntervalRef.current) clearInterval(keepAliveIntervalRef.current);
+    keepAliveIntervalRef.current = setInterval(() => {
+      if (window.speechSynthesis.speaking && !window.speechSynthesis.paused) {
+        window.speechSynthesis.pause();
+        window.speechSynthesis.resume();
+      }
+    }, 10000);
 
-    utterance.rate = rate;
-    utterance.pitch = 1.0;
-    
-    // Choose appropriate voice
-    const voiceToUse = availableVoices.find(v => 
-      language === 'hi' ? v.lang.startsWith('hi') : v.lang.startsWith('en')
-    ) || selectedVoice;
-
-    if (voiceToUse) {
-      utterance.voice = voiceToUse;
-      utterance.lang = voiceToUse.lang;
-    } else {
-      utterance.lang = language === 'hi' ? 'hi-IN' : 'en-US';
-    }
-
-    utterance.onstart = () => {
-      setIsPlaying(true);
-      setIsPaused(false);
-      setProgress(0);
-      
-      const estimatedDurationSec = (textToSpeak.split(' ').length / (150 * rate)) * 60;
-      const stepMs = 500;
-      const stepPercent = (stepMs / (estimatedDurationSec * 1000)) * 100;
-      
-      if (progressIntervalRef.current) clearInterval(progressIntervalRef.current);
-      progressIntervalRef.current = setInterval(() => {
-        setProgress(prev => (prev < 95 ? prev + stepPercent : 95));
-      }, stepMs);
-    };
-
-    utterance.onend = () => {
-      setIsPlaying(false);
-      setIsPaused(false);
-      setProgress(100);
-      if (progressIntervalRef.current) clearInterval(progressIntervalRef.current);
-    };
-
-    utterance.onerror = (e) => {
-      console.warn("Speech synthesis error", e);
-      setIsPlaying(false);
-      setIsPaused(false);
-      if (progressIntervalRef.current) clearInterval(progressIntervalRef.current);
-    };
-
-    window.speechSynthesis.speak(utterance);
+    speakSentence(0);
   };
 
   const handlePause = () => {
@@ -145,7 +185,6 @@ export const AudioNarrationPlayer: React.FC<AudioNarrationPlayerProps> = ({
     window.speechSynthesis.pause();
     setIsPaused(true);
     setIsPlaying(false);
-    if (progressIntervalRef.current) clearInterval(progressIntervalRef.current);
   };
 
   const handleStop = () => {
@@ -154,7 +193,9 @@ export const AudioNarrationPlayer: React.FC<AudioNarrationPlayerProps> = ({
     setIsPlaying(false);
     setIsPaused(false);
     setProgress(0);
-    if (progressIntervalRef.current) clearInterval(progressIntervalRef.current);
+    setCurrentSentence('');
+    currentSentenceIdxRef.current = 0;
+    if (keepAliveIntervalRef.current) clearInterval(keepAliveIntervalRef.current);
   };
 
   const toggleRate = () => {
@@ -162,12 +203,12 @@ export const AudioNarrationPlayer: React.FC<AudioNarrationPlayerProps> = ({
     const nextIdx = (rates.indexOf(rate) + 1) % rates.length;
     const newRate = rates[nextIdx];
     setRate(newRate);
-    
-    // If actively playing, restart with new rate
+
     if (isPlaying) {
-      handleStop();
+      const currentIdx = currentSentenceIdxRef.current;
+      window.speechSynthesis.cancel();
       setTimeout(() => {
-        handlePlay();
+        speakSentence(currentIdx);
       }, 50);
     }
   };
@@ -182,33 +223,48 @@ export const AudioNarrationPlayer: React.FC<AudioNarrationPlayerProps> = ({
     return null;
   }
 
+  const filteredVoices = availableVoices.filter(v => 
+    language === 'hi' ? v.lang.startsWith('hi') : v.lang.startsWith('en')
+  );
+
   return (
-    <div id="audio-narration-player" className="bg-gradient-to-r from-paper2 via-paper to-paper2 border border-black/10 rounded-2xl p-4 sm:p-5 shadow-sm my-6 transition-all">
-      <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 pb-3 border-b border-black/5">
+    <div 
+      id="audio-narration-player" 
+      className="bg-paper2 dark:bg-[#1a1a1a] border border-black/10 dark:border-white/10 rounded-2xl p-4 sm:p-5 shadow-sm my-6 transition-all"
+    >
+      <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 pb-3 border-b border-black/5 dark:border-white/10">
         <div className="flex items-center gap-2.5">
           <div className={cn(
             "w-9 h-9 rounded-xl flex items-center justify-center transition-all",
-            isPlaying ? "bg-gold text-ink shadow-md animate-pulse" : "bg-gold/15 text-gold"
+            isPlaying 
+              ? "bg-gold text-ink shadow-md animate-pulse" 
+              : "bg-gold/15 dark:bg-gold/20 text-gold"
           )}>
             <Volume2 size={18} />
           </div>
           <div>
             <div className="flex items-center gap-2">
-              <h4 className="text-sm font-bold text-ink">Audio Voiceover</h4>
-              <span className="text-[10px] font-bold px-1.5 py-0.5 rounded bg-gold/15 text-ink">AI Narrator</span>
+              <h4 className="text-sm font-bold text-ink dark:text-white">Audio Narration (TTS)</h4>
+              <span className="text-[10px] font-mono font-bold px-1.5 py-0.5 rounded bg-gold/15 text-gold">
+                SpeechSynthesis API
+              </span>
             </div>
-            <p className="text-xs text-ink3">Listen to this study capsule hands-free</p>
+            <p className="text-xs text-ink3 dark:text-neutral-400">
+              Listen to full verified facts and exam notes hands-free
+            </p>
           </div>
         </div>
 
-        {/* Language selector & Speed */}
+        {/* Language selector & Speed & Voice Settings */}
         <div className="flex items-center gap-2 self-end sm:self-auto">
-          <div className="flex items-center bg-paper3 rounded-lg p-0.5 border border-black/5">
+          <div className="flex items-center bg-paper3 dark:bg-[#252525] rounded-lg p-0.5 border border-black/5 dark:border-white/10">
             <button
               onClick={() => toggleLanguage('en')}
               className={cn(
                 "px-2 py-1 rounded text-xs font-bold transition-all",
-                language === 'en' ? "bg-white text-ink shadow-xs" : "text-ink3 hover:text-ink"
+                language === 'en' 
+                  ? "bg-white dark:bg-[#121212] text-ink dark:text-white shadow-2xs" 
+                  : "text-ink3 dark:text-neutral-400 hover:text-ink dark:hover:text-white"
               )}
             >
               EN
@@ -217,7 +273,9 @@ export const AudioNarrationPlayer: React.FC<AudioNarrationPlayerProps> = ({
               onClick={() => toggleLanguage('hi')}
               className={cn(
                 "px-2 py-1 rounded text-xs font-bold transition-all",
-                language === 'hi' ? "bg-white text-ink shadow-xs" : "text-ink3 hover:text-ink"
+                language === 'hi' 
+                  ? "bg-white dark:bg-[#121212] text-ink dark:text-white shadow-2xs" 
+                  : "text-ink3 dark:text-neutral-400 hover:text-ink dark:hover:text-white"
               )}
             >
               हिन्दी
@@ -226,16 +284,56 @@ export const AudioNarrationPlayer: React.FC<AudioNarrationPlayerProps> = ({
 
           <button
             onClick={toggleRate}
-            className="px-2.5 py-1 rounded-lg bg-paper3 hover:bg-black/5 text-xs font-mono font-bold text-ink border border-black/5 transition-all"
+            className="px-2.5 py-1 rounded-lg bg-paper3 dark:bg-[#252525] hover:bg-black/5 dark:hover:bg-white/5 text-xs font-mono font-bold text-ink dark:text-white border border-black/5 dark:border-white/10 transition-all"
             title="Change Narration Speed"
           >
             {rate}x
           </button>
+
+          {filteredVoices.length > 1 && (
+            <button
+              onClick={() => setShowVoicePicker(!showVoicePicker)}
+              className="p-1.5 rounded-lg bg-paper3 dark:bg-[#252525] text-ink3 dark:text-neutral-400 hover:text-ink dark:hover:text-white border border-black/5 dark:border-white/10 transition-all"
+              title="Select Voice"
+            >
+              <Settings2 size={14} />
+            </button>
+          )}
         </div>
       </div>
 
+      {/* Voice Picker Dropdown */}
+      {showVoicePicker && filteredVoices.length > 0 && (
+        <div className="py-2 border-b border-black/5 dark:border-white/10 mb-3 animate-in fade-in duration-150">
+          <label className="text-[11px] font-bold text-ink3 dark:text-neutral-400 block mb-1">
+            Select Browser Voice:
+          </label>
+          <select
+            value={selectedVoice?.name || ''}
+            onChange={(e) => {
+              const v = availableVoices.find(voice => voice.name === e.target.value);
+              if (v) setSelectedVoice(v);
+            }}
+            className="w-full text-xs p-1.5 bg-paper dark:bg-[#202020] border border-black/10 dark:border-white/10 rounded-lg text-ink dark:text-white"
+          >
+            {filteredVoices.map(voice => (
+              <option key={voice.name} value={voice.name}>
+                {voice.name} ({voice.lang})
+              </option>
+            ))}
+          </select>
+        </div>
+      )}
+
+      {/* Spoken sentence display */}
+      {currentSentence && (
+        <div className="my-2 p-2 bg-paper dark:bg-[#222] rounded-xl border border-black/5 dark:border-white/5 text-xs font-serif italic text-ink2 dark:text-neutral-300">
+          "{currentSentence}"
+        </div>
+      )}
+
       {/* Progress bar */}
-      <div className="w-full bg-black/5 h-1.5 rounded-full overflow-hidden my-3">
+      <div className="w-full bg-black/5 dark:bg-white/10 h-1.5 rounded-full overflow-hidden my-3">
         <div 
           className="bg-gold h-full transition-all duration-300 rounded-full"
           style={{ width: `${progress}%` }}
@@ -248,7 +346,7 @@ export const AudioNarrationPlayer: React.FC<AudioNarrationPlayerProps> = ({
           {isPlaying ? (
             <button
               onClick={handlePause}
-              className="flex items-center gap-1.5 bg-ink text-paper px-4 py-2 rounded-xl text-xs font-bold hover:bg-black transition-all shadow-sm"
+              className="flex items-center gap-1.5 bg-ink text-paper dark:bg-white dark:text-black px-4 py-2 rounded-xl text-xs font-bold hover:opacity-90 transition-all shadow-sm"
             >
               <Pause size={14} />
               <span>Pause</span>
@@ -266,7 +364,7 @@ export const AudioNarrationPlayer: React.FC<AudioNarrationPlayerProps> = ({
           {(isPlaying || isPaused || progress > 0) && (
             <button
               onClick={handleStop}
-              className="p-2 rounded-xl hover:bg-black/5 text-ink3 hover:text-ink transition-all"
+              className="p-2 rounded-xl hover:bg-black/5 dark:hover:bg-white/5 text-ink3 dark:text-neutral-400 hover:text-ink dark:hover:text-white transition-all"
               title="Stop & Reset"
             >
               <RotateCcw size={14} />
@@ -284,7 +382,7 @@ export const AudioNarrationPlayer: React.FC<AudioNarrationPlayerProps> = ({
             <span className="w-1 h-4 bg-gold rounded-full animate-bounce" style={{ animationDelay: '225ms' }} />
           </div>
         ) : (
-          <span className="text-[11px] text-ink3 font-medium">
+          <span className="text-[11px] text-ink3 dark:text-neutral-400 font-medium">
             {language === 'hi' ? 'द्विभाषी अध्ययन विवरण' : 'Exam-Ready High-Yield Audio'}
           </span>
         )}
