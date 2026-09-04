@@ -29,6 +29,7 @@ const InteractiveTimeline = lazy(() => import('./pages/InteractiveTimeline').the
 const TopicComparison = lazy(() => import('./pages/TopicComparison').then(m => ({ default: m.TopicComparison })));
 const DailyStudySheet = lazy(() => import('./pages/DailyStudySheet').then(m => ({ default: m.DailyStudySheet })));
 const CommunitySubmit = lazy(() => import('./pages/CommunitySubmit').then(m => ({ default: m.CommunitySubmit })));
+const SEOToolkit = lazy(() => import('./pages/SEOToolkit').then(m => ({ default: m.SEOToolkit })));
 
 const LoadingSpinner = () => (
   <div className="min-h-[60vh] flex items-center justify-center">
@@ -90,6 +91,7 @@ export default function App() {
                   <Route path="/compare" element={<TopicComparison />} />
                   <Route path="/daily-study-sheet" element={<DailyStudySheet />} />
                   <Route path="/submit-fact" element={<CommunitySubmit />} />
+                  <Route path="/seo-toolkit" element={<SEOToolkit />} />
                 </Routes>
               </Suspense>
             </main>

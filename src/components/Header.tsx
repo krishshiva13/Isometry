@@ -55,6 +55,7 @@ export const Header = () => {
     { name: 'Date Explorer', path: '/calendar', emoji: '📅', desc: 'On this day in history' },
     { name: 'Topic Comparator', path: '/compare', emoji: '⚖️', desc: 'Side-by-side analysis' },
     { name: 'Daily Quiz', path: '/quiz', emoji: '⚡', desc: 'Test your general knowledge' },
+    { name: 'Google SEO Toolkit', path: '/seo-toolkit', emoji: '🚀', desc: 'Page 1 keyword & SERP rank suite' },
   ];
 
   return (
@@ -297,6 +298,14 @@ export const Header = () => {
                             <Sparkles size={15} className="text-gold" />
                             <span>AI Studio Generator</span>
                           </button>
+                          <Link
+                            to="/seo-toolkit"
+                            onClick={() => setIsProfileOpen(false)}
+                            className="w-full flex items-center gap-2.5 px-3 py-2 text-xs font-bold text-emerald-700 hover:bg-emerald-50 rounded-xl transition-colors text-left"
+                          >
+                            <span>🚀</span>
+                            <span>Google Page 1 SEO Suite</span>
+                          </Link>
                         </>
                       )}
 

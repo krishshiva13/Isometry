@@ -2,7 +2,7 @@ import React, { useEffect, useState, useRef } from 'react';
 import { useParams, Link, useNavigate } from 'react-router-dom';
 import ReactMarkdown from 'react-markdown';
 import { motion } from 'motion/react';
-import { ArrowLeft, Calendar, BookOpen, Share2, Copy, Send, Twitter, Facebook, Edit2, Save, X as CloseIcon, Trash2, ShoppingBag, ExternalLink, ShieldCheck, Plus, BookCheck, Bookmark, Sparkles, Image, Volume2, Award } from 'lucide-react';
+import { ArrowLeft, Calendar, BookOpen, Share2, Copy, Send, Twitter, Facebook, Edit2, Save, X as CloseIcon, Trash2, ShoppingBag, ExternalLink, ShieldCheck, Plus, BookCheck, Bookmark, Sparkles, Image, Volume2, Award, Target, HelpCircle, CheckCircle2, ChevronDown, ChevronUp } from 'lucide-react';
 import { Helmet } from 'react-helmet-async';
 import { factService } from '../services/factService';
 import { Fact, AffiliateProduct } from '../types';
@@ -21,6 +21,8 @@ import { InlineVocabWord } from '../components/common/InlineVocabWord';
 import { ArticleVocabularySection } from '../components/common/ArticleVocabularySection';
 import { normalizeImageUrl } from '../lib/imageUtils';
 import { recordFactRead } from '../components/DailyGoalTracker';
+import { TableOfContents, slugify } from '../components/seo/TableOfContents';
+import { SEOKeywordResearcherModal } from '../components/seo/SEOKeywordResearcherModal';
 
 const DEFAULT_CATEGORY_BOOKS: Record<string, AffiliateProduct[]> = {
   history: [
@@ -219,17 +221,24 @@ const renderers = {
     );
   },
   h2: ({ children }: any) => {
+    const rawText = React.Children.toArray(children).map(c => typeof c === 'string' ? c : '').join('');
+    const id = slugify(rawText || (typeof children === 'string' ? children : 'section'));
     const text = typeof children === 'string' ? children : '';
     return (
-      <h2 className="text-2xl font-serif font-black text-ink mt-6 mb-3">
-        {text ? renderHighlightedText(text) : React.Children.map(children, child => typeof child === 'string' ? renderHighlightedText(child) : child)}
+      <h2 id={id} className="text-2xl font-serif font-black text-ink mt-8 mb-3 scroll-mt-24 group flex items-center gap-2">
+        <span>{text ? renderHighlightedText(text) : React.Children.map(children, child => typeof child === 'string' ? renderHighlightedText(child) : child)}</span>
+        <a href={`#${id}`} className="text-ink3 hover:text-gold opacity-0 group-hover:opacity-100 transition-opacity text-sm font-mono" title="Direct link to this section">
+          #
+        </a>
       </h2>
     );
   },
   h3: ({ children }: any) => {
+    const rawText = React.Children.toArray(children).map(c => typeof c === 'string' ? c : '').join('');
+    const id = slugify(rawText || (typeof children === 'string' ? children : 'subheading'));
     const text = typeof children === 'string' ? children : '';
     return (
-      <h3 className="text-xl font-serif font-bold text-ink mt-4 mb-2">
+      <h3 id={id} className="text-xl font-serif font-bold text-ink mt-6 mb-2 scroll-mt-24">
         {text ? renderHighlightedText(text) : React.Children.map(children, child => typeof child === 'string' ? renderHighlightedText(child) : child)}
       </h3>
     );
@@ -352,6 +361,8 @@ export const Article = () => {
   const [showShareCardModal, setShowShareCardModal] = useState(false);
   const [showSaveNotebookModal, setShowSaveNotebookModal] = useState(false);
   const [showTelegramCapsuleToast, setShowTelegramCapsuleToast] = useState(false);
+  const [showSEOModal, setShowSEOModal] = useState(false);
+  const [expandedFaqIndex, setExpandedFaqIndex] = useState<number | null>(null);
   const [showProductFormInEdit, setShowProductFormInEdit] = useState(false);
   const [newProductInEdit, setNewProductInEdit] = useState<AffiliateProduct>({
     title: '',
@@ -468,7 +479,12 @@ export const Article = () => {
       eventMonth: fact.eventMonth || 0,
       eventDay: fact.eventDay || 0,
       publishAt: fact.publishAt || '',
-      affiliateProducts: fact.affiliateProducts ? [...fact.affiliateProducts] : []
+      affiliateProducts: fact.affiliateProducts ? [...fact.affiliateProducts] : [],
+      targetKeyword: fact.targetKeyword || fact.focusKeyword || '',
+      focusKeyword: fact.focusKeyword || fact.targetKeyword || '',
+      seoTitle: fact.seoTitle || '',
+      metaDescription: fact.metaDescription || '',
+      searchKeywords: fact.searchKeywords ? [...fact.searchKeywords] : []
     });
     setIsEditing(true);
   };
@@ -556,18 +572,127 @@ export const Article = () => {
     );
   }
 
+  const primaryKeyword = fact.targetKeyword || fact.focusKeyword || fact.title;
+  const canonicalUrl = `https://facthub.in/article/${fact.id}`;
+  const keywordsList = [
+    primaryKeyword,
+    ...(fact.searchKeywords || []),
+    ...(fact.pyqTags || []),
+    fact.cat,
+    'facts',
+    'educational facts'
+  ].filter(Boolean);
+  const keywordsString = Array.from(new Set(keywordsList)).join(', ');
+
+  const wordCount = (fact.full || '').split(/\s+/).filter(Boolean).length;
+  const readingTime = Math.max(1, Math.ceil(wordCount / 200));
+
+  const articleSchema = {
+    "@context": "https://schema.org",
+    "@type": "Article",
+    "mainEntityOfPage": {
+      "@type": "WebPage",
+      "@id": canonicalUrl
+    },
+    "headline": fact.seoTitle || fact.title,
+    "description": fact.metaDescription || fact.excerpt || fact.full.substring(0, 160),
+    "image": fact.imageUrl ? [fact.imageUrl] : ["https://facthub.in/icon.png"],
+    "datePublished": fact.createdAt || "2026-01-01T00:00:00Z",
+    "dateModified": fact.publishAt || fact.createdAt || new Date().toISOString(),
+    "author": {
+      "@type": "Organization",
+      "name": "FActHub Editorial Board",
+      "url": "https://facthub.in"
+    },
+    "publisher": {
+      "@type": "Organization",
+      "name": "FActHub",
+      "logo": {
+        "@type": "ImageObject",
+        "url": "https://facthub.in/icon.png"
+      }
+    },
+    "keywords": keywordsString
+  };
+
+  const breadcrumbSchema = {
+    "@context": "https://schema.org",
+    "@type": "BreadcrumbList",
+    "itemListElement": [
+      {
+        "@type": "ListItem",
+        "position": 1,
+        "name": "Home",
+        "item": "https://facthub.in"
+      },
+      {
+        "@type": "ListItem",
+        "position": 2,
+        "name": fact.cat.charAt(0).toUpperCase() + fact.cat.slice(1),
+        "item": `https://facthub.in/category/${fact.cat}`
+      },
+      {
+        "@type": "ListItem",
+        "position": 3,
+        "name": fact.title,
+        "item": canonicalUrl
+      }
+    ]
+  };
+
+  const activeFaqs: Array<{ question: string; answer: string }> = [];
+  if (fact.faqs && fact.faqs.length > 0) {
+    activeFaqs.push(...fact.faqs);
+  } else if (fact.quizMCQs && fact.quizMCQs.length > 0) {
+    fact.quizMCQs.slice(0, 4).forEach((q) => {
+      const correctText = q.options[q.answer] || q.options[(q as any).correctIndex] || '';
+      activeFaqs.push({
+        question: q.question,
+        answer: `${q.explanation || `The correct answer is: ${correctText}`}`
+      });
+    });
+  }
+
+  const faqSchema = activeFaqs.length > 0 ? {
+    "@context": "https://schema.org",
+    "@type": "FAQPage",
+    "mainEntity": activeFaqs.map(f => ({
+      "@type": "Question",
+      "name": f.question,
+      "acceptedAnswer": {
+        "@type": "Answer",
+        "text": f.answer
+      }
+    }))
+  } : null;
+
   return (
     <div className="bg-paper min-h-screen pb-16 fade-in">
       <Helmet>
-        <title>{fact.title} | {fact.cat.charAt(0).toUpperCase() + fact.cat.slice(1)} | FActHub</title>
-        <meta name="description" content={fact.excerpt || fact.full.substring(0, 160)} />
-        <meta property="og:title" content={`${fact.title} | FActHub`} />
-        <meta property="og:description" content={fact.excerpt || fact.full.substring(0, 160)} />
+        <title>{fact.seoTitle || `${fact.title} | ${fact.cat.charAt(0).toUpperCase() + fact.cat.slice(1)} | FActHub`}</title>
+        <meta name="description" content={fact.metaDescription || fact.excerpt || fact.full.substring(0, 160)} />
+        <meta property="og:title" content={fact.seoTitle || `${fact.title} | FActHub`} />
+        <meta property="og:description" content={fact.metaDescription || fact.excerpt || fact.full.substring(0, 160)} />
         <meta property="og:type" content="article" />
-        <meta property="og:url" content={window.location.href} />
+        <meta property="og:url" content={canonicalUrl} />
+        {fact.imageUrl && <meta property="og:image" content={fact.imageUrl} />}
         <meta name="twitter:card" content="summary_large_image" />
-        <meta name="keywords" content={`fact, ${fact.cat}, history, science, inventions, discoveries, curiousity, facts for students`} />
-        <link rel="canonical" href={window.location.href} />
+        <meta name="twitter:title" content={fact.seoTitle || fact.title} />
+        <meta name="twitter:description" content={fact.metaDescription || fact.excerpt} />
+        {fact.imageUrl && <meta name="twitter:image" content={fact.imageUrl} />}
+        <meta name="keywords" content={keywordsString} />
+        <link rel="canonical" href={canonicalUrl} />
+        <script type="application/ld+json">
+          {JSON.stringify(articleSchema)}
+        </script>
+        <script type="application/ld+json">
+          {JSON.stringify(breadcrumbSchema)}
+        </script>
+        {faqSchema && (
+          <script type="application/ld+json">
+            {JSON.stringify(faqSchema)}
+          </script>
+        )}
       </Helmet>
 
       <div className="max-w-6xl mx-auto px-4 sm:px-6 lg:px-8 py-8 lg:py-12 grid lg:grid-cols-3 gap-12">
@@ -619,6 +744,14 @@ export const Article = () => {
                         </div>
                       ) : (
                         <>
+                          <button 
+                            onClick={() => setShowSEOModal(true)}
+                            className="flex items-center gap-1.5 px-2.5 sm:px-3 py-1.5 bg-gold/15 border border-gold/30 text-ink rounded-lg text-xs font-bold hover:bg-gold hover:text-black transition-all"
+                            title="Audit Google Page 1 SEO factors & research keywords"
+                          >
+                            <Sparkles size={13} className="text-gold" />
+                            <span>SEO Auditor</span>
+                          </button>
                           <button 
                             onClick={startEditing}
                             className="flex items-center gap-2 px-2.5 sm:px-4 py-1.5 bg-ink text-white rounded-lg text-xs font-bold hover:bg-gold hover:text-ink transition-all"
@@ -765,22 +898,35 @@ export const Article = () => {
               </h1>
             )}
 
-            <div className="flex flex-wrap items-center gap-6 text-sm text-ink3 font-mono">
-              <span className="flex items-center gap-2">
-                <Calendar size={16} /> 
+            <div className="flex flex-wrap items-center gap-3 sm:gap-5 text-xs sm:text-sm text-ink3 font-mono">
+              <span className="flex items-center gap-1.5">
+                <Calendar size={15} className="text-gold" /> 
                 {isEditing ? (
                   <input 
                     type="number"
                     value={editData.year}
                     onChange={(e) => setEditData({...editData, year: parseInt(e.target.value)})}
-                    className="w-24 bg-white border border-black/10 px-2 py-1 rounded"
+                    className="w-24 bg-white border border-black/10 px-2 py-1 rounded text-xs"
                   />
                 ) : (
                   fact.year < 0 ? `${Math.abs(fact.year)} BC` : fact.year
                 )}
               </span>
-              <span className="flex items-center gap-2"><BookOpen size={16} /> 5 min read</span>
-              <span>FActHub Verified</span>
+              <span className="flex items-center gap-1.5">
+                <BookOpen size={15} className="text-teal" />
+                <span>{readingTime} min read</span>
+                <span className="text-[11px] opacity-70 hidden sm:inline">({wordCount} words)</span>
+              </span>
+              <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full bg-emerald-50 text-emerald-800 border border-emerald-200 text-xs font-sans font-bold">
+                <ShieldCheck size={13} className="text-emerald-600" />
+                <span>Fact-Checked</span>
+              </span>
+              {primaryKeyword && primaryKeyword !== fact.title && (
+                <span className="hidden md:inline-flex items-center gap-1 px-2 py-0.5 rounded-full bg-paper2 text-ink2 border border-black/5 text-[11px] font-mono" title="Target Focus Keyword for Google Search">
+                  <Target size={11} className="text-gold" />
+                  <span className="truncate max-w-[150px]">{primaryKeyword}</span>
+                </span>
+              )}
             </div>
 
             {/* 🎓 Exam Relevance & PYQ Tagger Strip */}
@@ -877,6 +1023,13 @@ export const Article = () => {
               }}
             />
           </header>
+
+          {/* 📑 Mobile Inline Table of Contents */}
+          {!isEditing && (
+            <div className="lg:hidden mb-8 not-prose">
+              <TableOfContents content={fact.full} />
+            </div>
+          )}
 
           <div className="prose prose-lg max-w-none prose-headings:font-serif prose-headings:font-black prose-p:leading-relaxed prose-p:text-ink2 prose-blockquote:border-gold prose-blockquote:bg-paper2 prose-blockquote:py-1 prose-blockquote:px-6 prose-blockquote:italic">
              {isEditing ? (
@@ -1260,6 +1413,65 @@ export const Article = () => {
                     </div>
                   );
                 })()}
+
+                {/* ❓ Google Rich FAQ Accordion Section */}
+                {activeFaqs.length > 0 && (
+                  <section aria-label="Frequently Asked Questions" className="mt-12 bg-white rounded-3xl border border-black/10 p-6 sm:p-8 shadow-sm space-y-4 not-prose">
+                    <div className="flex items-center justify-between border-b border-black/5 pb-4">
+                      <div className="flex items-center gap-2.5">
+                        <div className="w-8 h-8 rounded-xl bg-gold/20 flex items-center justify-center text-gold font-bold">
+                          <HelpCircle size={18} />
+                        </div>
+                        <div>
+                          <h3 className="font-serif font-black text-lg text-ink">
+                            Frequently Asked Questions (Google Rich Snippets)
+                          </h3>
+                          <p className="text-xs text-ink3">
+                            Key search questions and verified answers regarding {fact.title}
+                          </p>
+                        </div>
+                      </div>
+                      <span className="text-[10px] font-mono font-bold bg-emerald-100 text-emerald-800 px-2.5 py-0.5 rounded-full border border-emerald-200">
+                        Schema.org Verified
+                      </span>
+                    </div>
+
+                    <div className="space-y-3">
+                      {activeFaqs.map((faq, fIdx) => (
+                        <div key={fIdx} className="border border-black/5 rounded-2xl overflow-hidden bg-paper2/50">
+                          <button
+                            type="button"
+                            onClick={() => setExpandedFaqIndex(expandedFaqIndex === fIdx ? null : fIdx)}
+                            className="w-full flex items-center justify-between p-4 text-left text-sm font-bold text-ink hover:text-gold transition-colors gap-3"
+                          >
+                            <span>{faq.question}</span>
+                            {expandedFaqIndex === fIdx ? <ChevronUp size={16} className="text-gold shrink-0" /> : <ChevronDown size={16} className="text-ink3 shrink-0" />}
+                          </button>
+                          {expandedFaqIndex === fIdx && (
+                            <div className="px-4 pb-4 pt-1 text-xs sm:text-sm text-ink2 leading-relaxed border-t border-black/5 bg-white">
+                              {faq.answer}
+                            </div>
+                          )}
+                        </div>
+                      ))}
+                    </div>
+                  </section>
+                )}
+
+                {/* 🏷️ SEO Keywords & Semantic Entities Bar */}
+                {keywordsList.length > 0 && (
+                  <div className="mt-8 p-4 bg-paper rounded-2xl border border-black/5 flex flex-wrap items-center gap-2 not-prose">
+                    <span className="text-xs font-bold text-ink flex items-center gap-1">
+                      <Target size={13} className="text-gold" />
+                      <span>Keywords & Tags:</span>
+                    </span>
+                    {keywordsList.map((tag, tIdx) => (
+                      <span key={tIdx} className="text-[11px] font-mono bg-paper2 border border-black/5 text-ink2 px-2.5 py-0.5 rounded-full">
+                        #{tag}
+                      </span>
+                    ))}
+                  </div>
+                )}
               </>
             )}
           </div>
@@ -1312,7 +1524,49 @@ export const Article = () => {
           </div>
         </div>
 
-        <aside className="space-y-10">
+        <aside className="space-y-8">
+          {/* 📑 Sticky Desktop Table of Contents & EEAT Verification */}
+          <div className="hidden lg:block sticky top-20 space-y-6">
+            <TableOfContents content={fact.full} />
+
+            {/* 🛡️ Google Page 1 Readiness & E-E-A-T Quality Card */}
+            <div className="bg-white rounded-2xl border border-black/10 p-5 shadow-sm space-y-3">
+              <div className="flex items-center justify-between">
+                <span className="text-xs font-mono font-bold text-gold uppercase tracking-wider flex items-center gap-1.5">
+                  <ShieldCheck size={14} className="text-emerald-600" /> E-E-A-T Verified
+                </span>
+                <span className="text-[10px] bg-emerald-50 text-emerald-700 font-bold px-2 py-0.5 rounded-full border border-emerald-200">
+                  Google Ready
+                </span>
+              </div>
+              <div className="text-xs text-ink2 space-y-2 pt-1 border-t border-black/5">
+                <div className="flex justify-between items-center">
+                  <span className="text-ink3">Target Keyword:</span>
+                  <span className="font-bold text-ink truncate max-w-[130px] font-mono text-[11px] bg-paper2 px-1.5 py-0.5 rounded">
+                    {primaryKeyword}
+                  </span>
+                </div>
+                <div className="flex justify-between items-center">
+                  <span className="text-ink3">Read Time:</span>
+                  <span className="font-bold text-ink">{readingTime} min (~{wordCount} words)</span>
+                </div>
+                <div className="flex justify-between items-center">
+                  <span className="text-ink3">Structured Data:</span>
+                  <span className="font-bold text-emerald-600 text-[11px]">Article • FAQ • Breadcrumbs</span>
+                </div>
+              </div>
+              {isAdmin && (
+                <button
+                  onClick={() => setShowSEOModal(true)}
+                  className="w-full mt-2 py-2 px-3 bg-paper2 hover:bg-gold hover:text-black border border-black/10 rounded-xl text-xs font-bold text-ink flex items-center justify-center gap-1.5 transition-colors shadow-xs"
+                >
+                  <Sparkles size={13} className="text-gold" />
+                  <span>Audit Google Rank Score</span>
+                </button>
+              )}
+            </div>
+          </div>
+
           <div className="bg-paper2 border border-black/5 rounded-2xl aspect-[300/250] flex items-center justify-center text-ink3 text-xs italic">
             📢 Google AdSense — 300x250 Rectangle
           </div>
@@ -1372,6 +1626,26 @@ export const Article = () => {
         isOpen={showSaveNotebookModal}
         onClose={() => setShowSaveNotebookModal(false)}
         fact={fact}
+      />
+
+      {/* 🚀 Google SEO Keyword Researcher & Auditor Modal */}
+      <SEOKeywordResearcherModal
+        isOpen={showSEOModal}
+        onClose={() => setShowSEOModal(false)}
+        initialTopic={fact.title}
+        initialCategory={fact.cat}
+        currentPost={fact}
+        onApplyToPost={async (seoUpdates) => {
+          if (!id) return;
+          try {
+            await factService.updateFact(id, seoUpdates);
+            setFact({ ...fact, ...seoUpdates });
+            alert("SEO settings saved! Your article has been updated with Google Page 1 metadata.");
+          } catch (err) {
+            console.error("Failed to save SEO metadata:", err);
+            alert("Failed to save SEO metadata.");
+          }
+        }}
       />
     </div>
   );

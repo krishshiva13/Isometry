@@ -66,6 +66,56 @@ export interface Fact {
   factCheckSummary?: string;
   verificationStatus?: string;
   trustedSources?: Array<{ title: string; uri: string }>;
+  // Rich SEO & Google Page 1 Ranking Metadata
+  seoTitle?: string;
+  metaDescription?: string;
+  canonicalUrl?: string;
+  focusKeyword?: string;
+  secondaryKeywords?: string[];
+  faqs?: Array<{ question: string; answer: string }>;
+  searchIntent?: 'Informational' | 'Educational' | 'Commercial' | 'Exam Prep' | string;
+  seoScore?: number;
+  estimatedReadTimeMinutes?: number;
+}
+
+export interface SEOKeywordResearchResult {
+  topic: string;
+  focusKeyword: string;
+  searchIntent: 'Informational' | 'Educational' | 'Commercial' | 'Exam Prep' | string;
+  searchVolumeTier: 'Very High (100k+)' | 'High (50k-100k)' | 'Medium (10k-50k)' | 'Emerging Trend (<10k)';
+  competitionLevel: 'Low' | 'Medium' | 'High';
+  difficultyScore: number; // 0 - 100
+  secondaryKeywords: string[];
+  longTailKeywords: string[];
+  peopleAlsoAsk: Array<{ question: string; snippetAnswer: string; targetHeading: 'H2' | 'H3' }>;
+  titleTagIdeas: Array<{ title: string; characterCount: number; clickHook: string }>;
+  metaDescription: string;
+  suggestedTags: string[];
+  faqSchema: Array<{ question: string; answer: string }>;
+  contentOutline: Array<{ headingLevel: 'H1' | 'H2' | 'H3'; text: string; rationale: string }>;
+  rankingTips: string[];
+}
+
+export interface SEOAuditCheckItem {
+  id: string;
+  label: string;
+  status: 'pass' | 'warning' | 'fail';
+  scoreImpact: number;
+  currentValue?: string | number;
+  recommendedValue: string;
+  explanation: string;
+}
+
+export interface SEOAuditReport {
+  overallScore: number; // 0 - 100
+  rating: 'Poor' | 'Average' | 'Good' | 'Excellent (Page 1 Ready)';
+  checks: SEOAuditCheckItem[];
+  criticalFixes: string[];
+  recommendedImprovements: string[];
+  wordCount: number;
+  readingTimeMinutes: number;
+  keywordDensity: number;
+  headingsCount: { h1: number; h2: number; h3: number };
 }
 
 export interface SavedFactNote {
