@@ -171,6 +171,10 @@ service cloud.firestore {
       allow list: if isAdmin();
       allow create: if isSignedIn() && request.auth.uid == uid && isValidUserProfile(incoming());
       allow update: if isSignedIn() && request.auth.uid == uid && isValidUserProfile(incoming());
+
+      match /bookmarks/{bookmarkId} {
+        allow read, write: if isSignedIn() && request.auth.uid == uid;
+      }
     }
   }
 }

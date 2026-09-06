@@ -23,6 +23,7 @@ const Magazine = lazy(() => import('./pages/Magazine').then(m => ({ default: m.M
 const AdminAIPanel = lazy(() => import('./pages/AdminAIPanel').then(m => ({ default: m.AdminAIPanel })));
 const DailyStreakChallenge = lazy(() => import('./pages/DailyStreakChallenge').then(m => ({ default: m.DailyStreakChallenge })));
 const StudentNotebook = lazy(() => import('./pages/StudentNotebook').then(m => ({ default: m.StudentNotebook })));
+const Bookmarks = lazy(() => import('./pages/Bookmarks').then(m => ({ default: m.Bookmarks })));
 const Flashcards = lazy(() => import('./pages/Flashcards').then(m => ({ default: m.Flashcards })));
 const CalendarExplorer = lazy(() => import('./pages/CalendarExplorer').then(m => ({ default: m.CalendarExplorer })));
 const InteractiveTimeline = lazy(() => import('./pages/InteractiveTimeline').then(m => ({ default: m.InteractiveTimeline })));
@@ -85,6 +86,7 @@ export default function App() {
                   <Route path="/admin/ai-creator" element={<AdminAIPanel />} />
                   <Route path="/daily-streak" element={<DailyStreakChallenge />} />
                   <Route path="/notebook" element={<StudentNotebook />} />
+                  <Route path="/bookmarks" element={<Bookmarks />} />
                   <Route path="/flashcards" element={<Flashcards />} />
                   <Route path="/calendar" element={<CalendarExplorer />} />
                   <Route path="/timeline" element={<InteractiveTimeline />} />

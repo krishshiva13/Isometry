@@ -295,3 +295,17 @@ export interface AIScannerStatus {
   lastScanTopic?: string;
 }
 
+export interface UserBookmark {
+  id: string;
+  userId: string;
+  factId: string;
+  factTitle: string;
+  factEmoji?: string;
+  factCat: string;
+  factYear?: number;
+  factExcerpt?: string;
+  factImageUrl?: string;
+  bookmarkedAt: string;
+}
+
+

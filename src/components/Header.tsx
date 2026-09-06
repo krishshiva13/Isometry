@@ -48,6 +48,7 @@ export const Header = () => {
   ];
 
   const studyTools = [
+    { name: 'Bookmarks', path: '/bookmarks', emoji: '🔖', desc: 'Your saved favorite facts' },
     { name: 'Student Notebook', path: '/notebook', emoji: '📓', desc: 'Saved facts & custom notes' },
     { name: 'Flashcards', path: '/flashcards', emoji: '🧠', desc: 'Active recall & memory practice' },
     { name: 'Daily Streak', path: '/daily-streak', emoji: '🔥', desc: '5 daily quick questions' },
@@ -144,6 +145,16 @@ export const Header = () => {
 
             {/* 🌓 Theme Switcher (Paper vs Dark) */}
             <ThemeSwitcher />
+
+            {/* 🔖 Saved Facts & Bookmarks */}
+            <Link
+              to="/bookmarks"
+              className="flex items-center justify-center w-8 h-8 rounded-full bg-paper2 hover:bg-gold/15 border border-black/10 dark:border-white/10 text-ink3 hover:text-gold transition-colors shrink-0"
+              title="Saved Facts & Bookmarks"
+              aria-label="Bookmarks"
+            >
+              <Bookmark size={14} className="text-gold" />
+            </Link>
 
             {/* 🔔 Daily Study & Quiz Push Notification Reminders */}
             <button
@@ -256,6 +267,15 @@ export const Header = () => {
                         <Bell size={15} className="text-coral" />
                         <span>Push Reminders</span>
                       </button>
+
+                      <Link
+                        to="/bookmarks"
+                        onClick={() => setIsProfileOpen(false)}
+                        className="w-full flex items-center gap-2.5 px-3 py-2 text-xs font-bold text-ink hover:bg-paper2 rounded-xl transition-colors"
+                      >
+                        <Bookmark size={15} className="text-gold" />
+                        <span>Saved Bookmarks</span>
+                      </Link>
 
                       <Link
                         to="/notebook"

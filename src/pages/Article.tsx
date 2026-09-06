@@ -25,6 +25,10 @@ import { normalizeImageUrl } from '../lib/imageUtils';
 import { recordFactRead } from '../components/DailyGoalTracker';
 import { TableOfContents, slugify } from '../components/seo/TableOfContents';
 import { SEOKeywordResearcherModal } from '../components/seo/SEOKeywordResearcherModal';
+import { ReadingProgressBar } from '../components/article/ReadingProgressBar';
+import { SocialShareToolbar } from '../components/article/SocialShareToolbar';
+import { RelatedFactsSection } from '../components/article/RelatedFactsSection';
+import { bookmarkService } from '../services/bookmarkService';
 
 const DEFAULT_CATEGORY_BOOKS: Record<string, AffiliateProduct[]> = {
   history: [
@@ -356,7 +360,7 @@ export const Article = () => {
   const [related, setRelated] = useState<Fact[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
-  const { isAdmin } = useAuth();
+  const { user, isAdmin } = useAuth();
   const [isEditing, setIsEditing] = useState(false);
   const [editData, setEditData] = useState<Partial<Fact>>({});
   const [isDeletingConfirm, setIsDeletingConfirm] = useState(false);
@@ -376,8 +380,36 @@ export const Article = () => {
     price: 'View on Amazon',
     platform: 'Amazon'
   });
+  const [isBookmarked, setIsBookmarked] = useState(false);
+  const [isTogglingBookmark, setIsTogglingBookmark] = useState(false);
+  const [bookmarkToast, setBookmarkToast] = useState<string | null>(null);
   const navigate = useNavigate();
   const textareaRef = useRef<HTMLTextAreaElement>(null);
+
+  useEffect(() => {
+    if (fact?.id) {
+      bookmarkService.isBookmarked(fact.id, user?.uid).then(setIsBookmarked);
+    }
+  }, [fact?.id, user?.uid]);
+
+  const handleToggleBookmark = async () => {
+    if (!fact) return;
+    setIsTogglingBookmark(true);
+    try {
+      const nowSaved = await bookmarkService.toggleBookmark(fact, user?.uid);
+      setIsBookmarked(nowSaved);
+      setBookmarkToast(
+        nowSaved 
+          ? '🔖 Fact saved to Bookmarks & synced with Firestore!' 
+          : 'Fact removed from bookmarks'
+      );
+      setTimeout(() => setBookmarkToast(null), 2800);
+    } catch (err) {
+      console.error("Failed toggling bookmark:", err);
+    } finally {
+      setIsTogglingBookmark(false);
+    }
+  };
 
   const handleInsertColor = (colorName: string) => {
     const textarea = textareaRef.current;
@@ -697,7 +729,19 @@ export const Article = () => {
   } : null;
 
   return (
-    <div className="bg-paper min-h-screen pb-16 fade-in">
+    <div className="bg-paper min-h-screen pb-16 fade-in relative">
+      <ReadingProgressBar />
+
+      {bookmarkToast && (
+        <div className="fixed bottom-6 right-6 z-50 bg-ink text-paper px-4 py-3 rounded-2xl shadow-xl border border-gold/40 flex items-center gap-2 text-xs font-bold animate-in fade-in slide-in-from-bottom-3">
+          <Bookmark size={15} className="text-gold fill-gold" />
+          <span>{bookmarkToast}</span>
+          <Link to="/bookmarks" className="ml-2 underline text-gold hover:text-amber-300 font-extrabold">
+            View Bookmarks →
+          </Link>
+        </div>
+      )}
+
       <Helmet>
         <title>{fact.seoTitle || `${fact.title} | ${fact.cat.charAt(0).toUpperCase() + fact.cat.slice(1)} | FActHub`}</title>
         <meta name="description" content={fact.metaDescription || fact.excerpt || fact.full.substring(0, 160)} />
@@ -991,11 +1035,28 @@ export const Article = () => {
               </button>
 
               <button
+                type="button"
+                onClick={handleToggleBookmark}
+                disabled={isTogglingBookmark}
+                className={cn(
+                  "flex items-center gap-1.5 px-3.5 py-2 rounded-2xl font-bold text-xs border transition-all shadow-xs cursor-pointer",
+                  isBookmarked
+                    ? "bg-gold/20 text-gold border-gold/40 hover:bg-gold/30"
+                    : "bg-paper2 hover:bg-gold/15 text-ink border-black/10"
+                )}
+                title={isBookmarked ? "Click to remove from Firestore bookmarks" : "Bookmark this fact to your Firestore account"}
+              >
+                <Bookmark size={14} className={cn("text-gold transition-transform", isBookmarked && "fill-gold scale-110")} />
+                <span>{isBookmarked ? 'Bookmarked' : 'Bookmark Fact'}</span>
+              </button>
+
+              <button
                 onClick={() => setShowSaveNotebookModal(true)}
                 className="flex items-center gap-1.5 px-3.5 py-2 rounded-2xl bg-paper2 hover:bg-gold/15 text-ink font-bold text-xs border border-black/10 transition-all shadow-xs"
+                title="Save detailed study note to Notebook"
               >
-                <Bookmark size={14} className="text-gold" />
-                <span>Save to Notebook</span>
+                <BookOpen size={14} className="text-gold" />
+                <span>Add Note</span>
               </button>
 
               <button
@@ -1554,41 +1615,16 @@ export const Article = () => {
             )}
           </div>
 
-          <div className="mt-16 p-8 bg-paper2 rounded-2xl border border-black/5">
-             <div className="flex items-center justify-between mb-6">
-                <div>
-                  <h3 className="font-bold text-ink uppercase tracking-widest text-xs">Share this fact</h3>
-                  <p className="text-[10px] text-ink3 mt-1">Spread the knowledge with your friends</p>
-                </div>
-                <Share2 size={18} className="text-gold" />
-             </div>
-             <div className="flex flex-wrap gap-3">
-                <button 
-                  onClick={() => handleShare('WhatsApp')}
-                  className="flex items-center gap-2 px-5 py-2.5 bg-[#25D366] text-white rounded-xl text-sm font-bold hover:scale-105 transition-all shadow-lg shadow-green-500/10"
-                >
-                  <Send size={16} fill="white" /> WhatsApp
-                </button>
-                <button 
-                  onClick={() => handleShare('X')}
-                  className="flex items-center gap-2 px-5 py-2.5 bg-black text-white rounded-xl text-sm font-bold hover:scale-105 transition-all"
-                >
-                  <Twitter size={16} fill="white" /> Post on X
-                </button>
-                <button 
-                  onClick={() => handleShare('Facebook')}
-                  className="flex items-center gap-2 px-5 py-2.5 bg-[#1877F2] text-white rounded-xl text-sm font-bold hover:scale-105 transition-all shadow-lg shadow-blue-500/10"
-                >
-                  <Facebook size={16} fill="white" /> Facebook
-                </button>
-                <button 
-                  onClick={() => handleShare('Copy')}
-                  className="flex items-center gap-2 px-5 py-2.5 bg-white border border-black/10 text-ink rounded-xl text-sm font-bold hover:bg-gold hover:text-white hover:border-gold transition-all"
-                >
-                  <Copy size={16} /> Copy Link
-                </button>
-             </div>
-          </div>
+          {/* 🔗 Curated Related Facts Section (Tagged semantic matching) */}
+          <RelatedFactsSection currentFact={fact} />
+
+          {/* 📣 Social Media Sharing Toolbar (Twitter, LinkedIn, WhatsApp, Copy Link) */}
+          <SocialShareToolbar 
+            title={fact.title}
+            excerpt={fact.excerpt || fact.full.substring(0, 160)}
+            category={fact.cat}
+            tags={fact.searchKeywords || []}
+          />
 
           <div className="mt-8 flex items-center justify-between bg-white border border-black/10 p-5 rounded-2xl shadow-sm">
             <span className="text-xs sm:text-sm text-ink3 font-serif italic">Finished reading this story?</span>

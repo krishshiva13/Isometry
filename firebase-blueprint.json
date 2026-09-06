@@ -120,9 +120,30 @@
         "createdAt": { "type": "string", "format": "date-time" }
       },
       "required": ["title", "cat", "excerpt", "full", "status"]
+    },
+    "UserBookmark": {
+      "title": "UserBookmark",
+      "description": "User bookmarked article record stored in Firestore.",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "userId": { "type": "string" },
+        "factId": { "type": "string" },
+        "factTitle": { "type": "string" },
+        "factEmoji": { "type": "string" },
+        "factCat": { "type": "string" },
+        "factYear": { "type": "number" },
+        "factExcerpt": { "type": "string" },
+        "bookmarkedAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["userId", "factId", "factTitle"]
     }
   },
   "firestore": {
+    "/users/{uid}/bookmarks/{bookmarkId}": {
+      "schema": "UserBookmark",
+      "description": "Bookmarked facts for user."
+    },
     "/ai_drafts/{draftId}": {
       "schema": "AIDraft",
       "description": "AI generated educational content drafts for admin approval."
