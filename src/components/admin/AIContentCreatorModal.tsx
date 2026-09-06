@@ -450,7 +450,8 @@ export const AIContentCreatorModal: React.FC<AIContentCreatorModalProps> = ({ is
         vocabulary: editForm.vocabulary || [],
         socialPostDigest: editForm.socialPostDigest || '',
         affiliateProducts: editForm.affiliateProducts || [],
-        trustedSources: editForm.trustedSources || []
+        trustedSources: editForm.trustedSources || [],
+        faqs: editForm.faqs || []
       });
 
       setNotification({
@@ -506,7 +507,8 @@ export const AIContentCreatorModal: React.FC<AIContentCreatorModalProps> = ({ is
         affiliateProducts: editForm.affiliateProducts || [],
         examRelevance: editForm.examRelevance || '',
         factCheckSummary: editForm.factCheckSummary || '',
-        trustedSources: editForm.trustedSources || []
+        trustedSources: editForm.trustedSources || [],
+        faqs: editForm.faqs || []
       };
 
       if (publishType === 'schedule') {

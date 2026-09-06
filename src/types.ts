@@ -274,6 +274,7 @@ export interface AIDraft {
   eventMonth?: number;
   eventDay?: number;
   quizMCQs?: QuizMCQ[];
+  faqs?: Array<{ question: string; answer: string }>;
   bilingualTerms?: BilingualTerm[];
   vocabulary?: VocabularyWord[];
   socialPostDigest?: string;

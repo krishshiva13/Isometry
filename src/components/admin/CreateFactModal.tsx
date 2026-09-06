@@ -1,10 +1,11 @@
 import React, { useState, useRef } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
-import { X, Save, Plus, Calendar, Clock, ShoppingBag, Trash2, ExternalLink, BookCheck, ShieldAlert } from 'lucide-react';
+import { X, Save, Plus, Calendar, Clock, ShoppingBag, Trash2, ExternalLink, BookCheck, ShieldAlert, GraduationCap } from 'lucide-react';
 import { factService } from '../../services/factService';
-import { Fact, Category, AffiliateProduct } from '../../types';
+import { Fact, Category, AffiliateProduct, QuizMCQ } from '../../types';
 import { ImageUploadField } from '../common/ImageUploadField';
 import { MarkdownToolbar } from '../common/MarkdownToolbar';
+import { ExamQuestionsAndFaqEditor } from './ExamQuestionsAndFaqEditor';
 
 const COLOR_OPTIONS = [
   { name: 'gold', label: 'Gold', bg: 'bg-[#d9ad42]', text: 'text-[#d9ad42]' },
@@ -54,6 +55,9 @@ export const CreateFactModal = ({ isOpen, onClose, onSuccess, initialCat }: Crea
     eventMonth: 0,
     eventDay: 0
   });
+
+  const [quizMCQs, setQuizMCQs] = useState<QuizMCQ[]>([]);
+  const [faqs, setFaqs] = useState<Array<{ question: string; answer: string }>>([]);
 
   const [products, setProducts] = useState<AffiliateProduct[]>([]);
   const [showProductForm, setShowProductForm] = useState(false);
@@ -134,6 +138,12 @@ export const CreateFactModal = ({ isOpen, onClose, onSuccess, initialCat }: Crea
       if (products.length > 0) {
         newFact.affiliateProducts = products;
       }
+      if (quizMCQs.length > 0) {
+        newFact.quizMCQs = quizMCQs;
+      }
+      if (faqs.length > 0) {
+        newFact.faqs = faqs;
+      }
       if (pubType === 'schedule') {
         newFact.publishAt = scheduleTime;
       }
@@ -166,7 +176,7 @@ export const CreateFactModal = ({ isOpen, onClose, onSuccess, initialCat }: Crea
           initial={{ opacity: 0, scale: 0.95, y: 20 }}
           animate={{ opacity: 1, scale: 1, y: 0 }}
           exit={{ opacity: 0, scale: 0.95, y: 20 }}
-          className="bg-paper w-full max-w-2xl rounded-3xl shadow-2xl overflow-hidden border border-black/5"
+          className="bg-paper w-full max-w-3xl rounded-3xl shadow-2xl overflow-hidden border border-black/5"
         >
           <div className="p-6 border-b border-black/5 flex items-center justify-between bg-paper2">
             <h2 className="text-2xl font-serif font-black flex items-center gap-3">
@@ -538,6 +548,27 @@ export const CreateFactModal = ({ isOpen, onClose, onSuccess, initialCat }: Crea
                   </div>
                 </div>
               )}
+            </div>
+
+            {/* 🎓 Exam View Questions & Answers / Practice MCQs & FAQ Section */}
+            <div className="space-y-2">
+              <div className="flex items-center justify-between">
+                <label className="text-xs font-bold uppercase tracking-widest text-ink3 flex items-center gap-1.5">
+                  <GraduationCap size={16} className="text-gold" />
+                  Exam View Questions & FAQ Section
+                </label>
+                <span className="text-[11px] text-ink3 font-medium">
+                  {quizMCQs.length} MCQs • {faqs.length} FAQs
+                </span>
+              </div>
+              <ExamQuestionsAndFaqEditor
+                quizMCQs={quizMCQs}
+                onChangeQuizMCQs={setQuizMCQs}
+                faqs={faqs}
+                onChangeFaqs={setFaqs}
+                topicTitle={formData.title}
+                category={formData.cat}
+              />
             </div>
 
             {/* Scheduling and Publish section */}

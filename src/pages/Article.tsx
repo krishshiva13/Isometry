@@ -2,10 +2,10 @@ import React, { useEffect, useState, useRef } from 'react';
 import { useParams, Link, useNavigate } from 'react-router-dom';
 import ReactMarkdown from 'react-markdown';
 import { motion } from 'motion/react';
-import { ArrowLeft, Calendar, BookOpen, Share2, Copy, Send, Twitter, Facebook, Edit2, Save, X as CloseIcon, Trash2, ShoppingBag, ExternalLink, ShieldCheck, Plus, BookCheck, Bookmark, Sparkles, Image, Volume2, Award, Target, HelpCircle, CheckCircle2, ChevronDown, ChevronUp } from 'lucide-react';
+import { ArrowLeft, Calendar, BookOpen, Share2, Copy, Send, Twitter, Facebook, Edit2, Save, X as CloseIcon, Trash2, ShoppingBag, ExternalLink, ShieldCheck, Plus, BookCheck, Bookmark, Sparkles, Image, Volume2, Award, Target, HelpCircle, CheckCircle2, ChevronDown, ChevronUp, GraduationCap } from 'lucide-react';
 import { Helmet } from 'react-helmet-async';
 import { factService } from '../services/factService';
-import { Fact, AffiliateProduct } from '../types';
+import { Fact, AffiliateProduct, QuizMCQ } from '../types';
 import { cn } from '../lib/utils';
 import { INITIAL_FACTS } from '../seed';
 import { useAuth } from '../contexts/AuthContext';
@@ -19,6 +19,8 @@ import { MarkdownToolbar } from '../components/common/MarkdownToolbar';
 import { EmbeddedRelatedCard } from '../components/common/EmbeddedRelatedCard';
 import { InlineVocabWord } from '../components/common/InlineVocabWord';
 import { ArticleVocabularySection } from '../components/common/ArticleVocabularySection';
+import { ArticleExamQuizSection } from '../components/article/ArticleExamQuizSection';
+import { ExamQuestionsAndFaqEditor } from '../components/admin/ExamQuestionsAndFaqEditor';
 import { normalizeImageUrl } from '../lib/imageUtils';
 import { recordFactRead } from '../components/DailyGoalTracker';
 import { TableOfContents, slugify } from '../components/seo/TableOfContents';
@@ -362,7 +364,7 @@ export const Article = () => {
   const [showSaveNotebookModal, setShowSaveNotebookModal] = useState(false);
   const [showTelegramCapsuleToast, setShowTelegramCapsuleToast] = useState(false);
   const [showSEOModal, setShowSEOModal] = useState(false);
-  const [expandedFaqIndex, setExpandedFaqIndex] = useState<number | null>(null);
+  const [expandedFaqIndex, setExpandedFaqIndex] = useState<number | null>(0);
   const [showProductFormInEdit, setShowProductFormInEdit] = useState(false);
   const [newProductInEdit, setNewProductInEdit] = useState<AffiliateProduct>({
     title: '',
@@ -480,6 +482,9 @@ export const Article = () => {
       eventDay: fact.eventDay || 0,
       publishAt: fact.publishAt || '',
       affiliateProducts: fact.affiliateProducts ? [...fact.affiliateProducts] : [],
+      quizMCQs: fact.quizMCQs ? [...fact.quizMCQs] : [],
+      faqs: fact.faqs ? [...fact.faqs] : [],
+      examRelevance: fact.examRelevance || '',
       targetKeyword: fact.targetKeyword || fact.focusKeyword || '',
       focusKeyword: fact.focusKeyword || fact.targetKeyword || '',
       seoTitle: fact.seoTitle || '',
@@ -651,6 +656,31 @@ export const Article = () => {
         answer: `${q.explanation || `The correct answer is: ${correctText}`}`
       });
     });
+  }
+
+  // 🌟 Guaranteed FAQ Section for Every Blog Content:
+  if (activeFaqs.length === 0) {
+    const yearDisplay = fact.year < 0 ? `${Math.abs(fact.year)} BC` : `${fact.year} AD`;
+    const catDisplay = fact.cat ? fact.cat.charAt(0).toUpperCase() + fact.cat.slice(1) : 'General Awareness';
+
+    activeFaqs.push(
+      {
+        question: `What is the significance of ${fact.title}?`,
+        answer: fact.excerpt || `${fact.title} is a landmark milestone in ${catDisplay}, documented for its lasting historical, scientific, and educational impact.`
+      },
+      {
+        question: `When did ${fact.title} take place or get established?`,
+        answer: `This historical milestone is recorded in the year ${yearDisplay}, contributing fundamentally to the chronology and evolution of ${catDisplay}.`
+      },
+      {
+        question: `Why is ${fact.title} important for competitive examinations (UPSC, SSC, State PSCs)?`,
+        answer: fact.examRelevance || `Questions regarding ${fact.title} evaluate candidates' static general knowledge, factual clarity, and conceptual understanding in competitive examinations including UPSC Civil Services, SSC CGL, and State PSCs.`
+      },
+      {
+        question: `How are the facts and records about ${fact.title} verified?`,
+        answer: `All educational summaries and factual milestones on FActHub are cross-checked against verified historical archives, peer-reviewed publications, and credible academic sources.`
+      }
+    );
   }
 
   const faqSchema = activeFaqs.length > 0 ? {
@@ -1296,6 +1326,27 @@ export const Article = () => {
                     </div>
                   )}
                 </div>
+
+                {/* 🎓 Exam View Questions & Answers & FAQ Editor in Edit Mode */}
+                <div className="space-y-2 pt-2">
+                  <div className="flex items-center justify-between">
+                    <label className="text-xs font-bold uppercase tracking-widest text-ink3 flex items-center gap-1.5">
+                      <GraduationCap size={16} className="text-gold" />
+                      Exam View Questions & FAQ Section
+                    </label>
+                    <span className="text-[11px] text-ink3 font-medium">
+                      {(editData.quizMCQs || []).length} MCQs • {(editData.faqs || []).length} FAQs
+                    </span>
+                  </div>
+                  <ExamQuestionsAndFaqEditor
+                    quizMCQs={editData.quizMCQs || []}
+                    onChangeQuizMCQs={(mcqs) => setEditData({ ...editData, quizMCQs: mcqs })}
+                    faqs={editData.faqs || []}
+                    onChangeFaqs={(newFaqs) => setEditData({ ...editData, faqs: newFaqs })}
+                    topicTitle={editData.title || fact.title}
+                    category={fact.cat}
+                  />
+                </div>
               </div>
             ) : (
               <>
@@ -1307,6 +1358,16 @@ export const Article = () => {
                   bilingualTerms={fact.bilingualTerms}
                   articleTitle={fact.title}
                   articleId={fact.id}
+                />
+
+                {/* 🎓 Exam View: Practice Questions & Answers (Quiz/MCQs) */}
+                <ArticleExamQuizSection
+                  quizMCQs={fact.quizMCQs}
+                  articleTitle={fact.title}
+                  category={fact.cat}
+                  examRelevance={fact.examRelevance}
+                  isAdmin={isAdmin}
+                  onEditClick={startEditing}
                 />
 
                 {/* 📚 SAFEGUARDED RECOMMENDED READING & AFFILIATE PRODUCTS SHOWCASE */}
@@ -1417,23 +1478,40 @@ export const Article = () => {
                 {/* ❓ Google Rich FAQ Accordion Section */}
                 {activeFaqs.length > 0 && (
                   <section aria-label="Frequently Asked Questions" className="mt-12 bg-white rounded-3xl border border-black/10 p-6 sm:p-8 shadow-sm space-y-4 not-prose">
-                    <div className="flex items-center justify-between border-b border-black/5 pb-4">
+                    <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 border-b border-black/5 pb-4">
                       <div className="flex items-center gap-2.5">
-                        <div className="w-8 h-8 rounded-xl bg-gold/20 flex items-center justify-center text-gold font-bold">
-                          <HelpCircle size={18} />
+                        <div className="w-9 h-9 rounded-xl bg-gold/20 flex items-center justify-center text-gold font-bold shrink-0">
+                          <HelpCircle size={20} />
                         </div>
                         <div>
-                          <h3 className="font-serif font-black text-lg text-ink">
-                            Frequently Asked Questions (Google Rich Snippets)
-                          </h3>
+                          <div className="flex items-center gap-2">
+                            <h3 className="font-serif font-black text-lg text-ink">
+                              Frequently Asked Questions
+                            </h3>
+                            <span className="text-[10px] font-mono font-bold bg-emerald-100 text-emerald-800 px-2 py-0.5 rounded-full border border-emerald-200">
+                              Google Rich Snippets
+                            </span>
+                          </div>
                           <p className="text-xs text-ink3">
                             Key search questions and verified answers regarding {fact.title}
                           </p>
                         </div>
                       </div>
-                      <span className="text-[10px] font-mono font-bold bg-emerald-100 text-emerald-800 px-2.5 py-0.5 rounded-full border border-emerald-200">
-                        Schema.org Verified
-                      </span>
+
+                      <div className="flex items-center gap-2 shrink-0">
+                        <span className="text-[11px] font-mono text-ink3 bg-paper2 px-2.5 py-1 rounded-lg border border-black/5">
+                          {activeFaqs.length} Questions
+                        </span>
+                        {isAdmin && (
+                          <button
+                            type="button"
+                            onClick={startEditing}
+                            className="text-xs font-bold text-ink hover:text-gold bg-paper2 hover:bg-gold/15 px-3 py-1 rounded-lg border border-black/5 transition-colors flex items-center gap-1"
+                          >
+                            <Edit2 size={12} /> Edit FAQs
+                          </button>
+                        )}
+                      </div>
                     </div>
 
                     <div className="space-y-3">
