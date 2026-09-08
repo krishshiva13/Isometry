@@ -41,30 +41,18 @@ export const Birthdays = () => {
           </div>
        </div>
 
-       <div className="max-w-7xl mx-auto px-4">
-          <div className="bg-paper2 border border-black/5 rounded-fact h-24 flex items-center justify-center text-ink3 text-xs italic mb-12">
-            📢 Google AdSense — 728x90 Leaderboard
-          </div>
+       <div className="max-w-7xl mx-auto px-4 py-8">
           <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-6 gap-6">
-            {birthdays.map((b, i) => (
-              <React.Fragment key={b.id}>
-                <div className="bg-white border border-black/10 rounded-fact p-6 text-center group hover:shadow-fact-lg transition-all cursor-pointer">
-                  <div className="w-16 h-16 rounded-full mx-auto mb-4 flex items-center justify-center font-serif text-2xl font-bold bg-opacity-20" style={{ backgroundColor: b.color + '33', color: b.color }}>
-                    {b.init}
-                  </div>
-                  <div className="font-serif font-bold text-ink group-hover:text-gold transition-colors">{b.name}</div>
-                  <div className="font-mono text-[0.7rem] text-ink3 mt-1">Born {b.year}</div>
-                  <div className="text-[0.65rem] font-bold uppercase tracking-widest mt-2" style={{ color: b.color }}>{b.field}</div>
-                  <div className="text-[0.65rem] text-ink3 mt-1 italic">{b.date}</div>
+            {birthdays.map((b) => (
+              <div key={b.id} className="bg-white border border-black/10 rounded-fact p-6 text-center group hover:shadow-fact-lg transition-all cursor-pointer">
+                <div className="w-16 h-16 rounded-full mx-auto mb-4 flex items-center justify-center font-serif text-2xl font-bold bg-opacity-20" style={{ backgroundColor: b.color + '33', color: b.color }}>
+                  {b.init}
                 </div>
-                {i === 11 && (
-                  <div className="col-span-full py-8">
-                    <div className="bg-paper2 border border-black/5 rounded-fact h-32 flex items-center justify-center text-ink3 text-xs italic">
-                      📢 Google AdSense — 728x90 In-Feed Ad
-                    </div>
-                  </div>
-                )}
-              </React.Fragment>
+                <div className="font-serif font-bold text-ink group-hover:text-gold transition-colors">{b.name}</div>
+                <div className="font-mono text-[0.7rem] text-ink3 mt-1">Born {b.year}</div>
+                <div className="text-[0.65rem] font-bold uppercase tracking-widest mt-2" style={{ color: b.color }}>{b.field}</div>
+                <div className="text-[0.65rem] text-ink3 mt-1 italic">{b.date}</div>
+              </div>
             ))}
           </div>
        </div>

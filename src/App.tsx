@@ -7,6 +7,7 @@ import { HelmetProvider } from 'react-helmet-async';
 import { AnalyticsTracker } from './components/AnalyticsTracker';
 import { OfflineToast } from './components/OfflineToast';
 import { notificationService } from './services/notificationService';
+import { AdminRoute } from './components/auth/AdminRoute';
 
 const Home = lazy(() => import('./pages/Home').then(m => ({ default: m.Home })));
 const Article = lazy(() => import('./pages/Article').then(m => ({ default: m.Article })));
@@ -81,9 +82,9 @@ export default function App() {
                   <Route path="/privacy" element={<Privacy />} />
                   <Route path="/advertise" element={<Advertise />} />
                   <Route path="/sitemap" element={<Sitemap />} />
-                  <Route path="/exam-prep" element={<ExamPrep />} />
-                  <Route path="/magazine" element={<Magazine />} />
-                  <Route path="/admin/ai-creator" element={<AdminAIPanel />} />
+                  <Route path="/exam-prep" element={<AdminRoute><ExamPrep /></AdminRoute>} />
+                  <Route path="/magazine" element={<AdminRoute><Magazine /></AdminRoute>} />
+                  <Route path="/admin/ai-creator" element={<AdminRoute><AdminAIPanel /></AdminRoute>} />
                   <Route path="/daily-streak" element={<DailyStreakChallenge />} />
                   <Route path="/notebook" element={<StudentNotebook />} />
                   <Route path="/bookmarks" element={<Bookmarks />} />

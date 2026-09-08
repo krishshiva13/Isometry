@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
-import { Link } from 'react-router-dom';
+import { Link, Navigate } from 'react-router-dom';
 import { Helmet } from 'react-helmet-async';
+import { useAuth } from '../contexts/AuthContext';
 import { 
   BookOpen, 
   Calendar, 
@@ -330,6 +331,7 @@ const QUIZ_QUESTIONS: QuizQuestionItem[] = [
 ];
 
 export const ExamPrep = () => {
+  const { isAdmin, loading: authLoading } = useAuth();
   const [selectedExam, setSelectedExam] = useState<string>('all');
   const [selectedGkTab, setSelectedGkTab] = useState<string>('all');
   const [searchQuery, setSearchQuery] = useState<string>('');
@@ -422,6 +424,19 @@ export const ExamPrep = () => {
     month: 'long',
     day: 'numeric'
   });
+
+  if (authLoading) {
+    return (
+      <div className="min-h-[60vh] flex flex-col items-center justify-center bg-paper px-4 text-center">
+        <div className="w-8 h-8 border-2 border-gold border-t-transparent rounded-full animate-spin mb-3" />
+        <p className="text-xs font-mono text-ink3">Loading Exam Prep...</p>
+      </div>
+    );
+  }
+
+  if (!isAdmin) {
+    return <Navigate to="/" replace />;
+  }
 
   return (
     <div className="bg-[#FFFDF5] text-ink min-h-screen font-sans selection:bg-gold selection:text-ink">

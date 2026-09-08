@@ -1681,10 +1681,6 @@ export const Article = () => {
             </div>
           </div>
 
-          <div className="bg-paper2 border border-black/5 rounded-2xl aspect-[300/250] flex items-center justify-center text-ink3 text-xs italic">
-            📢 Google AdSense — 300x250 Rectangle
-          </div>
-
           <div className="space-y-6">
             <h3 className="font-serif font-bold text-xl text-ink border-b border-black/10 pb-4">
               More {fact.cat.charAt(0).toUpperCase() + fact.cat.slice(1)} Facts
@@ -1716,10 +1712,6 @@ export const Article = () => {
             <button className="bg-gold text-ink font-bold text-xs px-4 py-2 rounded-full hover:bg-gold-l transition-all">
               Next Fact →
             </button>
-          </div>
-
-          <div className="bg-paper2 border border-black/5 rounded-2xl aspect-[300/600] hidden lg:flex items-center justify-center text-ink3 text-xs italic">
-            📢 Google AdSense — 300x600 Half-Page Ad
           </div>
         </aside>
       </div>

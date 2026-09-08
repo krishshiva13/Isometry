@@ -43,8 +43,10 @@ export const Header = () => {
   const primaryNavLinks = [
     { name: 'History', path: '/category/history', color: '#c94a2b' },
     { name: 'Science', path: '/category/science', color: '#0a7c6e' },
-    { name: 'Exam Prep', path: '/exam-prep', emoji: '📚', badge: 'India' },
-    { name: 'Magazine', path: '/magazine', emoji: '📖', badge: 'Weekly' },
+    ...(isAdmin ? [
+      { name: 'Exam Prep', path: '/exam-prep', emoji: '📚', badge: 'Admin' },
+      { name: 'Magazine', path: '/magazine', emoji: '📖', badge: 'Admin' },
+    ] : []),
   ];
 
   const studyTools = [
@@ -325,6 +327,28 @@ export const Header = () => {
                           >
                             <span>🚀</span>
                             <span>Google Page 1 SEO Suite</span>
+                          </Link>
+                          <Link
+                            to="/exam-prep"
+                            onClick={() => setIsProfileOpen(false)}
+                            className="w-full flex items-center justify-between px-3 py-2 text-xs font-bold text-sky-800 hover:bg-sky-50 rounded-xl transition-colors text-left"
+                          >
+                            <span className="flex items-center gap-2">
+                              <span>📚</span>
+                              <span>Exam Prep Hub</span>
+                            </span>
+                            <span className="text-[9px] bg-sky-100 text-sky-800 px-1.5 py-0.5 rounded font-mono uppercase">Admin Only</span>
+                          </Link>
+                          <Link
+                            to="/magazine"
+                            onClick={() => setIsProfileOpen(false)}
+                            className="w-full flex items-center justify-between px-3 py-2 text-xs font-bold text-amber-800 hover:bg-amber-50 rounded-xl transition-colors text-left"
+                          >
+                            <span className="flex items-center gap-2">
+                              <span>📖</span>
+                              <span>Sunday Magazine</span>
+                            </span>
+                            <span className="text-[9px] bg-amber-100 text-amber-800 px-1.5 py-0.5 rounded font-mono uppercase">Admin Only</span>
                           </Link>
                         </>
                       )}

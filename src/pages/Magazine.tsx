@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
-import { Link } from 'react-router-dom';
+import { Link, Navigate } from 'react-router-dom';
 import { Helmet } from 'react-helmet-async';
+import { useAuth } from '../contexts/AuthContext';
 import { 
   BookOpen, 
   Calendar, 
@@ -29,6 +30,7 @@ import { MagazineIssue } from '../types';
 import { factService } from '../services/factService';
 
 export const Magazine = () => {
+  const { isAdmin, loading: authLoading } = useAuth();
   const [selectedMonthKey, setSelectedMonthKey] = useState<string>('2026-09');
   const [selectedIssueId, setSelectedIssueId] = useState<string>('mag-2026-09-w1');
   const [isReaderModalOpen, setIsReaderModalOpen] = useState<boolean>(false);
@@ -97,6 +99,19 @@ export const Magazine = () => {
   const handleDownloadFullVolumePDF = () => {
     showToast(`📥 Downloading Full Compendium "${activeVolume.month}" (${activeVolume.pdfSize || '14.2 MB'} PDF)…`);
   };
+
+  if (authLoading) {
+    return (
+      <div className="min-h-[60vh] flex flex-col items-center justify-center bg-paper px-4 text-center">
+        <div className="w-8 h-8 border-2 border-gold border-t-transparent rounded-full animate-spin mb-3" />
+        <p className="text-xs font-mono text-ink3">Loading Magazine...</p>
+      </div>
+    );
+  }
+
+  if (!isAdmin) {
+    return <Navigate to="/" replace />;
+  }
 
   return (
     <div className="bg-[#FFFDF5] text-ink min-h-screen font-sans selection:bg-gold selection:text-ink">

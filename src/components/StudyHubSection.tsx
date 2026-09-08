@@ -1,5 +1,6 @@
 import React from 'react';
 import { Link } from 'react-router-dom';
+import { useAuth } from '../contexts/AuthContext';
 import { 
   BookOpen, 
   Brain, 
@@ -16,6 +17,8 @@ import {
 } from 'lucide-react';
 
 export const StudyHubSection: React.FC = () => {
+  const { isAdmin } = useAuth();
+
   const studyTools = [
     {
       id: 'notebook',
@@ -131,6 +134,14 @@ export const StudyHubSection: React.FC = () => {
     }
   ];
 
+  // Restrict held sections (Exam Prep & Magazine) to administrators only
+  const visibleTools = studyTools.filter(tool => {
+    if (tool.id === 'exam-prep' || tool.id === 'magazine') {
+      return isAdmin;
+    }
+    return true;
+  });
+
   return (
     <section className="py-12 px-4 sm:px-6 lg:px-8 max-w-7xl mx-auto border-b border-black/10">
       {/* Header with Title and Quick Pills */}
@@ -179,7 +190,7 @@ export const StudyHubSection: React.FC = () => {
 
       {/* Grid of All Study Hub Tools */}
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 sm:gap-6">
-        {studyTools.map((tool) => {
+        {visibleTools.map((tool) => {
           const Icon = tool.icon;
           return (
             <Link

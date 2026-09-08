@@ -98,23 +98,10 @@ export const Section = () => {
           </div>
        </div>
 
-       <div className="max-w-7xl mx-auto px-4 py-4">
-          <div className="bg-paper2 border border-black/5 rounded-fact h-24 flex items-center justify-center text-ink3 text-xs italic">
-            📢 Google AdSense — 728x90 Leaderboard
-          </div>
-       </div>
-
-       <div className="max-w-7xl mx-auto px-4">
+       <div className="max-w-7xl mx-auto px-4 py-8">
           <div className="grid sm:grid-cols-2 lg:grid-cols-3 gap-8">
             {facts.map((f, i) => (
-              <React.Fragment key={f.id}>
-                <FactCard fact={f} index={i} />
-                {i === 2 && (
-                  <div className="bg-paper2 border border-black/5 rounded-fact flex items-center justify-center text-ink3 text-xs italic min-h-[300px]">
-                    📢 Google AdSense — 300x250 Rectangle
-                  </div>
-                )}
-              </React.Fragment>
+              <FactCard key={f.id} fact={f} index={i} />
             ))}
           </div>
           {facts.length === 0 && !loading && (

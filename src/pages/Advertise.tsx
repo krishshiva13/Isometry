@@ -58,7 +58,7 @@ export const Advertise = () => {
         <h2 className="text-3xl font-serif font-bold text-ink mb-8 text-center">Advertising Options</h2>
         <div className="grid md:grid-cols-3 gap-6 mb-16">
            {[
-             { title: 'Display Ads', desc: 'Direct placements via Google AdSense auto-optimized for your campaign.', color: 'bg-coral' },
+             { title: 'Display Sponsorships', desc: 'Direct editorial placements and high-visibility brand showcases.', color: 'bg-coral' },
              { title: 'Sponsored Articles', desc: 'In-depth educational content written by our staff or yours.', color: 'bg-teal' },
              { title: 'Newsletter', desc: 'Direct inbox reach with 5k+ active daily subscribers.', color: 'bg-indigo' }
            ].map(opt => (

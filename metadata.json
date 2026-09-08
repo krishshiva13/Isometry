@@ -1,6 +1,6 @@
 {
   "name": "FActHub",
-  "description": "Daily facts, origin stories, government exam prep portal for India (UPSC, SSC, TNPSC, Railway, Banking), and weekly Sunday digital magazine series.",
+  "description": "Daily facts, origin stories, verified historical milestones, and scientific discoveries.",
   "requestFramePermissions": [],
   "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
 }
