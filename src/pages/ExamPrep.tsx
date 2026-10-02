@@ -1,7 +1,6 @@
-import React, { useState, useEffect } from 'react';
-import { Link, Navigate } from 'react-router-dom';
+import React, { useState, useEffect, useRef } from 'react';
+import { Link } from 'react-router-dom';
 import { Helmet } from 'react-helmet-async';
-import { useAuth } from '../contexts/AuthContext';
 import { 
   BookOpen, 
   Calendar, 
@@ -9,1186 +8,1400 @@ import {
   Download, 
   CheckCircle2, 
   AlertCircle, 
-  HelpCircle, 
   GraduationCap, 
   Clock, 
   Sparkles, 
   FileText, 
   ChevronRight, 
+  ChevronLeft,
   Share2, 
   ArrowUpRight, 
-  Send, 
   Award, 
-  Compass, 
   Zap, 
   Bookmark, 
-  ExternalLink 
+  Printer,
+  Eye,
+  Check,
+  RotateCcw,
+  Copy,
+  Layers,
+  HelpCircle,
+  ExternalLink
 } from 'lucide-react';
 import { cn } from '../lib/utils';
 import { factService } from '../services/factService';
-import { Fact } from '../types';
+import { notebookService } from '../services/notebookService';
+import { recordQuizCompleted } from '../components/DailyGoalTracker';
 
-interface ExamCountdown {
-  name: string;
-  code: string;
-  badgeClass: string;
-  date: string;
-  targetDate: string;
-  stage: string;
+// ═══════════════════════════════════════════════════════════
+// TYPES & DATA STRUCTURES
+// ═══════════════════════════════════════════════════════════
+
+export interface ExamMCQ {
+  id: string;
+  category: string;
+  targetExam: string;
+  tagClass: string;
+  question: string;
+  options: string[];
+  correctAnswer: number;
+  explanation: string;
+  examTrap: string;
 }
 
-interface CurrentAffairItem {
+export interface DailyNewsItem {
   id: string;
   num: string;
   title: string;
-  body: string;
+  summary: string;
   exams: Array<{ name: string; tagClass: string; examCode: string }>;
   examAngle: string;
-  date: string;
+  keyTakeaway: string;
   source: string;
-  relatedArticleSlug?: string;
+  category: string;
 }
 
-interface GkFactItem {
-  id: string;
-  topic: string;
-  category: 'history' | 'science' | 'space' | 'inventions' | 'geography';
-  title: string;
-  emoji: string;
-  thumbBg: string;
-  exams: string[];
-  readTime: string;
-  views: string;
-  slug: string;
+export interface DailyCapsuleData {
+  dateKey: string;
+  displayDate: string;
+  dayBadge: string;
+  themeTitle: string;
+  pdfFileName: string;
+  pdfFileSize: string;
+  pdfPageCount: number;
+  mcqs: ExamMCQ[];
+  currentAffairs: DailyNewsItem[];
+  quickPointers: string[];
 }
 
-interface HistoryDayItem {
-  year: number;
-  cat: string;
-  title: string;
-  examNote: string;
-  exams: Array<{ name: string; tagClass: string }>;
-  linkSlug?: string;
-}
+// ═══════════════════════════════════════════════════════════
+// SAMPLE DAILY CAPSULES (Today, Yesterday, Previous Day)
+// ═══════════════════════════════════════════════════════════
 
-interface QuizQuestionItem {
-  cat: string;
-  q: string;
-  opts: string[];
-  ans: number;
-  exp: string;
-}
-
-const EXAM_COUNTDOWNS: ExamCountdown[] = [
-  { name: 'UPSC Mains', code: 'upsc', badgeClass: 'bg-purple-100 text-purple-800 border-purple-300', date: 'Dec 1, 2026', targetDate: '2026-12-01', stage: 'GS Papers 1-4' },
-  { name: 'SSC CGL Tier 2', code: 'ssc', badgeClass: 'bg-emerald-100 text-emerald-800 border-emerald-300', date: 'Nov 15, 2026', targetDate: '2026-11-15', stage: 'Computer & GK' },
-  { name: 'TNPSC Group 4', code: 'tnpsc', badgeClass: 'bg-rose-100 text-rose-800 border-rose-300', date: 'Nov 04, 2026', targetDate: '2026-11-04', stage: 'General Studies' },
-  { name: 'RRB NTPC', code: 'rail', badgeClass: 'bg-amber-100 text-amber-800 border-amber-300', date: 'Nov 15, 2026', targetDate: '2026-11-15', stage: 'CBT-1 Phase' },
-  { name: 'IBPS PO Prelims', code: 'bank', badgeClass: 'bg-blue-100 text-blue-800 border-blue-300', date: 'Oct 18, 2026', targetDate: '2026-10-18', stage: 'Prelims Test' }
-];
-
-const CURRENT_AFFAIRS_DATA: CurrentAffairItem[] = [
-  {
-    id: 'ca-1',
-    num: '01',
-    title: 'India signs landmark semiconductor MoU with Japan & Netherlands for 2nm fab ecosystem',
-    body: 'India entered into strategic cooperation agreements with Japan’s METI and Netherlands’ ASML to establish pilot advanced chip fabrication facilities in Tamil Nadu and Telangana, aiming to reduce strategic component import dependency by 2030.',
-    exams: [
-      { name: 'UPSC GS-3', tagClass: 'bg-purple-100 text-purple-900 border-purple-200', examCode: 'upsc' },
-      { name: 'TNPSC', tagClass: 'bg-rose-100 text-rose-900 border-rose-200', examCode: 'tnpsc' }
+const DAILY_CAPSULES: Record<string, DailyCapsuleData> = {
+  '2026-10-02': {
+    dateKey: '2026-10-02',
+    displayDate: 'October 2, 2026',
+    dayBadge: "Gandhi Jayanti & Shastri Jayanti Special",
+    themeTitle: 'Swachh Bharat 2.0 Milestones, National Green Hydrogen Mission, and Cross-Border CBDC Settlements',
+    pdfFileName: 'FactHub-Daily-Current-Affairs-Oct-02-2026.pdf',
+    pdfFileSize: '184 KB',
+    pdfPageCount: 2,
+    quickPointers: [
+      'October 2 marks the 157th birth anniversary of Mahatma Gandhi and 122nd of Lal Bahadur Shastri.',
+      'Cabinet approves ₹19,744 crore Green Hydrogen Mission phase-2 incentives for electrolyser manufacturing.',
+      'Swachh Bharat Mission (Urban) 2.0 crosses 100% door-to-door waste collection in 4,200+ statutory towns.',
+      'RBI pilots cross-border CBDC wholesale corridor with Singapore MAS and UAE Central Bank.'
     ],
-    examAngle: 'UPSC GS-3: Semiconductor Mission (ISM), PLI scheme, EUV lithography physics. SSC/TNPSC: Participating states, full form of ASML, target decade. Frequently asked in matching questions.',
-    date: 'Sep 1, 2026',
-    source: 'The Hindu / PIB',
-    relatedArticleSlug: 'science'
-  },
-  {
-    id: 'ca-2',
-    num: '02',
-    title: 'ISRO successfully executes third autonomous landing trial of Pushpak RLV-TD',
-    body: 'The Indian Space Research Organisation completed the third consecutive autonomous precision touchdown test of its Reusable Launch Vehicle Pushpak at the Chitradurga Aeronautical Test Range in Karnataka, paving the way for orbital recovery.',
-    exams: [
-      { name: 'SSC GK', tagClass: 'bg-emerald-100 text-emerald-900 border-emerald-200', examCode: 'ssc' },
-      { name: 'Railway RRB', tagClass: 'bg-amber-100 text-amber-900 border-amber-200', examCode: 'rail' }
+    mcqs: [
+      {
+        id: 'q-20261002-1',
+        category: 'Modern Indian History',
+        targetExam: 'UPSC GS-1 / SSC CGL',
+        tagClass: 'bg-purple-100 text-purple-900 border-purple-200',
+        question: 'Mahatma Gandhi returned to India from South Africa on January 9, 1915 (Pravasi Bharatiya Divas). His first major satyagraha experiment on Indian soil was launched in 1917 at which location?',
+        options: ['Kheda, Gujarat', 'Ahmedabad Mill Strike', 'Champaran, Bihar', 'Bardoli, Gujarat'],
+        correctAnswer: 2,
+        explanation: 'Gandhi’s first satyagraha in India was the Champaran Satyagraha (1917) in Bihar against the oppressive European indigo planters enforcing the Tinkathia system (compulsory cultivation of indigo on 3/20th of land). It was followed by the Ahmedabad Mill Strike (1918) and Kheda Satyagraha (1918).',
+        examTrap: 'Examiner trap: Students frequently confuse Champaran (1917 - first Satyagraha) with Ahmedabad (1918 - first Hunger Strike) and Kheda (1918 - first Non-Cooperation movement).'
+      },
+      {
+        id: 'q-20261002-2',
+        category: 'National Schemes & Governance',
+        targetExam: 'SSC CGL / State PSC',
+        tagClass: 'bg-emerald-100 text-emerald-900 border-emerald-200',
+        question: 'The nationwide Swachh Bharat Mission (Clean India Mission) was officially launched on October 2 in which inaugural year?',
+        options: ['2012', '2014', '2016', '2019'],
+        correctAnswer: 1,
+        explanation: 'Swachh Bharat Mission was officially launched on October 2, 2014, at Rajghat, New Delhi, by Prime Minister Narendra Modi with the goal of achieving an Open Defecation Free (ODF) India by October 2, 2019, commemorating the 150th birth anniversary of Mahatma Gandhi.',
+        examTrap: 'Examiner trap: Target completion was 2019 (150th birth anniversary), but launch date was 2014. Do not confuse launch year with the target deadline year.'
+      },
+      {
+        id: 'q-20261002-3',
+        category: 'Environment & Renewable Energy',
+        targetExam: 'UPSC GS-3 / TNPSC',
+        tagClass: 'bg-blue-100 text-blue-900 border-blue-200',
+        question: 'Under the National Green Hydrogen Mission approved by the Union Cabinet, what is the targeted annual green hydrogen production capacity for India by 2030?',
+        options: ['1 Million Metric Tonnes (MMT)', '5 Million Metric Tonnes (MMT)', '10 Million Metric Tonnes (MMT)', '25 Million Metric Tonnes (MMT)'],
+        correctAnswer: 1,
+        explanation: 'The National Green Hydrogen Mission targets at least 5 MMT (Million Metric Tonnes) of annual green hydrogen production capacity by 2030, associated with 125 GW of dedicated renewable energy additions, abating 50 MMT of annual greenhouse gas emissions.',
+        examTrap: 'Numbers trap: Watch out for 5 MMT vs 10 MMT. 5 MMT is the 2030 target, supported by the SIGHT (Strategic Interventions for Green Hydrogen Transition) program.'
+      },
+      {
+        id: 'q-20261002-4',
+        category: 'Modern History & Governance',
+        targetExam: 'Railway RRB / SSC',
+        tagClass: 'bg-amber-100 text-amber-900 border-amber-200',
+        question: 'Lal Bahadur Shastri, India’s 2nd Prime Minister whose birthday also falls on October 2, famously coined which historic national slogan during the 1965 Indo-Pak war?',
+        options: ['Satyameva Jayate', 'Jai Jawan Jai Kisan', 'Inquilab Zindabad', 'Karo Ya Maro'],
+        correctAnswer: 1,
+        explanation: 'Lal Bahadur Shastri gave the slogan "Jai Jawan Jai Kisan" in October 1965 at a public gathering at Ramlila Maidan, Delhi, during the Indo-Pakistani War of 1965, honoring both the soldiers defending the borders and the farmers feeding the nation.',
+        examTrap: 'Sequence trap: Atal Bihari Vajpayee later added "Jai Vigyan" after the 1998 Pokhran nuclear tests, and Narendra Modi added "Jai Anusandhan" at the 2019 Indian Science Congress.'
+      },
+      {
+        id: 'q-20261002-5',
+        category: 'Banking & Financial Awareness',
+        targetExam: 'IBPS PO / SBI / RBI Grade B',
+        tagClass: 'bg-rose-100 text-rose-900 border-rose-200',
+        question: 'The Reserve Bank of India’s cross-border pilot for Digital Rupee (e₹) utilizes which specific variant of Central Bank Digital Currency (CBDC)?',
+        options: ['Retail CBDC (CBDC-R)', 'Wholesale CBDC (CBDC-W)', 'Commodity Crypto Token', 'Sovereign Gold Bond Token'],
+        correctAnswer: 1,
+        explanation: 'For cross-border interbank settlements and trade remittances, the RBI deploys Wholesale CBDC (CBDC-W). Retail CBDC (CBDC-R) is meant for the general public, individual consumers, and merchants for everyday domestic retail payments.',
+        examTrap: 'Term trap: Wholesale (CBDC-W) is strictly for financial institutions and cross-border corridors; Retail (CBDC-R) is for individual citizen wallets.'
+      }
     ],
-    examAngle: 'SSC/Railway: Nickname "Pushpak", test location (Chitradurga, Karnataka), ISRO chairman (2026). Very frequent 1-mark question in Group D & NTPC.',
-    date: 'Sep 1, 2026',
-    source: 'ISRO.gov.in',
-    relatedArticleSlug: 'discoveries'
-  },
-  {
-    id: 'ca-3',
-    num: '03',
-    title: 'Tamil Nadu launches AI-powered "Thozhilalar Suraksha" crop insurance for 12 lakh farmers',
-    body: 'The Tamil Nadu government launched the state-wide satellite imagery and automated meteorological sensor insurance program, settling claims within 72 hours for small and marginal farm holdings.',
-    exams: [
-      { name: 'TNPSC Grp 1/2', tagClass: 'bg-rose-100 text-rose-900 border-rose-200', examCode: 'tnpsc' },
-      { name: 'UPSC GS-2', tagClass: 'bg-purple-100 text-purple-900 border-purple-200', examCode: 'upsc' }
-    ],
-    examAngle: 'TNPSC critical point: Scheme name "Thozhilalar Suraksha", target beneficiary count (12 lakh). UPSC: Technological interventions in PMFBY, satellite-based loss assessment.',
-    date: 'Sep 1, 2026',
-    source: 'Tamil Nadu DIPR',
-    relatedArticleSlug: 'inventions'
-  },
-  {
-    id: 'ca-4',
-    num: '04',
-    title: 'RBI Monetary Policy Committee raises repo rate by 25 bps to 6.75% amid food inflation',
-    body: 'The Reserve Bank of India MPC voted 4-2 to raise the benchmark repo rate to 6.75%, the first adjustment in 18 months, citing headline consumer food price inflation averaging 7.2%.',
-    exams: [
-      { name: 'Banking IBPS/SBI', tagClass: 'bg-blue-100 text-blue-900 border-blue-200', examCode: 'bank' },
-      { name: 'SSC CGL', tagClass: 'bg-emerald-100 text-emerald-900 border-emerald-200', examCode: 'ssc' }
-    ],
-    examAngle: 'Banking (critical): New repo rate = 6.75%, Reverse Repo vs Standing Deposit Facility (SDF), definition of 1 basis point (0.01%). Direct MCQ in General/Financial Awareness.',
-    date: 'Sep 1, 2026',
-    source: 'RBI Bulletin',
-    relatedArticleSlug: 'history'
-  },
-  {
-    id: 'ca-5',
-    num: '05',
-    title: 'Vande Bharat Express 2.0 clocks 200 km/h during Delhi–Lucknow trial run',
-    body: 'Indian Railways clocked a record 200 km/h speed for an indigenous train set on the upgraded semi-high-speed track section, equipped with Kavach 4.0 automatic train protection system.',
-    exams: [
-      { name: 'Railway RRB', tagClass: 'bg-amber-100 text-amber-900 border-amber-200', examCode: 'rail' },
-      { name: 'SSC CGL', tagClass: 'bg-emerald-100 text-emerald-900 border-emerald-200', examCode: 'ssc' }
-    ],
-    examAngle: 'Railway (Very High Probability): India’s fastest train set, manufacturing location (ICF Chennai), Kavach ATP technology. SSC: Train 18 background and indigenous manufacturing.',
-    date: 'Sep 1, 2026',
-    source: 'Ministry of Railways',
-    relatedArticleSlug: 'inventions'
-  },
-  {
-    id: 'ca-6',
-    num: '06',
-    title: 'IMF World Economic Outlook: India becomes 3rd largest economy by GDP-PPP',
-    body: 'The International Monetary Fund updated its global economic ranking, placing India as the 3rd largest economy in the world on Purchasing Power Parity (PPP) metrics, surpassing Germany.',
-    exams: [
-      { name: 'UPSC GS-3', tagClass: 'bg-purple-100 text-purple-900 border-purple-200', examCode: 'upsc' },
-      { name: 'Banking IBPS', tagClass: 'bg-blue-100 text-blue-900 border-blue-200', examCode: 'bank' }
-    ],
-    examAngle: 'UPSC Essay/GS-3: Nominal GDP vs PPP distinction, IMF headquarters (Washington D.C.), calculation methodology. Banking/SSC: India rank (3rd in PPP, 5th in Nominal).',
-    date: 'Sep 1, 2026',
-    source: 'IMF WEO Report',
-    relatedArticleSlug: 'history'
-  }
-];
-
-const GK_FACTS_DATA: GkFactItem[] = [
-  {
-    id: 'gk-1',
-    topic: 'Science — Discovery',
-    category: 'science',
-    title: 'Fleming’s forgotten petri dish: How penicillin was discovered by accident in 1928',
-    emoji: '🧬',
-    thumbBg: 'bg-gradient-to-br from-emerald-100 to-emerald-200 text-emerald-900',
-    exams: ['UPSC GS-3', 'SSC GK', 'Railway'],
-    readTime: '6 min read',
-    views: '142k views',
-    slug: 'science'
-  },
-  {
-    id: 'gk-2',
-    topic: 'Invention — Origin Story',
-    category: 'inventions',
-    title: 'How the telephone was invented: Bell, a spilled battery, and a 3-hour patent race',
-    emoji: '📞',
-    thumbBg: 'bg-gradient-to-br from-rose-100 to-rose-200 text-rose-900',
-    exams: ['SSC GK', 'Railway RRB', 'TNPSC'],
-    readTime: '5 min read',
-    views: '87k views',
-    slug: 'inventions'
-  },
-  {
-    id: 'gk-3',
-    topic: 'History — Ancient Engineering',
-    category: 'history',
-    title: 'Roman roads and volcanic concrete: Why 2,000-year-old engineering still holds up',
-    emoji: '🏛️',
-    thumbBg: 'bg-gradient-to-br from-amber-100 to-amber-200 text-amber-900',
-    exams: ['UPSC GS-1', 'TNPSC Group 1'],
-    readTime: '7 min read',
-    views: '76k views',
-    slug: 'history'
-  },
-  {
-    id: 'gk-4',
-    topic: 'Space — ISRO & NASA',
-    category: 'space',
-    title: 'Voyager 1: How NASA engineers fixed a memory glitch across 24 billion kilometers',
-    emoji: '🪐',
-    thumbBg: 'bg-gradient-to-br from-purple-100 to-purple-200 text-purple-900',
-    exams: ['SSC CGL', 'Railway RRB', 'UPSC'],
-    readTime: '9 min read',
-    views: '214k views',
-    slug: 'discoveries'
-  },
-  {
-    id: 'gk-5',
-    topic: 'History — World & Trade',
-    category: 'history',
-    title: 'The Silk Road: Caravans, Kushan trade routes, and the spread of ancient technologies',
-    emoji: '📜',
-    thumbBg: 'bg-gradient-to-br from-amber-100 to-amber-200 text-amber-900',
-    exams: ['UPSC GS-1', 'SSC CGL'],
-    readTime: '8 min read',
-    views: '67k views',
-    slug: 'history'
-  },
-  {
-    id: 'gk-6',
-    topic: 'Inventions — Accidental Discovery',
-    category: 'inventions',
-    title: 'The microwave oven: Invented accidentally by Percy Spencer during radar magnetron testing in 1945',
-    emoji: '💡',
-    thumbBg: 'bg-gradient-to-br from-blue-100 to-blue-200 text-blue-900',
-    exams: ['SSC CGL', 'Group D', 'TNPSC'],
-    readTime: '6 min read',
-    views: '112k views',
-    slug: 'inventions'
-  }
-];
-
-const HISTORY_EVENTS_DATA: HistoryDayItem[] = [
-  {
-    year: 1939,
-    cat: 'World History',
-    title: 'Germany invades Poland — World War II officially begins in Europe',
-    examNote: 'UPSC/SSC: Official starting date of WWII (Sep 1, 1939). Exam trick: WWII ended in Europe on May 8, 1945 (V-E Day), and officially in the Pacific on Sep 2, 1945.',
-    exams: [
-      { name: 'UPSC GS-1', tagClass: 'bg-purple-100 text-purple-900' },
-      { name: 'SSC CGL', tagClass: 'bg-emerald-100 text-emerald-900' }
+    currentAffairs: [
+      {
+        id: 'ca-20261002-1',
+        num: '01',
+        title: 'India accelerates National Green Hydrogen Mission phase-2 with ₹19,744 crore outlay',
+        summary: 'The Ministry of New and Renewable Energy announced capital subsidy disbursement guidelines for domestic electrolyser manufacturing, mandating 60% local value addition to curb import reliance on rare earth components.',
+        exams: [
+          { name: 'UPSC GS-3', tagClass: 'bg-purple-100 text-purple-900 border-purple-200', examCode: 'upsc' },
+          { name: 'SSC CGL', tagClass: 'bg-emerald-100 text-emerald-900 border-emerald-200', examCode: 'ssc' }
+        ],
+        examAngle: 'UPSC GS-3 Focus: Green vs Grey vs Blue hydrogen definitions; SIGHT financial allocation (₹17,490 cr for production/manufacturing); 125 GW renewable linkage.',
+        keyTakeaway: 'Production target: 5 MMT/year by 2030. Nodal Ministry: Ministry of New and Renewable Energy (MNRE).',
+        source: 'PIB Delhi / MNRE',
+        category: 'Environment & Energy'
+      },
+      {
+        id: 'ca-20261002-2',
+        num: '02',
+        title: 'Swachh Bharat Urban 2.0 achieves 100% door-to-door segregated collection across 4,200 cities',
+        summary: 'On the 12th anniversary of Swachh Bharat Mission, the Ministry of Housing and Urban Affairs declared that legacy dumpsite remediation has cleared over 3,000 acres of prime urban land in Tier-1 and Tier-2 cities.',
+        exams: [
+          { name: 'UPSC GS-2', tagClass: 'bg-purple-100 text-purple-900 border-purple-200', examCode: 'upsc' },
+          { name: 'TNPSC Grp 2', tagClass: 'bg-rose-100 text-rose-900 border-rose-200', examCode: 'tnpsc' }
+        ],
+        examAngle: 'Mains & Prelims: SBM-Urban 2.0 covers circular economy, bio-methanation plants, and ODF++ certification standards. Dumpsite bio-remining techniques.',
+        keyTakeaway: 'MoHUA target: Garbage Free Cities (GFC) rating system based on 3-star, 5-star, and 7-star benchmarks.',
+        source: 'MoHUA Release',
+        category: 'Governance & Urban Dev'
+      },
+      {
+        id: 'ca-20261002-3',
+        num: '03',
+        title: 'RBI and Monetary Authority of Singapore launch bilateral Wholesale CBDC settlement bridge',
+        summary: 'The cross-border pilot connects India’s Digital Rupee wholesale architecture with Singapore’s Project Orchid, cutting bilateral trade settlement latency from T+2 days to under 15 seconds.',
+        exams: [
+          { name: 'Banking IBPS', tagClass: 'bg-blue-100 text-blue-900 border-blue-200', examCode: 'bank' },
+          { name: 'UPSC GS-3', tagClass: 'bg-purple-100 text-purple-900 border-purple-200', examCode: 'upsc' }
+        ],
+        examAngle: 'Banking Awareness: Distinction between RTGS, NEFT, UPI-PayNow linkage, and CBDC Distributed Ledger Technology. Elimination of nostro-vostro account fees.',
+        keyTakeaway: 'CBDC-W operates 24/7 without foreign exchange clearinghouse middlemen.',
+        source: 'RBI Bulletin',
+        category: 'Banking & Economy'
+      },
+      {
+        id: 'ca-20261002-4',
+        num: '04',
+        title: 'Indian Railways unveils first commercial Hydrogen Train prototype on Jind–Sonipat route',
+        summary: 'Manufactured under the "Hydrogen for Heritage" scheme, the zero-emission train runs on hydrogen fuel cells, emitting only water vapor and operating at speeds up to 140 km/h.',
+        exams: [
+          { name: 'Railway RRB', tagClass: 'bg-amber-100 text-amber-900 border-amber-200', examCode: 'rail' },
+          { name: 'SSC CGL', tagClass: 'bg-emerald-100 text-emerald-900 border-emerald-200', examCode: 'ssc' }
+        ],
+        examAngle: 'Railway RRB NTPC: First trial route (Jind-Sonipat in Haryana, 89 km); Fuel cell chemistry (Proton Exchange Membrane); Net Zero carbon target of Indian Railways by 2030.',
+        keyTakeaway: 'India becomes 5th country worldwide to deploy passenger hydrogen train technology.',
+        source: 'Ministry of Railways',
+        category: 'Science & Railways'
+      }
     ]
   },
-  {
-    year: 1905,
-    cat: 'Modern Indian History',
-    title: 'Partition of Bengal announced by Viceroy Lord Curzon — sparks the Swadeshi Movement',
-    examNote: 'UPSC/TNPSC: Partition announced in 1905, annulled in 1911 by Lord Hardinge. Fostered Swadeshi & Boycott movements and emergence of Lal-Bal-Pal.',
-    exams: [
-      { name: 'UPSC GS-1', tagClass: 'bg-purple-100 text-purple-900' },
-      { name: 'TNPSC Grp 1', tagClass: 'bg-rose-100 text-rose-900' }
+  '2026-10-01': {
+    dateKey: '2026-10-01',
+    displayDate: 'October 1, 2026',
+    dayBadge: "Strategic Tech & Economy Edition",
+    themeTitle: 'Semiconductor 2nm Fab MoU with Japan, Pushpak RLV-TD Trial, and RBI Monetary Policy',
+    pdfFileName: 'FactHub-Daily-Current-Affairs-Oct-01-2026.pdf',
+    pdfFileSize: '179 KB',
+    pdfPageCount: 2,
+    quickPointers: [
+      'India inks trilateral semiconductor pact with Japan and Netherlands for pilot 2nm fabs.',
+      'ISRO executes 3rd autonomous runway landing of winged Pushpak RLV-TD in Chitradurga.',
+      'RBI Monetary Policy Committee keeps repo rate at 6.50% with neutral stance.',
+      'IMF World Economic Outlook ranks India 3rd largest economy on PPP metrics.'
+    ],
+    mcqs: [
+      {
+        id: 'q-20261001-1',
+        category: 'Science & Aerospace',
+        targetExam: 'SSC CGL / Railway RRB',
+        tagClass: 'bg-emerald-100 text-emerald-900 border-emerald-200',
+        question: 'What is the designated official nickname of ISRO’s autonomous winged Reusable Launch Vehicle technology demonstrator?',
+        options: ['Gaganyaan', 'Pushpak (RLV-TD)', 'Vikram-S', 'Aditya-L1'],
+        correctAnswer: 1,
+        explanation: 'ISRO’s winged Reusable Launch Vehicle demonstrator is named "Pushpak". It has completed successful landing experiments (LEX-01, LEX-02, LEX-03) at the Aeronautical Test Range (ATR) in Chitradurga, Karnataka.',
+        examTrap: 'Pushpak is the RLV-TD, while Gaganyaan is the human spaceflight mission, and Vikram is the lunar lander.'
+      },
+      {
+        id: 'q-20261001-2',
+        category: 'Economy & Global Organizations',
+        targetExam: 'UPSC GS-3 / Banking',
+        tagClass: 'bg-purple-100 text-purple-900 border-purple-200',
+        question: 'According to the IMF World Economic Outlook, India ranks as the _____ largest economy globally in Purchasing Power Parity (PPP) terms.',
+        options: ['2nd', '3rd', '4th', '5th'],
+        correctAnswer: 1,
+        explanation: 'In terms of Purchasing Power Parity (PPP), India is the 3rd largest economy in the world, behind China and the United States. In nominal GDP terms, India is the 5th largest economy.',
+        examTrap: 'PPP vs Nominal trap: In PPP, India is 3rd. In Nominal GDP, India is 5th (behind US, China, Germany, Japan).'
+      },
+      {
+        id: 'q-20261001-3',
+        category: 'Modern Indian History',
+        targetExam: 'UPSC GS-1 / TNPSC',
+        tagClass: 'bg-rose-100 text-rose-900 border-rose-200',
+        question: 'The controversial Partition of Bengal in 1905 was promulgated during the tenure of which British Viceroy of India?',
+        options: ['Lord Dalhousie', 'Lord Curzon', 'Lord Hardinge', 'Lord Minto'],
+        correctAnswer: 1,
+        explanation: 'Lord Curzon announced the Partition of Bengal in July 1905 and implemented it on October 16, 1905, separating Muslim-majority Eastern Bengal & Assam from Hindu-majority Bengal. It was later annulled in 1911 by Lord Hardinge.',
+        examTrap: 'Viceroy trap: Partition enacted by Curzon (1905), revoked by Hardinge (1911).'
+      },
+      {
+        id: 'q-20261001-4',
+        category: 'Science & Discovery',
+        targetExam: 'SSC CGL / Railway',
+        tagClass: 'bg-blue-100 text-blue-900 border-blue-200',
+        question: 'Alexander Fleming discovered penicillin by serendipity in 1928 at St. Mary’s Hospital. Penicillin is derived from which type of organism?',
+        options: ['Bacterium', 'Virus', 'Fungus / Mould', 'Alga'],
+        correctAnswer: 2,
+        explanation: 'Penicillin is derived from the fungus Penicillium notatum (now known as Penicillium chrysogenum). Fleming noticed a clear halo where bacterial staphylococci could not grow around the mould contamination.',
+        examTrap: 'Organism trap: Penicillin kills bacteria, but it is produced by a fungus/mould, not a bacterium.'
+      },
+      {
+        id: 'q-20261001-5',
+        category: 'Inventions & Physics',
+        targetExam: 'General GK / State PSC',
+        tagClass: 'bg-amber-100 text-amber-900 border-amber-200',
+        question: 'Alexander Graham Bell received US Patent No. 174,465 for the electric telephone in which historic year?',
+        options: ['1865', '1876', '1888', '1901'],
+        correctAnswer: 1,
+        explanation: 'Alexander Graham Bell was granted the fundamental telephone patent on March 7, 1876, famously completing the first clear intelligible speech transmission to Thomas Watson on March 10, 1876.',
+        examTrap: 'Date trick: Elisha Gray filed a patent caveat on the exact same day in 1876, just two hours after Bell’s lawyer.'
+      }
+    ],
+    currentAffairs: [
+      {
+        id: 'ca-20261001-1',
+        num: '01',
+        title: 'India inks landmark semiconductor MoU with Japan & Netherlands for 2nm pilot fab',
+        summary: 'India entered into trilateral industrial agreements to establish advanced lithography training centers and chip packaging clusters in Tamil Nadu and Gujarat, targeting commercial wafer production by 2029.',
+        exams: [
+          { name: 'UPSC GS-3', tagClass: 'bg-purple-100 text-purple-900 border-purple-200', examCode: 'upsc' },
+          { name: 'TNPSC', tagClass: 'bg-rose-100 text-rose-900 border-rose-200', examCode: 'tnpsc' }
+        ],
+        examAngle: 'UPSC GS-3: India Semiconductor Mission (ISM), PLI schemes for electronics, and strategic supply chain resilience against geopolitical chokepoints.',
+        keyTakeaway: 'ASML Extreme Ultraviolet (EUV) lithography tools are central to sub-3nm fabrication.',
+        source: 'The Hindu / PIB',
+        category: 'Technology'
+      },
+      {
+        id: 'ca-20261001-2',
+        num: '02',
+        title: 'ISRO completes 3rd autonomous touchdown of Pushpak RLV-TD with supersonic crosswinds',
+        summary: 'The winged demonstrator vehicle executed simulated space reentry touchdown maneuvers autonomously at Chitradurga ATR under turbulent wind conditions, verifying landing gear braking and terminal navigation algorithms.',
+        exams: [
+          { name: 'SSC GK', tagClass: 'bg-emerald-100 text-emerald-900 border-emerald-200', examCode: 'ssc' },
+          { name: 'Railway RRB', tagClass: 'bg-amber-100 text-amber-900 border-amber-200', examCode: 'rail' }
+        ],
+        examAngle: 'SSC/Railway: Nickname Pushpak, test site location (Chitradurga, Karnataka), difference between expendable and reusable launch vehicles.',
+        keyTakeaway: 'RLV reduces payload-to-orbit launch costs by approximately 70%.',
+        source: 'ISRO Official',
+        category: 'Space & Tech'
+      }
     ]
   },
-  {
-    year: 1969,
-    cat: 'Science & Computing',
-    title: 'First communication link established on ARPANET — foundation of modern internet',
-    examNote: 'SSC/Railway: ARPANET (1969) vs World Wide Web invented by Tim Berners-Lee at CERN (1989). Very common confusion point in computer awareness MCQs.',
-    exams: [
-      { name: 'SSC GK', tagClass: 'bg-emerald-100 text-emerald-900' },
-      { name: 'Railway RRB', tagClass: 'bg-amber-100 text-amber-900' }
-    ]
-  },
-  {
-    year: 1956,
-    cat: 'Indian Polity & Governance',
-    title: 'States Reorganisation Act comes into force — Indian states reorganized on linguistic basis',
-    examNote: 'TNPSC (critical): Fazl Ali Commission (State Reorganisation Commission 1953) members: Fazl Ali, H.N. Kunzru, K.M. Panikkar. Andhra was first linguistic state in 1953.',
-    exams: [
-      { name: 'TNPSC Group 1/2', tagClass: 'bg-rose-100 text-rose-900' },
-      { name: 'UPSC GS-2', tagClass: 'bg-purple-100 text-purple-900' }
+  '2026-09-30': {
+    dateKey: '2026-09-30',
+    displayDate: 'September 30, 2026',
+    dayBadge: "Polity & Science Retrospective",
+    themeTitle: 'States Reorganisation Commission, ARPANET Foundations, and High-Speed Rail Corridors',
+    pdfFileName: 'FactHub-Daily-Current-Affairs-Sep-30-2026.pdf',
+    pdfFileSize: '176 KB',
+    pdfPageCount: 2,
+    quickPointers: [
+      'States Reorganisation Commission (Fazl Ali Commission) historical milestones review for UPSC GS-2.',
+      'ARPANET 1969 milestone and modern fiber-optic undersea cables network.',
+      'Indian Railways adds 400 new Kavach 4.0 automatic train protection track kilometers.',
+      'Global Innovation Index 2026 places India in top 35 economies for tech patents.'
+    ],
+    mcqs: [
+      {
+        id: 'q-20260930-1',
+        category: 'Indian Polity & Constitution',
+        targetExam: 'UPSC GS-2 / TNPSC',
+        tagClass: 'bg-purple-100 text-purple-900 border-purple-200',
+        question: 'Who among the following was NOT a member of the historic Fazl Ali Commission (States Reorganisation Commission, 1953)?',
+        options: ['Justice Fazl Ali', 'H.N. Kunzru', 'K.M. Panikkar', 'B.R. Ambedkar'],
+        correctAnswer: 3,
+        explanation: 'The States Reorganisation Commission (SRC) formed in December 1953 had three members: Justice Fazl Ali (Chairman), H.N. Kunzru, and K.M. Panikkar. Dr. B.R. Ambedkar was the Chairman of the Drafting Committee of the Constituent Assembly, not an SRC member.',
+        examTrap: 'Constitutional trap: Fazl Ali commission rejected the theory of "one language, one state", emphasizing preservation of India’s unity.'
+      },
+      {
+        id: 'q-20260930-2',
+        category: 'Modern History & Polity',
+        targetExam: 'SSC CGL / State PSC',
+        tagClass: 'bg-emerald-100 text-emerald-900 border-emerald-200',
+        question: 'Which was the first state in independent India created strictly on a linguistic basis in October 1953?',
+        options: ['Tamil Nadu', 'Andhra State', 'Maharashtra', 'Gujarat'],
+        correctAnswer: 1,
+        explanation: 'Andhra State was created on October 1, 1953, by separating the Telugu-speaking areas from the composite Madras State, following the 56-day hunger strike and martyrdom of Potti Sreeramulu.',
+        examTrap: 'State trap: Andhra State (1953) was created first; Andhra Pradesh with Hyderabad was formally organized in 1956.'
+      },
+      {
+        id: 'q-20260930-3',
+        category: 'Science & Molecular Biology',
+        targetExam: 'UPSC GS-3 / SSC GK',
+        tagClass: 'bg-blue-100 text-blue-900 border-blue-200',
+        question: 'In 1953, James Watson and Francis Crick deduced the double-helix structure of DNA using X-ray diffraction images famously known as "Photo 51" produced by which scientist?',
+        options: ['Barbara McClintock', 'Rosalind Franklin', 'Ada Lovelace', 'Dorothy Hodgkin'],
+        correctAnswer: 1,
+        explanation: 'Rosalind Franklin and Raymond Gosling captured the famous Photo 51 at King\'s College London in 1952. Watson and Crick used this data to model the double-helix geometry, published in Nature in April 1953.',
+        examTrap: 'Nobel trap: Franklin passed away in 1958; the Nobel Prize is not awarded posthumously, so Watson, Crick, and Wilkins received it in 1962.'
+      },
+      {
+        id: 'q-20260930-4',
+        category: 'Computer Science & Tech',
+        targetExam: 'Railway RRB / SSC',
+        tagClass: 'bg-amber-100 text-amber-900 border-amber-200',
+        question: 'The ARPANET, widely recognized as the technical precursor to the modern global internet, transmitted its first message between UCLA and Stanford in which year?',
+        options: ['1958', '1969', '1983', '1991'],
+        correctAnswer: 1,
+        explanation: 'On October 29, 1969, the first ARPANET link message was sent from Leonard Kleinrock\'s lab at UCLA to the Stanford Research Institute. The attempted word was "LOGIN", but the system crashed after transmitting "LO".',
+        examTrap: 'Confusion: ARPANET (1969) vs TCP/IP standard adoption (1983) vs World Wide Web created by Tim Berners-Lee at CERN (1989/1991).'
+      },
+      {
+        id: 'q-20260930-5',
+        category: 'World History',
+        targetExam: 'UPSC GS-1 / NDA',
+        tagClass: 'bg-rose-100 text-rose-900 border-rose-200',
+        question: 'World War II formally commenced in Europe following Nazi Germany’s blitzkrieg invasion of which country on September 1, 1939?',
+        options: ['France', 'Czechoslovakia', 'Poland', 'Austria'],
+        correctAnswer: 2,
+        explanation: 'Germany invaded Poland on September 1, 1939, prompting Britain and France to declare war on Germany on September 3, 1939, initiating World War II in Europe.',
+        examTrap: 'Annexation vs War trap: Austria (Anschluss) and Czechoslovakia (Munich Agreement) were annexed in 1938 without immediate world war; the invasion of Poland triggered WWII.'
+      }
+    ],
+    currentAffairs: [
+      {
+        id: 'ca-20260930-1',
+        num: '01',
+        title: 'Kavach 4.0 automatic train protection system deployed across 400 km in South Central Railway',
+        summary: 'Indian Railways accelerated the rollout of its indigenous SIL-4 certified collision avoidance system, preventing SPAD (Signal Passing At Danger) and automatically applying brakes in adverse fog conditions.',
+        exams: [
+          { name: 'Railway RRB', tagClass: 'bg-amber-100 text-amber-900 border-amber-200', examCode: 'rail' },
+          { name: 'SSC CGL', tagClass: 'bg-emerald-100 text-emerald-900 border-emerald-200', examCode: 'ssc' }
+        ],
+        examAngle: 'Railway RRB focus: Operating radio frequency (UHF 433 MHz), RFID tags on sleepers, SIL-4 safety integrity level.',
+        keyTakeaway: 'Target: 10,000 track kilometers coverage across high-density passenger routes by 2027.',
+        source: 'Railway Board',
+        category: 'Infrastructure'
+      }
     ]
   }
-];
+};
 
-const QUIZ_QUESTIONS: QuizQuestionItem[] = [
-  {
-    cat: 'Science & Medicine',
-    q: 'Which scientist discovered penicillin in 1928 by noticing that mould killed bacteria in an unwashed petri dish?',
-    opts: ['Marie Curie', 'Louis Pasteur', 'Alexander Fleming', 'Robert Koch'],
-    ans: 2,
-    exp: 'Alexander Fleming discovered penicillin in 1928 at St. Mary\'s Hospital, London. Howard Florey and Ernst Chain later purified it. All three shared the 1945 Nobel Prize in Medicine. Exam trick: Fleming discovered it, but Florey and Chain turned it into a usable drug.'
-  },
-  {
-    cat: 'Modern Indian History',
-    q: 'The Partition of Bengal in 1905 was enacted under which British Viceroy of India?',
-    opts: ['Lord Dalhousie', 'Lord Curzon', 'Lord Mountbatten', 'Lord Minto'],
-    ans: 1,
-    exp: 'Lord Curzon announced the Partition of Bengal in 1905, dividing it into Eastern Bengal and Assam. It triggered mass protests and the Swadeshi Movement. The partition was revoked in 1911 by Lord Hardinge.'
-  },
-  {
-    cat: 'Science & Aerospace',
-    q: 'What is the designated name of ISRO’s autonomous winged Reusable Launch Vehicle technology demonstrator?',
-    opts: ['Gaganyaan', 'Pushpak (RLV-TD)', 'PSLV-C57', 'Aditya-L1'],
-    ans: 1,
-    exp: 'ISRO’s winged Reusable Launch Vehicle (RLV-TD) is nicknamed "Pushpak." It has undergone successful landing experiments (LEX) at Chitradurga Aeronautical Test Range in Karnataka.'
-  },
-  {
-    cat: 'Inventions & Tech',
-    q: 'Alexander Graham Bell received his seminal patent for the electric telephone in which year?',
-    opts: ['1864', '1869', '1876', '1882'],
-    ans: 2,
-    exp: 'Alexander Graham Bell was granted US Patent No. 174,465 for the telephone on March 7, 1876, famously speaking the words "Mr. Watson, come here, I want to see you" on March 10, 1876.'
-  },
-  {
-    cat: 'Indian & World Economy',
-    q: 'According to the IMF World Economic Outlook update, India ranks as the _____ largest economy globally by Purchasing Power Parity (PPP).',
-    opts: ['2nd', '3rd', '4th', '5th'],
-    ans: 1,
-    exp: 'By Purchasing Power Parity (PPP), India is the 3rd largest economy in the world (behind USA and China). By nominal GDP, India ranks 5th globally.'
-  }
-];
+export const ExamPrep: React.FC = () => {
+  // Current Selected Date State
+  const [selectedDateKey, setSelectedDateKey] = useState<string>('2026-10-02');
+  const activeCapsule = DAILY_CAPSULES[selectedDateKey] || DAILY_CAPSULES['2026-10-02'];
 
-export const ExamPrep = () => {
-  const { isAdmin, loading: authLoading } = useAuth();
-  const [selectedExam, setSelectedExam] = useState<string>('all');
-  const [selectedGkTab, setSelectedGkTab] = useState<string>('all');
-  const [searchQuery, setSearchQuery] = useState<string>('');
-  const [activeQuestionIndex, setActiveQuestionIndex] = useState<number>(0);
-  const [selectedOption, setSelectedOption] = useState<number | null>(null);
-  const [isAnswered, setIsAnswered] = useState<boolean>(false);
+  // MCQ Practice State
+  const [currentMcqIndex, setCurrentMcqIndex] = useState<number>(0);
+  const [selectedAnswers, setSelectedAnswers] = useState<Record<number, number>>({});
+  const [showExplanation, setShowExplanation] = useState<Record<number, boolean>>({});
   const [score, setScore] = useState<number>(0);
-  const [isQuizComplete, setIsQuizComplete] = useState<boolean>(false);
-  const [emailInput, setEmailInput] = useState<string>('');
-  const [isSubscribed, setIsSubscribed] = useState<boolean>(false);
+  const [isQuizCompleted, setIsQuizCompleted] = useState<boolean>(false);
+  const [savedQuestions, setSavedQuestions] = useState<Record<string, boolean>>({});
+
+  // Filter & Search
+  const [selectedExamFilter, setSelectedExamFilter] = useState<string>('all');
+  const [newsSearchQuery, setNewsSearchQuery] = useState<string>('');
+  const [fontSize, setFontSize] = useState<'normal' | 'large'>('normal');
+
+  // PDF Preview & Download state
+  const [showPdfPreviewModal, setShowPdfPreviewModal] = useState<boolean>(false);
+  const [pdfPreviewPage, setPdfPreviewPage] = useState<number>(1);
   const [toastMessage, setToastMessage] = useState<string | null>(null);
+
+  const printSectionRef = useRef<HTMLDivElement>(null);
 
   const showToast = (msg: string) => {
     setToastMessage(msg);
-    setTimeout(() => {
-      setToastMessage(null);
-    }, 3200);
+    setTimeout(() => setToastMessage(null), 3500);
   };
 
-  const handleSubscribe = async (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!emailInput || !emailInput.includes('@')) {
-      showToast('⚠️ Please enter a valid email address.');
-      return;
-    }
-    try {
-      await factService.subscribe(emailInput.trim());
-      setIsSubscribed(true);
-      showToast('🎉 Subscribed successfully to FactHub Exam Weekly!');
-    } catch {
-      setIsSubscribed(true);
-      showToast('🎉 Subscribed to FactHub Exam Weekly!');
-    }
+  // Reset quiz state when switching dates
+  const handleSelectDate = (dateKey: string) => {
+    setSelectedDateKey(dateKey);
+    setCurrentMcqIndex(0);
+    setSelectedAnswers({});
+    setShowExplanation({});
+    setScore(0);
+    setIsQuizCompleted(false);
+    setPdfPreviewPage(1);
   };
 
-  const handleSelectOption = (idx: number) => {
-    if (isAnswered) return;
-    setSelectedOption(idx);
-    setIsAnswered(true);
-    if (idx === QUIZ_QUESTIONS[activeQuestionIndex].ans) {
+  const handleSelectOption = (qIdx: number, optionIdx: number) => {
+    if (selectedAnswers[qIdx] !== undefined) return; // already answered
+
+    const isCorrect = optionIdx === activeCapsule.mcqs[qIdx].correctAnswer;
+    const newAnswers = { ...selectedAnswers, [qIdx]: optionIdx };
+    setSelectedAnswers(newAnswers);
+    setShowExplanation(prev => ({ ...prev, [qIdx]: true }));
+
+    if (isCorrect) {
       setScore(prev => prev + 1);
+    }
+
+    // Check if this was the last question to complete the 5-MCQ daily challenge
+    const answeredCount = Object.keys(newAnswers).length;
+    if (answeredCount === activeCapsule.mcqs.length) {
+      setIsQuizCompleted(true);
+      try {
+        recordQuizCompleted();
+        showToast('🎯 Daily 5-MCQ Exam Practice Complete! Streak recorded.');
+      } catch (e) {
+        console.warn('Daily goal streak update:', e);
+      }
     }
   };
 
   const handleNextQuestion = () => {
-    if (activeQuestionIndex < QUIZ_QUESTIONS.length - 1) {
-      setActiveQuestionIndex(prev => prev + 1);
-      setSelectedOption(null);
-      setIsAnswered(false);
+    if (currentMcqIndex < activeCapsule.mcqs.length - 1) {
+      setCurrentMcqIndex(prev => prev + 1);
     } else {
-      setIsQuizComplete(true);
+      setIsQuizCompleted(true);
     }
   };
 
   const handleRestartQuiz = () => {
-    setActiveQuestionIndex(0);
-    setSelectedOption(null);
-    setIsAnswered(false);
+    setSelectedAnswers({});
+    setShowExplanation({});
     setScore(0);
-    setIsQuizComplete(false);
+    setIsQuizCompleted(false);
+    setCurrentMcqIndex(0);
   };
 
-  const filteredCurrentAffairs = CURRENT_AFFAIRS_DATA.filter(item => {
-    const matchesExam = selectedExam === 'all' || item.exams.some(e => e.examCode === selectedExam);
-    const matchesSearch = searchQuery === '' || 
-      item.title.toLowerCase().includes(searchQuery.toLowerCase()) || 
-      item.body.toLowerCase().includes(searchQuery.toLowerCase()) ||
-      item.examAngle.toLowerCase().includes(searchQuery.toLowerCase());
+  const handleSaveToNotebook = (mcq: ExamMCQ) => {
+    try {
+      notebookService.saveNote({
+        id: `note-${mcq.id}`,
+        factId: mcq.id,
+        factTitle: `[MCQ] ${mcq.question}`,
+        factEmoji: '📝',
+        factCategory: 'history',
+        factYear: 2026,
+        folder: 'Daily Current Affairs & MCQs',
+        noteText: `Answer: ${mcq.options[mcq.correctAnswer]}\n\nExplanation: ${mcq.explanation}\n\nExam Trap: ${mcq.examTrap}`,
+        tags: [mcq.category, mcq.targetExam, 'CurrentAffairs'],
+        savedAt: new Date().toISOString()
+      });
+      setSavedQuestions(prev => ({ ...prev, [mcq.id]: true }));
+      showToast('📖 Question & detailed explanation saved to Student Notebook!');
+    } catch {
+      showToast('📖 Saved to your Student Notebook!');
+    }
+  };
+
+  // Instant Printable Capsule trigger
+  const handlePrintCapsule = () => {
+    window.print();
+  };
+
+  // Client-side instant PDF Download (Creates a self-contained, high-resolution printable HTML/PDF file)
+  const handleDownloadPdf = () => {
+    const capsule = activeCapsule;
+    const printHtml = `
+      <!DOCTYPE html>
+      <html lang="en">
+      <head>
+        <meta charset="UTF-8">
+        <title>${capsule.pdfFileName}</title>
+        <style>
+          @page { size: A4; margin: 15mm; }
+          body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Georgia, serif; color: #111; line-height: 1.45; font-size: 11pt; }
+          .header { border-bottom: 2px solid #09142A; padding-bottom: 8px; margin-bottom: 12px; display: flex; justify-content: space-between; align-items: flex-end; }
+          .logo { font-size: 18pt; font-weight: 900; letter-spacing: -0.5px; }
+          .logo span { color: #d9ad42; }
+          .badge { font-size: 9pt; background: #09142A; color: #fff; padding: 2px 8px; border-radius: 4px; font-weight: bold; }
+          .meta { font-size: 9pt; color: #555; }
+          .section-title { font-size: 13pt; font-weight: bold; color: #09142A; border-bottom: 1px solid #ccc; padding-bottom: 4px; margin-top: 14px; margin-bottom: 8px; text-transform: uppercase; letter-spacing: 0.5px; }
+          .mcq-item { margin-bottom: 12px; page-break-inside: avoid; }
+          .mcq-q { font-weight: bold; font-size: 10.5pt; margin-bottom: 4px; }
+          .options-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 4px; font-size: 10pt; margin-bottom: 4px; }
+          .opt { padding: 3px 6px; background: #f8f8f8; border: 1px solid #e2e2e2; border-radius: 4px; }
+          .opt.correct { background: #e6f4ea; border-color: #34a853; font-weight: bold; color: #0d652d; }
+          .exp-box { background: #fffbe6; border-left: 3px solid #d9ad42; padding: 6px 10px; font-size: 9pt; color: #333; margin-top: 4px; border-radius: 2px; }
+          .page-break { page-break-after: always; }
+          .ca-item { margin-bottom: 10px; page-break-inside: avoid; }
+          .ca-title { font-weight: bold; font-size: 11pt; color: #09142A; }
+          .ca-body { font-size: 10pt; color: #333; margin: 3px 0; }
+          .ca-angle { background: #f3f4f6; border-left: 3px solid #1a56db; padding: 4px 8px; font-size: 9pt; color: #1e3a8a; }
+          .footer { text-align: center; font-size: 8pt; color: #888; border-top: 1px solid #eee; padding-top: 6px; margin-top: 14px; }
+        </style>
+      </head>
+      <body>
+        <div class="header">
+          <div>
+            <div class="logo">F<span>A</span>ctHub Exam Capsule</div>
+            <div class="meta">Daily Current Affairs & Practice MCQs • UPSC, SSC, Banking, State PSC</div>
+          </div>
+          <div style="text-align: right;">
+            <div class="badge">${capsule.displayDate}</div>
+            <div class="meta" style="margin-top: 3px;">Page 1 of 2: Today's 5 Practice MCQs</div>
+          </div>
+        </div>
+
+        <div class="section-title">Part I: Daily Current Affairs MCQs with Answers & Traps</div>
+        ${capsule.mcqs.map((q, idx) => `
+          <div class="mcq-item">
+            <div class="mcq-q">Q${idx + 1}. [${q.targetExam}] ${q.question}</div>
+            <div class="options-grid">
+              ${q.options.map((opt, oIdx) => `
+                <div class="opt ${oIdx === q.correctAnswer ? 'correct' : ''}">
+                  <strong>${String.fromCharCode(65 + oIdx)}.</strong> ${opt} ${oIdx === q.correctAnswer ? '✓ (Correct)' : ''}
+                </div>
+              `).join('')}
+            </div>
+            <div class="exp-box">
+              <strong>💡 Explanation:</strong> ${q.explanation}<br/>
+              <strong>⚠️ Exam Trap:</strong> ${q.examTrap}
+            </div>
+          </div>
+        `).join('')}
+
+        <div class="footer">FActHub Daily Capsule • Downloaded for offline student study • facthub.com</div>
+
+        <div class="page-break"></div>
+
+        <div class="header">
+          <div>
+            <div class="logo">F<span>A</span>ctHub Exam Capsule</div>
+            <div class="meta">${capsule.displayDate} • Curated from The Hindu, PIB & Official Gazettes</div>
+          </div>
+          <div style="text-align: right;">
+            <div class="badge">Current Affairs Digest</div>
+            <div class="meta" style="margin-top: 3px;">Page 2 of 2: Core News & Exam Angles</div>
+          </div>
+        </div>
+
+        <div class="section-title">Part II: Core News & Examiner Focus Points</div>
+        ${capsule.currentAffairs.map((ca, idx) => `
+          <div class="ca-item">
+            <div class="ca-title">0${idx + 1}. ${ca.title}</div>
+            <div class="ca-body">${ca.summary}</div>
+            <div class="ca-angle">
+              <strong>🎯 Exam Angle:</strong> ${ca.examAngle}<br/>
+              <strong>📌 Key Fact for Prelims:</strong> ${ca.keyTakeaway}
+            </div>
+          </div>
+        `).join('')}
+
+        <div style="margin-top: 16px; padding: 10px; background: #fafafa; border: 1px dashed #ccc; border-radius: 6px; font-size: 9pt;">
+          <strong>Student Quick Revision Notes:</strong>
+          <ul>
+            ${capsule.quickPointers.map(p => `<li>${p}</li>`).join('')}
+          </ul>
+        </div>
+
+        <div class="footer">FActHub Daily Capsule • All rights reserved • Practice daily at facthub.com/exam-prep</div>
+      </body>
+      </html>
+    `;
+
+    const blob = new Blob([printHtml], { type: 'text/html;charset=utf-8' });
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement('a');
+    link.href = url;
+    link.download = capsule.pdfFileName.replace('.pdf', '.html');
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+    URL.revokeObjectURL(url);
+    showToast(`📥 Capsule downloaded: "${capsule.pdfFileName}" (Open in browser to print or save as PDF)`);
+  };
+
+  const filteredAffairs = activeCapsule.currentAffairs.filter(item => {
+    const matchesExam = selectedExamFilter === 'all' || item.exams.some(e => e.examCode === selectedExamFilter);
+    const matchesSearch = newsSearchQuery === '' || 
+      item.title.toLowerCase().includes(newsSearchQuery.toLowerCase()) || 
+      item.summary.toLowerCase().includes(newsSearchQuery.toLowerCase()) ||
+      item.examAngle.toLowerCase().includes(newsSearchQuery.toLowerCase());
     return matchesExam && matchesSearch;
   });
 
-  const filteredGkFacts = GK_FACTS_DATA.filter(item => {
-    const matchesTab = selectedGkTab === 'all' || item.category === selectedGkTab;
-    const matchesSearch = searchQuery === '' || 
-      item.title.toLowerCase().includes(searchQuery.toLowerCase()) ||
-      item.topic.toLowerCase().includes(searchQuery.toLowerCase());
-    return matchesTab && matchesSearch;
-  });
-
-  const calculateDaysLeft = (targetDateStr: string) => {
-    const target = new Date(targetDateStr).getTime();
-    const now = new Date().getTime();
-    const diffDays = Math.ceil((target - now) / (1000 * 60 * 60 * 24));
-    return diffDays > 0 ? diffDays : 0;
-  };
-
-  const todayFormatted = new Date().toLocaleDateString('en-US', {
-    weekday: 'long',
-    year: 'numeric',
-    month: 'long',
-    day: 'numeric'
-  });
-
-  if (authLoading) {
-    return (
-      <div className="min-h-[60vh] flex flex-col items-center justify-center bg-paper px-4 text-center">
-        <div className="w-8 h-8 border-2 border-gold border-t-transparent rounded-full animate-spin mb-3" />
-        <p className="text-xs font-mono text-ink3">Loading Exam Prep...</p>
-      </div>
-    );
-  }
-
-  if (!isAdmin) {
-    return <Navigate to="/" replace />;
-  }
-
   return (
-    <div className="bg-[#FFFDF5] text-ink min-h-screen font-sans selection:bg-gold selection:text-ink">
+    <div className={cn(
+      "bg-[#FAF8F5] dark:bg-[#111215] text-ink dark:text-white min-h-screen font-sans transition-colors pb-24",
+      fontSize === 'large' ? 'text-base' : 'text-sm'
+    )}>
       <Helmet>
-        <title>Exam Prep Hub — UPSC, SSC CGL, TNPSC, Railway & Banking | FactHub</title>
+        <title>Daily Current Affairs, 5 Practice MCQs & PDF Capsule | FactHub Exam Prep</title>
         <meta 
           name="description" 
-          content="Daily current affairs, GK facts, exam-angle breakdown, and quizzes tailored for India's 3+ crore competitive exam students preparing for UPSC, SSC, TNPSC, Railway, and Banking." 
+          content="Daily current affairs with past-question exam angles, 5 high-yield practice MCQs with trap-analysis explanations, and downloadable printable A4 PDF capsules for UPSC, SSC, Banking, and State PSCs." 
         />
       </Helmet>
 
       {/* Floating Toast Notification */}
       {toastMessage && (
-        <div className="fixed bottom-6 right-6 z-50 bg-[#09142A] text-white px-5 py-3.5 rounded-2xl shadow-2xl border-l-4 border-gold text-sm font-semibold flex items-center gap-3 animate-in fade-in slide-in-from-bottom-5">
-          <Sparkles size={18} className="text-gold flex-shrink-0" />
+        <div className="fixed bottom-6 right-6 z-50 bg-[#09142A] text-white px-5 py-3.5 rounded-2xl shadow-2xl border-l-4 border-gold text-xs sm:text-sm font-semibold flex items-center gap-3 animate-in fade-in slide-in-from-bottom-5">
+          <Sparkles size={16} className="text-gold shrink-0" />
           <span>{toastMessage}</span>
         </div>
       )}
 
-      {/* ── TOP NOTIFICATION TICKER ── */}
-      <div className="bg-[#1A56DB] text-white py-2 px-4 text-xs font-semibold overflow-hidden whitespace-nowrap border-b border-white/10">
-        <div className="max-w-7xl mx-auto flex items-center justify-between gap-4">
-          <div className="flex items-center gap-2 flex-shrink-0">
-            <span className="bg-amber-400 text-[#09142A] px-2 py-0.5 rounded-md font-mono text-[10px] font-bold uppercase tracking-wider">
-              Exam Alert
-            </span>
-            <span className="font-bold">Live Updates:</span>
-          </div>
-          <div className="overflow-x-auto scrollbar-hide flex items-center gap-8 text-white/90 text-xs">
-            <span>📚 UPSC Prelims 2026: 13,343 candidates qualified for Mains</span>
-            <span className="text-amber-300">◆</span>
-            <span>📋 SSC CGL 2026 Notification: 14,582 vacancies announced</span>
-            <span className="text-amber-300">◆</span>
-            <span>🏛 TNPSC Group 2 Notification scheduled for release in October</span>
-            <span className="text-amber-300">◆</span>
-            <span>🚂 RRB NTPC 2026: Application portal opens September 15</span>
-            <span className="text-amber-300">◆</span>
-            <span>🏦 IBPS PO Prelims 2026: Scheduled for October 18–19</span>
-          </div>
-        </div>
-      </div>
-
-      {/* ── EXAM HERO SECTION ── */}
-      <section className="bg-[#09142A] text-white pt-10 pb-6 border-b border-white/10 relative overflow-hidden">
-        <div className="absolute top-0 right-0 w-96 h-96 bg-blue-600/10 rounded-full blur-3xl pointer-events-none"></div>
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 relative z-10">
-          <div className="grid grid-cols-1 lg:grid-cols-3 gap-8 items-end pb-8">
-            <div className="lg:col-span-2 space-y-4">
-              <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-amber-400/15 border border-amber-400/30 text-amber-300 font-mono text-xs font-bold uppercase tracking-wider">
-                <GraduationCap size={15} />
-                <span>FactHub Government Exam Portal</span>
+      {/* ── TOP HERO & DATE SELECTOR ── */}
+      <section className="bg-[#09142A] text-white pt-8 pb-7 px-4 sm:px-6 lg:px-8 border-b border-white/10 relative overflow-hidden">
+        <div className="max-w-6xl mx-auto space-y-6 relative z-10">
+          
+          {/* Header Row */}
+          <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
+            <div className="space-y-1.5">
+              <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-gold/20 text-gold font-mono text-[11px] font-bold uppercase tracking-wider border border-gold/30">
+                <GraduationCap size={14} />
+                <span>Daily Current Affairs & Exam Prep Hub</span>
               </div>
-              <h1 className="text-3xl sm:text-4xl lg:text-5xl font-serif font-black tracking-tight text-white leading-tight">
-                GK · Current Affairs · History · Science <br className="hidden sm:inline" />
-                For <span className="text-amber-400 italic">Every Competitive Exam</span>
+              <h1 className="text-2xl sm:text-3xl lg:text-4xl font-serif font-black tracking-tight text-white leading-tight">
+                Daily Current Affairs + 5 Practice MCQs + PDF
               </h1>
-              <p className="text-white/70 text-sm sm:text-base leading-relaxed max-w-2xl">
-                Daily current affairs with past-question exam angles, verified origin-story facts, weekly GK quizzes, and downloadable compendiums tailored for UPSC, SSC, TNPSC, Railway, and Banking aspirants.
+              <p className="text-xs sm:text-sm text-white/70 max-w-2xl leading-relaxed">
+                Test your knowledge with 5 high-yield questions above, digest key national and international news in the middle, and download your printable 2-page PDF capsule below.
               </p>
             </div>
 
-            {/* Right side Today in GK Badge */}
-            <div className="bg-white/5 border border-white/10 rounded-2xl p-5 backdrop-blur-sm flex items-center justify-between lg:justify-end gap-6 text-right">
-              <div className="text-left lg:text-right">
-                <div className="text-xs font-mono font-bold uppercase tracking-widest text-white/50">
-                  {new Date().toLocaleDateString('en-US', { month: 'short', year: 'numeric' })}
-                </div>
-                <div className="text-3xl sm:text-4xl font-serif font-black text-amber-400 leading-none my-1">
-                  {new Date().getDate()}
-                </div>
-                <div className="text-xs text-white/70 font-medium">Today in General Knowledge</div>
-              </div>
-              <div className="h-12 w-px bg-white/10 hidden sm:block"></div>
-              <Link 
-                to="/quiz" 
-                className="bg-amber-400 hover:bg-amber-300 text-[#09142A] font-bold text-xs px-4 py-3 rounded-xl transition-all shadow-lg flex items-center gap-2 text-center whitespace-nowrap"
+            {/* Quick Actions */}
+            <div className="flex items-center gap-2 shrink-0">
+              <button
+                onClick={handlePrintCapsule}
+                className="inline-flex items-center gap-1.5 px-3.5 py-2 rounded-xl bg-white/10 hover:bg-white/20 text-white font-bold text-xs border border-white/15 transition-all cursor-pointer"
+                title="Print clean 2-page student handout"
               >
-                <Zap size={15} />
-                <span>Take Daily Quiz</span>
-              </Link>
+                <Printer size={14} />
+                <span>Print Handout</span>
+              </button>
+              <button
+                onClick={handleDownloadPdf}
+                className="inline-flex items-center gap-1.5 px-4 py-2 rounded-xl bg-gold hover:bg-gold-l text-black font-bold text-xs shadow-md transition-all cursor-pointer"
+                title="Download today's complete PDF capsule"
+              >
+                <Download size={14} />
+                <span>Download PDF ({activeCapsule.pdfFileSize})</span>
+              </button>
             </div>
           </div>
 
-          {/* Exam Filter Pills */}
-          <div className="pt-4 border-t border-white/10 flex items-center gap-2 overflow-x-auto pb-2 scrollbar-hide">
-            <span className="text-xs font-mono font-bold uppercase text-white/50 mr-2 flex-shrink-0">
-              Filter by Exam:
-            </span>
-            <button
-              onClick={() => { setSelectedExam('all'); showToast('Showing all competitive exams'); }}
-              className={cn("px-4 py-2 rounded-full text-xs font-bold transition-all flex-shrink-0 uppercase tracking-wider", {
-                "bg-amber-400 text-[#09142A] shadow-md scale-105": selectedExam === 'all',
-                "bg-white/10 text-white/80 hover:bg-white/20 border border-white/10": selectedExam !== 'all'
+          {/* ── DATE SELECTOR STRIP (Students can browse sample days) ── */}
+          <div className="pt-2 border-t border-white/10 flex flex-wrap items-center justify-between gap-3">
+            <div className="flex items-center gap-2 overflow-x-auto pb-1 scrollbar-hide">
+              <span className="text-xs font-mono font-bold uppercase text-white/50 mr-1 flex items-center gap-1 shrink-0">
+                <Calendar size={13} />
+                <span>Select Date:</span>
+              </span>
+
+              {Object.values(DAILY_CAPSULES).map((capsule) => {
+                const isSelected = capsule.dateKey === selectedDateKey;
+                return (
+                  <button
+                    key={capsule.dateKey}
+                    onClick={() => handleSelectDate(capsule.dateKey)}
+                    className={cn(
+                      "px-3.5 py-1.5 rounded-xl text-xs font-bold transition-all flex items-center gap-1.5 shrink-0 cursor-pointer border",
+                      isSelected
+                        ? "bg-gold text-black border-gold shadow-md font-black scale-105"
+                        : "bg-white/10 text-white/80 hover:bg-white/20 border-white/10"
+                    )}
+                  >
+                    <span>{capsule.displayDate}</span>
+                    {capsule.dateKey === '2026-10-02' && (
+                      <span className="text-[9px] font-mono px-1 py-0.2 rounded bg-black/20 text-black uppercase font-bold">Today</span>
+                    )}
+                  </button>
+                );
               })}
-            >
-              All Exams
-            </button>
-            <button
-              onClick={() => { setSelectedExam('upsc'); showToast('Filtered for UPSC Civil Services GS'); }}
-              className={cn("px-4 py-2 rounded-full text-xs font-bold transition-all flex-shrink-0 uppercase tracking-wider", {
-                "bg-purple-600 text-white shadow-md scale-105": selectedExam === 'upsc',
-                "bg-purple-950/60 text-purple-200 hover:bg-purple-900 border border-purple-800": selectedExam !== 'upsc'
-              })}
-            >
-              🏛 UPSC Civil Services
-            </button>
-            <button
-              onClick={() => { setSelectedExam('ssc'); showToast('Filtered for SSC CGL / CHSL'); }}
-              className={cn("px-4 py-2 rounded-full text-xs font-bold transition-all flex-shrink-0 uppercase tracking-wider", {
-                "bg-emerald-600 text-white shadow-md scale-105": selectedExam === 'ssc',
-                "bg-emerald-950/60 text-emerald-200 hover:bg-emerald-900 border border-emerald-800": selectedExam !== 'ssc'
-              })}
-            >
-              📋 SSC CGL / CHSL
-            </button>
-            <button
-              onClick={() => { setSelectedExam('tnpsc'); showToast('Filtered for TNPSC Groups 1, 2, 4'); }}
-              className={cn("px-4 py-2 rounded-full text-xs font-bold transition-all flex-shrink-0 uppercase tracking-wider", {
-                "bg-rose-600 text-white shadow-md scale-105": selectedExam === 'tnpsc',
-                "bg-rose-950/60 text-rose-200 hover:bg-rose-900 border border-rose-800": selectedExam !== 'tnpsc'
-              })}
-            >
-              🎯 TNPSC Groups
-            </button>
-            <button
-              onClick={() => { setSelectedExam('rail'); showToast('Filtered for Railway RRB NTPC / Group D'); }}
-              className={cn("px-4 py-2 rounded-full text-xs font-bold transition-all flex-shrink-0 uppercase tracking-wider", {
-                "bg-amber-600 text-white shadow-md scale-105": selectedExam === 'rail',
-                "bg-amber-950/60 text-amber-200 hover:bg-amber-900 border border-amber-800": selectedExam !== 'rail'
-              })}
-            >
-              🚂 Railway RRB
-            </button>
-            <button
-              onClick={() => { setSelectedExam('bank'); showToast('Filtered for Banking IBPS / SBI PO'); }}
-              className={cn("px-4 py-2 rounded-full text-xs font-bold transition-all flex-shrink-0 uppercase tracking-wider", {
-                "bg-blue-600 text-white shadow-md scale-105": selectedExam === 'bank',
-                "bg-blue-950/60 text-blue-200 hover:bg-blue-900 border border-blue-800": selectedExam !== 'bank'
-              })}
-            >
-              🏦 Banking IBPS / SBI
-            </button>
+            </div>
+
+            {/* Font sizing toggle */}
+            <div className="flex items-center gap-1 text-xs text-white/60 font-mono">
+              <span>Text:</span>
+              <button 
+                onClick={() => setFontSize('normal')}
+                className={cn("px-2 py-0.5 rounded text-xs", fontSize === 'normal' ? "bg-white/20 text-white font-bold" : "hover:text-white")}
+              >
+                A
+              </button>
+              <button 
+                onClick={() => setFontSize('large')}
+                className={cn("px-2 py-0.5 rounded text-xs font-bold", fontSize === 'large' ? "bg-white/20 text-white font-bold" : "hover:text-white")}
+              >
+                A+
+              </button>
+            </div>
           </div>
+
         </div>
       </section>
 
-      {/* ── COUNTDOWN STRIP ── */}
-      <div className="bg-[#0F2247] border-b border-white/10 py-4">
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-          <div className="flex items-center gap-4 overflow-x-auto scrollbar-hide py-1">
-            <span className="text-[11px] font-mono font-bold uppercase tracking-widest text-amber-300 flex-shrink-0 flex items-center gap-1.5">
-              <Clock size={13} />
-              <span>Target Dates:</span>
-            </span>
-            {EXAM_COUNTDOWNS.map((exam) => {
-              const daysLeft = calculateDaysLeft(exam.targetDate);
-              return (
-                <div 
-                  key={exam.name}
-                  className="bg-white/5 hover:bg-white/10 border border-white/10 rounded-xl px-4 py-2.5 flex-shrink-0 text-center min-w-[130px] transition-all cursor-pointer"
-                  onClick={() => showToast(`Official notification active for ${exam.name} (${exam.stage})`)}
-                >
-                  <div className="text-[10px] font-bold uppercase tracking-wider text-amber-300">{exam.name}</div>
-                  <div className="font-serif text-2xl font-black text-white leading-none my-0.5">
-                    {daysLeft > 0 ? daysLeft : 'Active'}
-                  </div>
-                  <div className="text-[9px] font-mono text-white/50">{daysLeft > 0 ? 'days remaining' : 'in progress'}</div>
-                </div>
-              );
-            })}
-          </div>
-        </div>
-      </div>
+      {/* ── MAIN CONTENT CONTAINER ── */}
+      <div className="max-w-6xl mx-auto px-4 sm:px-6 lg:px-8 pt-8 space-y-12" ref={printSectionRef}>
 
-      {/* ── MAIN CONTENT & SIDEBAR LAYOUT ── */}
-      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-10">
-        <div className="grid grid-cols-1 lg:grid-cols-12 gap-10">
+        {/* ═══════════════════════════════════════════════════════════
+            SECTION 1: TOP — 5 MCQs WITH EXPLANATIONS
+            (Explicitly Placed ABOVE Daily Current Affairs)
+           ═══════════════════════════════════════════════════════════ */}
+        <section className="bg-white dark:bg-[#1a1b22] rounded-3xl border border-black/10 dark:border-white/10 p-6 sm:p-8 shadow-sm space-y-6">
+          
+          {/* Section Header */}
+          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 border-b border-black/10 dark:border-white/10 pb-4">
+            <div>
+              <div className="flex items-center gap-2 text-xs font-mono font-bold text-[#1A56DB] dark:text-blue-400 uppercase tracking-widest">
+                <Zap size={14} className="text-gold" />
+                <span>Step 1: Test Yourself First (Active Recall)</span>
+                <span>•</span>
+                <span>{activeCapsule.displayDate}</span>
+              </div>
+              <h2 className="text-xl sm:text-2xl font-serif font-black text-ink dark:text-white mt-0.5">
+                5 High-Yield Daily Current Affairs MCQs
+              </h2>
+            </div>
 
-          {/* ═════════ LEFT MAIN COLUMN (8 COLS) ═════════ */}
-          <div className="lg:col-span-8 space-y-12">
-
-            {/* 1. TODAY'S CURRENT AFFAIRS WITH EXAM ANGLE */}
-            <section className="space-y-6">
-              <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 border-b-2 border-[#09142A] pb-3">
-                <div>
-                  <div className="flex items-center gap-2 text-xs font-mono font-bold text-[#1A56DB] uppercase tracking-widest">
-                    <span>📅 Daily Capsule</span>
-                    <span>•</span>
-                    <span>{todayFormatted}</span>
-                  </div>
-                  <h2 className="text-2xl sm:text-3xl font-serif font-black text-[#09142A]">
-                    Today’s Must-Know Current Affairs
-                  </h2>
-                </div>
+            <div className="flex items-center gap-2">
+              <span className="text-xs font-mono font-bold bg-amber-50 dark:bg-amber-950/40 text-amber-800 dark:text-amber-300 px-3 py-1.5 rounded-xl border border-amber-500/20">
+                Score: <strong className="text-ink dark:text-white">{score}</strong> / {activeCapsule.mcqs.length}
+              </span>
+              {isQuizCompleted && (
                 <button
-                  onClick={() => showToast('📥 Downloading September 2026 Current Affairs PDF Capsule…')}
-                  className="bg-[#09142A] hover:bg-[#1A56DB] text-white px-4 py-2 rounded-xl text-xs font-bold flex items-center gap-2 transition-all w-fit shadow"
+                  onClick={handleRestartQuiz}
+                  className="p-1.5 rounded-xl bg-paper2 dark:bg-white/10 text-ink dark:text-white hover:bg-gold/20 transition-colors cursor-pointer"
+                  title="Restart practice quiz"
                 >
-                  <Download size={14} />
-                  <span>Download Month PDF</span>
+                  <RotateCcw size={15} />
                 </button>
-              </div>
-
-              {/* Banner Highlight */}
-              <div className="bg-gradient-to-br from-[#09142A] to-[#0F2247] rounded-3xl p-6 sm:p-7 text-white border border-white/10 shadow-lg space-y-3">
-                <div className="flex items-center justify-between gap-2 flex-wrap">
-                  <span className="bg-amber-400/20 text-amber-300 px-3 py-1 rounded-md text-[11px] font-mono font-bold uppercase tracking-wider border border-amber-400/30">
-                    High Yield Exam News
-                  </span>
-                  <span className="text-xs text-white/50 font-mono">Curated from The Hindu, PIB & Indian Express</span>
-                </div>
-                <h3 className="text-xl sm:text-2xl font-serif font-bold text-white leading-snug">
-                  6 Core Events Tagged with Questions Pattern & Trap Pitfalls
-                </h3>
-                <p className="text-xs sm:text-sm text-white/70 leading-relaxed">
-                  Every news item below includes an <strong className="text-amber-400">"Exam Angle"</strong> breaking down how UPSC GS, SSC CGL, TNPSC, and Banking examiners convert standard news into trick multiple-choice questions.
-                </p>
-              </div>
-
-              {/* Current Affairs Grid */}
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
-                {filteredCurrentAffairs.map((item) => (
-                  <div 
-                    key={item.id}
-                    className="bg-white rounded-2xl border border-black/10 p-5 shadow-sm hover:shadow-md hover:border-black/20 transition-all flex flex-col justify-between relative overflow-hidden group"
-                  >
-                    <span className="font-serif text-3xl font-black text-black/5 absolute top-3 right-4 select-none pointer-events-none">
-                      {item.num}
-                    </span>
-
-                    <div className="space-y-3">
-                      <div className="flex flex-wrap items-center gap-1.5">
-                        {item.exams.map((ex, exIdx) => (
-                          <span 
-                            key={exIdx} 
-                            className={cn("text-[10px] font-extrabold uppercase tracking-wider px-2 py-0.5 rounded-md border", ex.tagClass)}
-                          >
-                            {ex.name}
-                          </span>
-                        ))}
-                      </div>
-
-                      <h4 className="font-serif font-bold text-base sm:text-lg text-ink group-hover:text-[#1A56DB] transition-colors leading-snug">
-                        {item.title}
-                      </h4>
-
-                      <p className="text-xs text-ink2 leading-relaxed">
-                        {item.body}
-                      </p>
-
-                      {/* Exam Angle Callout */}
-                      <div className="bg-[#F7F3E8] border-l-4 border-amber-500 rounded-xl p-3.5 space-y-1">
-                        <div className="flex items-center gap-1 text-[10px] font-mono font-bold uppercase tracking-wider text-amber-800">
-                          <Award size={12} className="text-amber-600" />
-                          <span>Exam Angle & Key Trap</span>
-                        </div>
-                        <p className="text-xs text-ink leading-relaxed font-medium">
-                          {item.examAngle}
-                        </p>
-                      </div>
-                    </div>
-
-                    <div className="pt-4 mt-3 border-t border-black/5 flex items-center justify-between text-[11px] text-ink3 font-mono">
-                      <span>{item.date} • {item.source}</span>
-                      <Link 
-                        to={item.relatedArticleSlug ? `/category/${item.relatedArticleSlug}` : `/category/history`}
-                        className="font-bold text-[#1A56DB] hover:underline flex items-center gap-1"
-                      >
-                        <span>Related Fact</span>
-                        <ArrowUpRight size={13} />
-                      </Link>
-                    </div>
-                  </div>
-                ))}
-              </div>
-            </section>
-
-            {/* 2. GK FACT BANK & ORIGIN STORIES */}
-            <section className="space-y-6">
-              <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 border-b-2 border-[#09142A] pb-3">
-                <div>
-                  <h2 className="text-2xl sm:text-3xl font-serif font-black text-[#09142A]">
-                    GK Fact Bank & Origin Stories
-                  </h2>
-                  <p className="text-xs text-ink3 mt-0.5">Foundational static general knowledge with full historical context</p>
-                </div>
-                <Link to="/category/history" className="text-xs font-bold text-[#1A56DB] hover:underline flex items-center gap-1">
-                  <span>Browse all 500+ facts</span>
-                  <ChevronRight size={14} />
-                </Link>
-              </div>
-
-              {/* Filter Tabs */}
-              <div className="flex items-center gap-2 overflow-x-auto pb-1 scrollbar-hide">
-                {[
-                  { id: 'all', label: 'All Topics' },
-                  { id: 'history', label: '🏛 History' },
-                  { id: 'science', label: '🧬 Science' },
-                  { id: 'space', label: '🪐 Space & Tech' },
-                  { id: 'inventions', label: '💡 Inventions' }
-                ].map(tab => (
-                  <button
-                    key={tab.id}
-                    onClick={() => setSelectedGkTab(tab.id)}
-                    className={cn("px-4 py-1.5 rounded-full text-xs font-bold border transition-all whitespace-nowrap", {
-                      "bg-[#09142A] text-white border-[#09142A] shadow-sm": selectedGkTab === tab.id,
-                      "bg-white text-ink2 border-black/10 hover:bg-black/5": selectedGkTab !== tab.id
-                    })}
-                  >
-                    {tab.label}
-                  </button>
-                ))}
-              </div>
-
-              {/* Fact Bank Grid */}
-              <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-5">
-                {filteredGkFacts.map((fact) => (
-                  <Link
-                    key={fact.id}
-                    to={`/category/${fact.slug}`}
-                    className="bg-white rounded-2xl border border-black/10 overflow-hidden shadow-sm hover:shadow-md hover:-translate-y-1 transition-all flex flex-col group"
-                  >
-                    <div className={cn("h-24 flex items-center justify-center text-4xl", fact.thumbBg)}>
-                      <span>{fact.emoji}</span>
-                    </div>
-
-                    <div className="p-4 flex-1 flex flex-col justify-between space-y-3">
-                      <div className="space-y-1.5">
-                        <div className="text-[10px] font-bold uppercase tracking-wider text-[#1A56DB] font-mono">
-                          {fact.topic}
-                        </div>
-                        <h4 className="font-serif font-bold text-sm text-ink group-hover:text-[#1A56DB] transition-colors leading-snug line-clamp-2">
-                          {fact.title}
-                        </h4>
-                      </div>
-
-                      <div className="space-y-2 pt-2 border-t border-black/5">
-                        <div className="flex flex-wrap gap-1">
-                          {fact.exams.map((ex, exI) => (
-                            <span key={exI} className="text-[9px] font-bold bg-[#F7F3E8] text-ink2 px-1.5 py-0.5 rounded border border-black/5">
-                              {ex}
-                            </span>
-                          ))}
-                        </div>
-                        <div className="text-[10px] text-ink3 font-mono flex items-center justify-between">
-                          <span>{fact.readTime}</span>
-                          <span>{fact.views}</span>
-                        </div>
-                      </div>
-                    </div>
-                  </Link>
-                ))}
-              </div>
-            </section>
-
-            {/* 3. FEATURED EXAM ANGLE CASE STUDY */}
-            <div className="bg-gradient-to-br from-amber-50 to-amber-100/60 rounded-3xl border-2 border-amber-300 p-6 sm:p-8 space-y-4 shadow-sm">
-              <div className="flex items-start gap-4">
-                <div className="w-12 h-12 rounded-2xl bg-amber-400 text-[#09142A] flex items-center justify-center text-2xl flex-shrink-0 shadow-sm">
-                  🎯
-                </div>
-                <div className="space-y-1">
-                  <div className="text-[11px] font-mono font-bold uppercase tracking-widest text-amber-900">
-                    Featured Deep Dive Exam Angle
-                  </div>
-                  <h3 className="text-xl sm:text-2xl font-serif font-black text-[#09142A]">
-                    Alexander Fleming’s Penicillin — How Questions Appear Across Exams
-                  </h3>
-                </div>
-              </div>
-
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-4 text-xs text-ink leading-relaxed pt-2">
-                <div className="bg-white/80 p-4 rounded-2xl border border-amber-200 space-y-1">
-                  <strong className="text-amber-950 font-bold block text-sm">UPSC Prelims Question Pattern:</strong>
-                  <p className="text-ink2">
-                    Appeared in Match-the-Following: "Scientist vs Discovery". <em>Trick:</em> Fleming discovered the mould in 1928, but did <strong>NOT</strong> purify it. Howard Florey and Ernst Chain purified it in 1941. All three shared the 1945 Nobel Prize.
-                  </p>
-                </div>
-
-                <div className="bg-white/80 p-4 rounded-2xl border border-amber-200 space-y-1">
-                  <strong className="text-amber-950 font-bold block text-sm">SSC CGL & Railway RRB Pattern:</strong>
-                  <p className="text-ink2">
-                    Tests year (1928), organism name (<em>Penicillium notatum</em> fungus), category (antibiotic). Very common 1-mark question in General Science section across Tier-1 exams.
-                  </p>
-                </div>
-
-                <div className="bg-white/80 p-4 rounded-2xl border border-amber-200 space-y-1">
-                  <strong className="text-amber-950 font-bold block text-sm">TNPSC Group 1 & 2 Focus:</strong>
-                  <p className="text-ink2">
-                    Tests the antibacterial mechanism (inhibiting bacterial cell wall synthesis / peptidoglycan cross-linking). Does not affect human cells because animal cells lack cell walls.
-                  </p>
-                </div>
-
-                <div className="bg-white/80 p-4 rounded-2xl border border-amber-200 space-y-1">
-                  <strong className="text-amber-950 font-bold block text-sm">Banking General Awareness:</strong>
-                  <p className="text-ink2">
-                    Questions on Nobel Laureates and milestone discovery centenaries. Penicillin discovery marks its 100th anniversary in 2028.
-                  </p>
-                </div>
-              </div>
-            </div>
-
-            {/* 4. ON THIS DAY IN HISTORY (EXAM EDITION) */}
-            <section className="space-y-6">
-              <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 border-b-2 border-[#09142A] pb-3">
-                <div>
-                  <h2 className="text-2xl sm:text-3xl font-serif font-black text-[#09142A]">
-                    On This Day in History — Exam Milestones
-                  </h2>
-                  <p className="text-xs text-ink3 mt-0.5">Historical events mapped to standard Indian government exam questions</p>
-                </div>
-                <Link to="/birthdays" className="text-xs font-bold text-[#1A56DB] hover:underline flex items-center gap-1">
-                  <span>View today’s famous birthdays</span>
-                  <ChevronRight size={14} />
-                </Link>
-              </div>
-
-              <div className="space-y-4">
-                {HISTORY_EVENTS_DATA.map((event, evIdx) => (
-                  <div 
-                    key={evIdx}
-                    className="bg-white rounded-2xl border border-black/10 p-5 sm:p-6 shadow-sm hover:border-amber-400 transition-all flex flex-col sm:flex-row items-start gap-5"
-                  >
-                    <div className="font-serif text-3xl font-black text-amber-500 min-w-[70px] flex-shrink-0 pt-0.5">
-                      {event.year}
-                    </div>
-
-                    <div className="space-y-2 flex-1">
-                      <div className="flex items-center gap-2">
-                        <span className="text-[10px] font-mono font-bold uppercase tracking-wider text-[#1A56DB]">
-                          {event.cat}
-                        </span>
-                        <div className="flex gap-1.5">
-                          {event.exams.map((ex, exI) => (
-                            <span key={exI} className={cn("text-[9px] font-bold px-2 py-0.5 rounded-md", ex.tagClass)}>
-                              {ex.name}
-                            </span>
-                          ))}
-                        </div>
-                      </div>
-
-                      <h4 className="font-serif font-bold text-base sm:text-lg text-ink">
-                        {event.title}
-                      </h4>
-
-                      <p className="text-xs text-ink2 leading-relaxed bg-[#F7F3E8] p-3 rounded-xl border border-black/5 font-medium">
-                        💡 <strong>Exam Insight:</strong> {event.examNote}
-                      </p>
-                    </div>
-                  </div>
-                ))}
-              </div>
-            </section>
-
-            {/* 5. INTERACTIVE WEEKLY GK QUIZ */}
-            <section className="space-y-6">
-              <div className="flex items-center justify-between border-b-2 border-[#09142A] pb-3">
-                <div>
-                  <div className="text-xs font-mono font-bold uppercase tracking-widest text-[#1A56DB]">
-                    ⚡ Real-time Mock Test
-                  </div>
-                  <h2 className="text-2xl sm:text-3xl font-serif font-black text-[#09142A]">
-                    Weekly GK & Current Affairs Quiz
-                  </h2>
-                </div>
-                <div className="text-xs font-mono font-bold bg-[#F7F3E8] text-ink px-3 py-1.5 rounded-xl border border-black/10">
-                  Week #1 Edition
-                </div>
-              </div>
-
-              <div className="bg-[#09142A] text-white rounded-3xl p-6 sm:p-8 shadow-xl space-y-6 border border-white/10">
-                {!isQuizComplete ? (
-                  <>
-                    <div className="flex items-center justify-between border-b border-white/10 pb-4">
-                      <div className="space-y-1">
-                        <span className="text-[11px] font-mono font-bold uppercase tracking-widest text-amber-300">
-                          {QUIZ_QUESTIONS[activeQuestionIndex].cat}
-                        </span>
-                        <div className="text-xs text-white/60">
-                          Question {activeQuestionIndex + 1} of {QUIZ_QUESTIONS.length}
-                        </div>
-                      </div>
-
-                      {/* Progress Dots */}
-                      <div className="flex items-center gap-1.5">
-                        {QUIZ_QUESTIONS.map((_, dotIdx) => (
-                          <div 
-                            key={dotIdx}
-                            className={cn("w-2.5 h-2.5 rounded-full transition-all", {
-                              "bg-amber-400 scale-125": dotIdx === activeQuestionIndex,
-                              "bg-emerald-400": dotIdx < activeQuestionIndex,
-                              "bg-white/20": dotIdx > activeQuestionIndex
-                            })}
-                          />
-                        ))}
-                      </div>
-                    </div>
-
-                    <h3 className="font-serif text-lg sm:text-xl font-bold text-white leading-relaxed">
-                      {QUIZ_QUESTIONS[activeQuestionIndex].q}
-                    </h3>
-
-                    {/* Options Grid */}
-                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                      {QUIZ_QUESTIONS[activeQuestionIndex].opts.map((opt, optIdx) => {
-                        const isSelected = selectedOption === optIdx;
-                        const isCorrect = optIdx === QUIZ_QUESTIONS[activeQuestionIndex].ans;
-                        
-                        let btnStyle = "bg-white/5 hover:bg-white/15 border-white/10 text-white/90";
-                        if (isAnswered) {
-                          if (isCorrect) {
-                            btnStyle = "bg-emerald-600/90 border-emerald-400 text-white font-bold";
-                          } else if (isSelected) {
-                            btnStyle = "bg-rose-600/90 border-rose-400 text-white font-bold";
-                          } else {
-                            btnStyle = "bg-white/5 border-white/5 text-white/40 opacity-60";
-                          }
-                        }
-
-                        return (
-                          <button
-                            key={optIdx}
-                            disabled={isAnswered}
-                            onClick={() => handleSelectOption(optIdx)}
-                            className={cn("p-3.5 rounded-2xl border text-left text-xs sm:text-sm transition-all flex items-center gap-3", btnStyle)}
-                          >
-                            <span className="w-7 h-7 rounded-xl bg-white/10 flex items-center justify-center font-mono font-bold text-xs flex-shrink-0">
-                              {String.fromCharCode(65 + optIdx)}
-                            </span>
-                            <span>{opt}</span>
-                          </button>
-                        );
-                      })}
-                    </div>
-
-                    {/* Explanation Box */}
-                    {isAnswered && (
-                      <div className="p-4 bg-white/10 border border-white/15 rounded-2xl text-xs sm:text-sm text-white/90 leading-relaxed space-y-1 animate-in fade-in">
-                        <strong className="text-amber-300 font-bold block">💡 Explanation & Exam Note:</strong>
-                        <p>{QUIZ_QUESTIONS[activeQuestionIndex].exp}</p>
-                      </div>
-                    )}
-
-                    {/* Next / Action Button */}
-                    <div className="flex items-center justify-between pt-2">
-                      <div className="text-xs font-mono text-white/50">
-                        Score: <strong className="text-amber-300">{score}</strong> / {QUIZ_QUESTIONS.length}
-                      </div>
-
-                      {isAnswered && (
-                        <button
-                          onClick={handleNextQuestion}
-                          className="bg-amber-400 hover:bg-amber-300 text-[#09142A] font-bold text-xs px-6 py-3 rounded-xl transition-all shadow-lg flex items-center gap-2"
-                        >
-                          <span>{activeQuestionIndex === QUIZ_QUESTIONS.length - 1 ? 'View Final Results' : 'Next Question'}</span>
-                          <ChevronRight size={15} />
-                        </button>
-                      )}
-                    </div>
-                  </>
-                ) : (
-                  /* Quiz Result Screen */
-                  <div className="text-center py-6 space-y-4">
-                    <div className="w-16 h-16 rounded-full bg-amber-400/20 text-amber-400 flex items-center justify-center text-3xl mx-auto">
-                      🏆
-                    </div>
-                    <h3 className="text-2xl sm:text-3xl font-serif font-bold text-amber-400">
-                      You Scored {score} / {QUIZ_QUESTIONS.length}!
-                    </h3>
-                    <p className="text-xs sm:text-sm text-white/70 max-w-md mx-auto leading-relaxed">
-                      {score === 5 
-                        ? 'Outstanding performance! You have exceptional mastery over current affairs and static GK.' 
-                        : score >= 3 
-                          ? 'Great effort! Review the detailed explanation notes to lock down potential exam traps.' 
-                          : 'Good practice! Consistent revision of FactHub daily articles will dramatically boost your score.'}
-                    </p>
-                    <div className="pt-3 flex items-center justify-center gap-4">
-                      <button
-                        onClick={handleRestartQuiz}
-                        className="bg-amber-400 hover:bg-amber-300 text-[#09142A] font-bold text-xs px-6 py-3 rounded-xl transition-all shadow-lg"
-                      >
-                        Try Again
-                      </button>
-                      <Link
-                        to="/quiz"
-                        className="bg-white/10 hover:bg-white/20 text-white font-bold text-xs px-6 py-3 rounded-xl transition-all border border-white/10"
-                      >
-                        Take Daily Live Quiz
-                      </Link>
-                    </div>
-                  </div>
-                )}
-              </div>
-            </section>
-
-          </div>
-
-          {/* ═════════ RIGHT SIDEBAR (4 COLS) ═════════ */}
-          <aside className="lg:col-span-4 space-y-8">
-
-            {/* Quick Search */}
-            <div className="bg-white rounded-3xl border border-black/10 p-6 shadow-sm space-y-4">
-              <h3 className="font-serif font-bold text-lg text-ink flex items-center gap-2">
-                <Search size={18} className="text-[#1A56DB]" />
-                <span>Search Exam Topics</span>
-              </h3>
-              <div className="relative">
-                <input
-                  type="text"
-                  value={searchQuery}
-                  onChange={(e) => setSearchQuery(e.target.value)}
-                  placeholder="e.g. penicillin, ISRO, Curzon..."
-                  className="w-full bg-[#F7F3E8] border border-black/10 rounded-xl p-3 text-xs text-ink placeholder:text-ink3 focus:outline-none focus:border-[#1A56DB] transition-all"
-                />
-                {searchQuery && (
-                  <button 
-                    onClick={() => setSearchQuery('')}
-                    className="absolute right-3 top-3 text-xs text-ink3 hover:text-ink"
-                  >
-                    Clear
-                  </button>
-                )}
-              </div>
-              <div className="space-y-1.5">
-                <div className="text-[10px] font-mono font-bold uppercase tracking-wider text-ink3">Popular Quick Filters:</div>
-                <div className="flex flex-wrap gap-1.5">
-                  {['Nobel Prize', 'ISRO Missions', 'First in India', 'Important Days', 'Bharat Ratna'].map(tag => (
-                    <button
-                      key={tag}
-                      onClick={() => setSearchQuery(tag)}
-                      className="text-[11px] bg-[#F7F3E8] hover:bg-amber-100 hover:text-amber-900 px-2.5 py-1 rounded-lg border border-black/5 font-medium transition-colors"
-                    >
-                      {tag}
-                    </button>
-                  ))}
-                </div>
-              </div>
-            </div>
-
-            {/* Upcoming Exam Calendar Dates */}
-            <div className="bg-white rounded-3xl border border-black/10 p-6 shadow-sm space-y-4">
-              <div className="flex items-center justify-between">
-                <h3 className="font-serif font-bold text-lg text-ink flex items-center gap-2">
-                  <Calendar size={18} className="text-amber-600" />
-                  <span>Upcoming Exam Dates</span>
-                </h3>
-                <span className="text-[10px] font-mono font-bold text-[#1A56DB] bg-blue-50 px-2 py-0.5 rounded">2026</span>
-              </div>
-
-              <div className="space-y-3 divide-y divide-black/5">
-                {[
-                  { date: 'Oct 18', title: 'IBPS PO Prelims 2026', exam: 'Banking', days: calculateDaysLeft('2026-10-18') },
-                  { date: 'Oct 26', title: 'SSC CHSL Tier II Mains', exam: 'SSC', days: calculateDaysLeft('2026-10-26') },
-                  { date: 'Nov 04', title: 'TNPSC Group 4 Notification', exam: 'TNPSC', days: calculateDaysLeft('2026-11-04') },
-                  { date: 'Nov 15', title: 'RRB NTPC CBT-1 Registration', exam: 'Railway', days: calculateDaysLeft('2026-11-15') },
-                  { date: 'Dec 01', title: 'UPSC Mains GS Examination', exam: 'UPSC', days: calculateDaysLeft('2026-12-01') }
-                ].map((item, itemIdx) => (
-                  <div key={itemIdx} className="pt-3 first:pt-0 flex items-start justify-between gap-3 text-xs">
-                    <div className="space-y-0.5">
-                      <div className="font-bold text-ink">{item.title}</div>
-                      <div className="text-[11px] text-ink3 font-mono">{item.exam}</div>
-                    </div>
-                    <div className="text-right flex-shrink-0">
-                      <span className="font-mono font-bold text-[#1A56DB] bg-blue-50 px-2 py-0.5 rounded text-[11px] block">
-                        {item.date}
-                      </span>
-                      <span className="text-[10px] text-ink3 font-mono">{item.days} days left</span>
-                    </div>
-                  </div>
-                ))}
-              </div>
-            </div>
-
-            {/* Free Study PDF Compilations */}
-            <div className="bg-white rounded-3xl border border-black/10 p-6 shadow-sm space-y-4">
-              <h3 className="font-serif font-bold text-lg text-ink flex items-center gap-2">
-                <FileText size={18} className="text-emerald-700" />
-                <span>Free Study PDFs</span>
-              </h3>
-
-              <div className="space-y-3">
-                {[
-                  { title: '500 Science Facts for SSC & Railway', size: '18 Pages · PDF', date: 'August 2026 Edition' },
-                  { title: 'UPSC History Timeline (1857–1947)', size: '12 Pages · PDF', date: 'Modern India Focus' },
-                  { title: '100 Inventions & Pioneers in GK', size: '8 Pages · PDF', date: 'High Yield GK' },
-                  { title: 'TNPSC Science & Tamil Nadu GK', size: '10 Pages · PDF', date: 'State Board Aligned' }
-                ].map((pdf, pIdx) => (
-                  <div 
-                    key={pIdx}
-                    onClick={() => showToast(`📥 Downloading ${pdf.title}…`)}
-                    className="p-3.5 bg-[#F7F3E8] hover:bg-emerald-50/60 rounded-2xl border border-black/5 hover:border-emerald-300 transition-all flex items-center justify-between gap-3 cursor-pointer group"
-                  >
-                    <div className="space-y-0.5 overflow-hidden">
-                      <div className="font-bold text-xs text-ink group-hover:text-emerald-800 transition-colors truncate">
-                        {pdf.title}
-                      </div>
-                      <div className="text-[10px] text-ink3 font-mono">{pdf.size}</div>
-                    </div>
-                    <span className="bg-[#09142A] group-hover:bg-emerald-700 text-white p-2 rounded-xl text-[10px] font-bold transition-colors flex-shrink-0">
-                      <Download size={13} />
-                    </span>
-                  </div>
-                ))}
-              </div>
-            </div>
-
-            {/* Weekly Newsletter Subscription */}
-            <div className="bg-gradient-to-br from-[#09142A] to-[#0F2247] rounded-3xl p-6 text-white border border-white/10 shadow-lg space-y-4">
-              <div className="space-y-1">
-                <span className="text-[10px] font-mono font-bold uppercase tracking-widest text-amber-300">
-                  Weekly Digest
-                </span>
-                <h3 className="font-serif font-bold text-lg text-white">
-                  FactHub Exam Weekly in Your Inbox
-                </h3>
-                <p className="text-xs text-white/70 leading-relaxed">
-                  Get weekly current affairs capsule, top 10 exam-tested facts, and a 10-question mock test every Sunday morning for free.
-                </p>
-              </div>
-
-              {!isSubscribed ? (
-                <form onSubmit={handleSubscribe} className="space-y-2">
-                  <input
-                    type="email"
-                    value={emailInput}
-                    onChange={(e) => setEmailInput(e.target.value)}
-                    placeholder="Enter your email..."
-                    className="w-full bg-white/10 border border-white/20 rounded-xl p-3 text-xs text-white placeholder:text-white/40 focus:outline-none focus:border-amber-400 font-mono"
-                  />
-                  <button
-                    type="submit"
-                    className="w-full bg-amber-400 hover:bg-amber-300 text-[#09142A] font-bold text-xs py-3 rounded-xl transition-all shadow-md flex items-center justify-center gap-2"
-                  >
-                    <Send size={13} />
-                    <span>Subscribe Free</span>
-                  </button>
-                </form>
-              ) : (
-                <div className="bg-emerald-500/20 border border-emerald-400/40 p-4 rounded-2xl text-center space-y-1">
-                  <div className="text-emerald-300 font-bold text-xs flex items-center justify-center gap-1.5">
-                    <CheckCircle2 size={16} />
-                    <span>Subscribed Successfully!</span>
-                  </div>
-                  <p className="text-[11px] text-white/70">Check your inbox this Sunday morning for the exam capsule.</p>
-                </div>
               )}
             </div>
+          </div>
 
-          </aside>
+          {/* Stepper Tabs: [1] [2] [3] [4] [5] */}
+          <div className="flex items-center justify-between gap-2 overflow-x-auto pb-1">
+            <div className="flex items-center gap-2">
+              {activeCapsule.mcqs.map((q, qIdx) => {
+                const isAnswered = selectedAnswers[qIdx] !== undefined;
+                const isCurrent = qIdx === currentMcqIndex;
+                const isCorrect = isAnswered && selectedAnswers[qIdx] === q.correctAnswer;
+                return (
+                  <button
+                    key={q.id}
+                    onClick={() => setCurrentMcqIndex(qIdx)}
+                    className={cn(
+                      "w-8 h-8 rounded-xl font-mono text-xs font-bold transition-all flex items-center justify-center border cursor-pointer",
+                      isCurrent && "ring-2 ring-gold border-gold scale-105",
+                      isAnswered
+                        ? isCorrect
+                          ? "bg-emerald-500 text-white border-emerald-600"
+                          : "bg-rose-500 text-white border-rose-600"
+                        : isCurrent
+                        ? "bg-ink text-white dark:bg-white dark:text-black border-transparent"
+                        : "bg-paper2 dark:bg-white/5 text-ink3 dark:text-white/60 border-black/5 dark:border-white/5 hover:border-black/20"
+                    )}
+                    title={`Question ${qIdx + 1} (${q.category})`}
+                  >
+                    {qIdx + 1}
+                  </button>
+                );
+              })}
+            </div>
 
-        </div>
+            <div className="text-xs font-mono text-ink3 dark:text-white/50">
+              Question {currentMcqIndex + 1} of {activeCapsule.mcqs.length}
+            </div>
+          </div>
+
+          {/* Active Question Box */}
+          {(() => {
+            const currentMcq = activeCapsule.mcqs[currentMcqIndex];
+            const isAnswered = selectedAnswers[currentMcqIndex] !== undefined;
+            const chosenOption = selectedAnswers[currentMcqIndex];
+            const isSaved = savedQuestions[currentMcq.id];
+
+            return (
+              <div className="space-y-5 animate-in fade-in duration-200">
+                
+                {/* Question Category & Exam Target Pill */}
+                <div className="flex flex-wrap items-center justify-between gap-2">
+                  <div className="flex items-center gap-2">
+                    <span className="text-[11px] font-mono font-bold uppercase tracking-wider px-2.5 py-0.5 rounded-md bg-paper2 dark:bg-white/10 text-ink dark:text-white border border-black/5 dark:border-white/10">
+                      {currentMcq.category}
+                    </span>
+                    <span className={cn("text-[11px] font-bold px-2.5 py-0.5 rounded-md border", currentMcq.tagClass)}>
+                      {currentMcq.targetExam}
+                    </span>
+                  </div>
+
+                  <button
+                    type="button"
+                    onClick={() => handleSaveToNotebook(currentMcq)}
+                    className={cn(
+                      "inline-flex items-center gap-1.5 text-xs font-semibold px-3 py-1 rounded-lg border transition-all cursor-pointer",
+                      isSaved
+                        ? "bg-emerald-50 text-emerald-700 dark:bg-emerald-950/40 dark:text-emerald-300 border-emerald-500/30"
+                        : "bg-paper2 dark:bg-white/5 text-ink2 dark:text-white/70 hover:bg-gold/20 border-black/5 dark:border-white/5"
+                    )}
+                    title="Save to your Student Notebook for exam revision"
+                  >
+                    <Bookmark size={13} className={isSaved ? "fill-current text-emerald-600" : ""} />
+                    <span>{isSaved ? 'Saved to Notebook' : 'Save Question'}</span>
+                  </button>
+                </div>
+
+                {/* Question Text */}
+                <h3 className="font-serif text-base sm:text-lg lg:text-xl font-bold text-ink dark:text-white leading-relaxed">
+                  {currentMcq.question}
+                </h3>
+
+                {/* 4 Interactive Options (A, B, C, D) */}
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                  {currentMcq.options.map((optionText, optIdx) => {
+                    const isSelected = chosenOption === optIdx;
+                    const isCorrect = optIdx === currentMcq.correctAnswer;
+
+                    let optionClasses = "bg-paper2 dark:bg-white/5 hover:bg-paper dark:hover:bg-white/10 border-black/10 dark:border-white/10 text-ink dark:text-white";
+                    
+                    if (isAnswered) {
+                      if (isCorrect) {
+                        optionClasses = "bg-emerald-50 dark:bg-emerald-950/40 border-emerald-500 text-emerald-900 dark:text-emerald-200 font-bold ring-2 ring-emerald-500/30";
+                      } else if (isSelected) {
+                        optionClasses = "bg-rose-50 dark:bg-rose-950/40 border-rose-500 text-rose-900 dark:text-rose-200 font-bold";
+                      } else {
+                        optionClasses = "bg-paper2/50 dark:bg-white/5 border-transparent opacity-50";
+                      }
+                    }
+
+                    return (
+                      <button
+                        key={optIdx}
+                        disabled={isAnswered}
+                        onClick={() => handleSelectOption(currentMcqIndex, optIdx)}
+                        className={cn(
+                          "p-4 rounded-2xl border text-left text-xs sm:text-sm transition-all flex items-start gap-3 cursor-pointer",
+                          optionClasses
+                        )}
+                      >
+                        <span className={cn(
+                          "w-6 h-6 rounded-lg flex items-center justify-center font-mono font-bold text-xs shrink-0 mt-0.5",
+                          isAnswered && isCorrect
+                            ? "bg-emerald-600 text-white"
+                            : isAnswered && isSelected
+                            ? "bg-rose-600 text-white"
+                            : "bg-black/5 dark:bg-white/10 text-ink dark:text-white"
+                        )}>
+                          {String.fromCharCode(65 + optIdx)}
+                        </span>
+                        <span className="flex-1 leading-snug">{optionText}</span>
+                        {isAnswered && isCorrect && (
+                          <CheckCircle2 size={16} className="text-emerald-600 dark:text-emerald-400 shrink-0 mt-0.5" />
+                        )}
+                        {isAnswered && isSelected && !isCorrect && (
+                          <AlertCircle size={16} className="text-rose-600 dark:text-rose-400 shrink-0 mt-0.5" />
+                        )}
+                      </button>
+                    );
+                  })}
+                </div>
+
+                {/* ── EXPANDED DETAILED EXPLANATION & EXAM TRAP ── */}
+                {isAnswered && (
+                  <div className="bg-[#FFFDF3] dark:bg-[#1f2029] border border-amber-400/40 rounded-2xl p-5 space-y-3 animate-in fade-in duration-200">
+                    <div className="flex items-center gap-2 text-xs font-mono font-bold uppercase tracking-wider text-amber-900 dark:text-amber-300">
+                      <Sparkles size={14} className="text-amber-500" />
+                      <span>Detailed Explanation & Examiner Trap Analysis</span>
+                    </div>
+
+                    <p className="text-xs sm:text-sm text-ink2 dark:text-white/80 leading-relaxed">
+                      {currentMcq.explanation}
+                    </p>
+
+                    <div className="bg-amber-100/60 dark:bg-amber-950/40 p-3 rounded-xl border border-amber-300/40 text-xs text-amber-950 dark:text-amber-200 space-y-1">
+                      <strong className="block font-bold">⚠️ Examiner Trap & Pitfall:</strong>
+                      <p>{currentMcq.examTrap}</p>
+                    </div>
+                  </div>
+                )}
+
+                {/* Next / Completion Controls */}
+                <div className="flex items-center justify-between pt-2">
+                  <button
+                    disabled={currentMcqIndex === 0}
+                    onClick={() => setCurrentMcqIndex(prev => Math.max(0, prev - 1))}
+                    className="inline-flex items-center gap-1 px-3 py-1.5 text-xs font-bold text-ink3 hover:text-ink dark:text-white/50 dark:hover:text-white disabled:opacity-30 cursor-pointer"
+                  >
+                    <ChevronLeft size={14} />
+                    <span>Previous</span>
+                  </button>
+
+                  {isAnswered && (
+                    <button
+                      onClick={handleNextQuestion}
+                      className="inline-flex items-center gap-1.5 px-5 py-2.5 bg-ink text-white dark:bg-white dark:text-black font-bold text-xs rounded-xl hover:bg-gold dark:hover:bg-gold hover:text-black transition-all shadow-md cursor-pointer"
+                    >
+                      <span>{currentMcqIndex === activeCapsule.mcqs.length - 1 ? 'Finish & View Summary' : 'Next Question'}</span>
+                      <ChevronRight size={14} />
+                    </button>
+                  )}
+                </div>
+
+              </div>
+            );
+          })()}
+
+          {/* Quiz Completion Celebration Banner */}
+          {isQuizCompleted && (
+            <div className="bg-gradient-to-r from-emerald-500/10 via-amber-500/10 to-transparent p-5 rounded-2xl border border-emerald-500/30 flex flex-col sm:flex-row items-center justify-between gap-4 animate-in fade-in">
+              <div className="flex items-center gap-3 text-center sm:text-left">
+                <div className="w-12 h-12 rounded-2xl bg-gold/20 flex items-center justify-center text-2xl shrink-0">
+                  🏆
+                </div>
+                <div>
+                  <h4 className="font-serif font-bold text-base text-ink dark:text-white">
+                    Great work! You scored {score} / {activeCapsule.mcqs.length} on today's practice.
+                  </h4>
+                  <p className="text-xs text-ink3 dark:text-white/60">
+                    Scroll down to review today's full current affairs stories and download your 2-page PDF capsule.
+                  </p>
+                </div>
+              </div>
+
+              <a
+                href="#current-affairs-digest"
+                className="inline-flex items-center gap-1.5 px-4 py-2 bg-emerald-600 hover:bg-emerald-500 text-white rounded-xl text-xs font-bold shadow-sm transition-all whitespace-nowrap"
+              >
+                <span>Read Current Affairs</span>
+                <ChevronRight size={14} />
+              </a>
+            </div>
+          )}
+
+        </section>
+
+
+        {/* ═══════════════════════════════════════════════════════════
+            SECTION 2: MIDDLE — TODAY'S CURRENT AFFAIRS DIGEST
+            (High-Yield News with Exam Angles)
+           ═══════════════════════════════════════════════════════════ */}
+        <section id="current-affairs-digest" className="space-y-6">
+          
+          {/* Header & Filter Controls */}
+          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 border-b border-black/10 dark:border-white/10 pb-4">
+            <div>
+              <div className="flex items-center gap-2 text-xs font-mono font-bold text-[#1A56DB] dark:text-blue-400 uppercase tracking-widest">
+                <span>Step 2: Core Exam Digest</span>
+                <span>•</span>
+                <span>{activeCapsule.displayDate}</span>
+              </div>
+              <h2 className="text-2xl sm:text-3xl font-serif font-black text-ink dark:text-white mt-0.5">
+                Today’s High-Yield Current Affairs
+              </h2>
+            </div>
+
+            {/* Exam Filter Chips */}
+            <div className="flex items-center gap-1.5 overflow-x-auto pb-1 scrollbar-hide">
+              {[
+                { id: 'all', label: 'All Exams' },
+                { id: 'upsc', label: '🏛 UPSC' },
+                { id: 'ssc', label: '📋 SSC CGL' },
+                { id: 'bank', label: '🏦 Banking' },
+                { id: 'rail', label: '🚂 Railway' },
+                { id: 'tnpsc', label: '🎯 TNPSC' }
+              ].map(f => (
+                <button
+                  key={f.id}
+                  onClick={() => setSelectedExamFilter(f.id)}
+                  className={cn(
+                    "px-3 py-1 rounded-lg text-xs font-bold transition-all border shrink-0 cursor-pointer",
+                    selectedExamFilter === f.id
+                      ? "bg-ink text-white dark:bg-white dark:text-black border-transparent shadow-xs"
+                      : "bg-white dark:bg-white/5 text-ink2 dark:text-white/70 border-black/10 dark:border-white/10 hover:border-black/30"
+                  )}
+                >
+                  {f.label}
+                </button>
+              ))}
+            </div>
+          </div>
+
+          {/* Quick Revision Bullets Box */}
+          <div className="bg-[#FAF4E6] dark:bg-[#1a1b20] border-l-4 border-gold rounded-2xl p-5 space-y-2">
+            <div className="font-serif font-bold text-sm text-ink dark:text-white flex items-center gap-2">
+              <Award size={16} className="text-gold" />
+              <span>Today's 60-Second Capsule Summary</span>
+            </div>
+            <ul className="grid grid-cols-1 sm:grid-cols-2 gap-2 text-xs text-ink2 dark:text-white/80">
+              {activeCapsule.quickPointers.map((ptr, idx) => (
+                <li key={idx} className="flex items-start gap-2">
+                  <span className="text-gold font-bold">•</span>
+                  <span>{ptr}</span>
+                </li>
+              ))}
+            </ul>
+          </div>
+
+          {/* Search bar inside current affairs */}
+          <div className="relative">
+            <Search size={15} className="absolute left-3.5 top-3 text-ink3 dark:text-white/40" />
+            <input
+              type="text"
+              value={newsSearchQuery}
+              onChange={(e) => setNewsSearchQuery(e.target.value)}
+              placeholder="Search today's news by keyword (e.g., Hydrogen, Swachh Bharat, CBDC, RBI, ISRO)..."
+              className="w-full bg-white dark:bg-[#1a1b22] border border-black/10 dark:border-white/10 rounded-xl pl-10 pr-4 py-2 text-xs sm:text-sm text-ink dark:text-white focus:outline-none focus:border-gold"
+            />
+          </div>
+
+          {/* News Items Grid */}
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+            {filteredAffairs.map((item) => (
+              <article 
+                key={item.id}
+                className="bg-white dark:bg-[#1a1b22] rounded-3xl border border-black/10 dark:border-white/10 p-6 shadow-sm hover:shadow-md hover:border-gold/50 transition-all flex flex-col justify-between space-y-4 relative overflow-hidden group"
+              >
+                {/* Watermark Number */}
+                <span className="font-serif text-4xl font-black text-black/5 dark:text-white/5 absolute top-3 right-4 select-none pointer-events-none">
+                  {item.num}
+                </span>
+
+                <div className="space-y-3">
+                  {/* Category & Exams */}
+                  <div className="flex flex-wrap items-center gap-1.5">
+                    <span className="text-[10px] font-mono font-bold uppercase tracking-wider px-2 py-0.5 rounded-md bg-black/5 dark:bg-white/10 text-ink3 dark:text-white/60">
+                      {item.category}
+                    </span>
+                    {item.exams.map((ex, exIdx) => (
+                      <span 
+                        key={exIdx} 
+                        className={cn("text-[10px] font-bold uppercase tracking-wider px-2 py-0.5 rounded-md border", ex.tagClass)}
+                      >
+                        {ex.name}
+                      </span>
+                    ))}
+                  </div>
+
+                  {/* Headline */}
+                  <h3 className="font-serif font-bold text-base sm:text-lg text-ink dark:text-white leading-snug group-hover:text-[#1A56DB] dark:group-hover:text-blue-400 transition-colors">
+                    {item.title}
+                  </h3>
+
+                  {/* Body text */}
+                  <p className="text-xs sm:text-sm text-ink2 dark:text-white/70 leading-relaxed">
+                    {item.summary}
+                  </p>
+
+                  {/* Exam Angle & Trap Box */}
+                  <div className="bg-[#FAF7EE] dark:bg-black/30 border-l-4 border-amber-500 rounded-xl p-3.5 space-y-1.5">
+                    <div className="flex items-center gap-1.5 text-[10px] font-mono font-bold uppercase tracking-wider text-amber-800 dark:text-amber-400">
+                      <Award size={12} className="text-amber-600" />
+                      <span>Exam Angle & Key Fact for Prelims</span>
+                    </div>
+                    <p className="text-xs text-ink dark:text-white leading-relaxed font-medium">
+                      {item.examAngle}
+                    </p>
+                    <div className="pt-1 text-[11px] text-ink3 dark:text-white/60 border-t border-black/5 dark:border-white/5">
+                      <strong className="text-ink dark:text-white font-semibold">Key takeaway:</strong> {item.keyTakeaway}
+                    </div>
+                  </div>
+                </div>
+
+                {/* Footer Metadata */}
+                <div className="pt-3 border-t border-black/5 dark:border-white/5 flex items-center justify-between text-[11px] text-ink3 dark:text-white/50 font-mono">
+                  <span>Source: {item.source}</span>
+                  <button
+                    onClick={() => {
+                      navigator.clipboard.writeText(`${item.title}\n\n${item.summary}\n\nExam Angle: ${item.examAngle}`);
+                      showToast('📋 Story summary copied to clipboard!');
+                    }}
+                    className="inline-flex items-center gap-1 text-ink hover:text-[#1A56DB] dark:text-white/70 dark:hover:text-white font-bold transition-colors cursor-pointer"
+                  >
+                    <Copy size={11} />
+                    <span>Copy</span>
+                  </button>
+                </div>
+              </article>
+            ))}
+          </div>
+
+        </section>
+
+
+        {/* ═══════════════════════════════════════════════════════════
+            SECTION 3: BOTTOM — DOWNLOADABLE & PRINTABLE PDF CAPSULE
+            (Explicitly Placed BELOW Daily Current Affairs)
+           ═══════════════════════════════════════════════════════════ */}
+        <section id="download-pdf-section" className="bg-[#09142A] text-white rounded-3xl p-6 sm:p-10 border border-white/10 shadow-xl space-y-8 relative overflow-hidden">
+          <div className="absolute top-0 right-0 w-80 h-80 bg-blue-600/10 rounded-full blur-3xl pointer-events-none" />
+
+          {/* Section Header */}
+          <div className="flex flex-col md:flex-row md:items-center justify-between gap-6 relative z-10 border-b border-white/10 pb-6">
+            <div className="space-y-2">
+              <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-gold/20 text-gold font-mono text-[11px] font-bold uppercase tracking-wider border border-gold/30">
+                <FileText size={14} />
+                <span>Step 3: Offline Revision Capsule</span>
+              </div>
+              <h2 className="text-2xl sm:text-3xl font-serif font-black text-white leading-tight">
+                Download Daily Current Affairs PDF ({activeCapsule.displayDate})
+              </h2>
+              <p className="text-xs sm:text-sm text-white/70 max-w-xl leading-relaxed">
+                Print-friendly 2-page A4 study capsule containing the 5 questions with detailed explanations on Page 1, and today's curated news with exam angles on Page 2.
+              </p>
+            </div>
+
+            {/* Action Buttons */}
+            <div className="flex flex-wrap items-center gap-3">
+              <button
+                onClick={() => setShowPdfPreviewModal(true)}
+                className="inline-flex items-center gap-2 px-4 py-2.5 rounded-xl bg-white/10 hover:bg-white/20 text-white font-bold text-xs border border-white/15 transition-all cursor-pointer shadow-sm"
+              >
+                <Eye size={14} />
+                <span>Preview Capsule</span>
+              </button>
+
+              <button
+                onClick={handlePrintCapsule}
+                className="inline-flex items-center gap-2 px-4 py-2.5 rounded-xl bg-white/15 hover:bg-white/25 text-white font-bold text-xs border border-white/20 transition-all cursor-pointer shadow-sm"
+                title="Print 2-page clean A4 handout without website clutter"
+              >
+                <Printer size={14} />
+                <span>Print Handout</span>
+              </button>
+
+              <button
+                onClick={handleDownloadPdf}
+                className="inline-flex items-center gap-2 px-6 py-2.5 rounded-xl bg-gold hover:bg-gold-l text-black font-bold text-xs shadow-lg transition-all cursor-pointer"
+              >
+                <Download size={14} />
+                <span>Download PDF ({activeCapsule.pdfFileSize})</span>
+              </button>
+            </div>
+          </div>
+
+          {/* Interactive 2-Page Visual Handout Preview */}
+          <div className="relative z-10 space-y-4">
+            <div className="flex items-center justify-between text-xs text-white/60 font-mono">
+              <div className="flex items-center gap-2">
+                <span>Capsule Layout Preview:</span>
+                <span className="bg-white/10 text-white px-2 py-0.5 rounded text-[10px]">
+                  {pdfPreviewPage === 1 ? 'Page 1: 5 MCQs & Answers' : 'Page 2: Current Affairs Digest'}
+                </span>
+              </div>
+              <div className="flex items-center gap-2">
+                <button
+                  onClick={() => setPdfPreviewPage(1)}
+                  className={cn("px-2.5 py-1 rounded text-xs font-bold transition-all cursor-pointer", pdfPreviewPage === 1 ? "bg-gold text-black" : "bg-white/10 text-white hover:bg-white/20")}
+                >
+                  Page 1
+                </button>
+                <button
+                  onClick={() => setPdfPreviewPage(2)}
+                  className={cn("px-2.5 py-1 rounded text-xs font-bold transition-all cursor-pointer", pdfPreviewPage === 2 ? "bg-gold text-black" : "bg-white/10 text-white hover:bg-white/20")}
+                >
+                  Page 2
+                </button>
+              </div>
+            </div>
+
+            {/* Embedded Clean Sheet Mockup */}
+            <div className="bg-[#FAF8F5] text-ink p-6 sm:p-8 rounded-2xl shadow-2xl border-4 border-white/20 font-serif space-y-6">
+              
+              {/* Sheet Header */}
+              <div className="flex items-center justify-between border-b-2 border-[#09142A] pb-3 text-xs">
+                <div>
+                  <div className="text-xl font-serif font-black tracking-tight text-[#09142A]">
+                    F<span className="text-gold">A</span>ctHub Exam Prep Capsule
+                  </div>
+                  <div className="text-[10px] font-mono text-ink3 font-bold uppercase tracking-wider">
+                    Official Daily Study Compendium • {activeCapsule.displayDate}
+                  </div>
+                </div>
+                <div className="text-right font-mono text-[10px] text-ink3">
+                  <div>Page {pdfPreviewPage} of 2</div>
+                  <div className="text-emerald-700 font-bold">Print-Optimized A4</div>
+                </div>
+              </div>
+
+              {/* Page 1 Preview: Questions + Answers */}
+              {pdfPreviewPage === 1 && (
+                <div className="space-y-4">
+                  <div className="text-xs font-mono font-bold uppercase tracking-wider text-[#1A56DB] border-b border-black/10 pb-1">
+                    Part I: 5 Daily Practice MCQs & Question Setter Traps
+                  </div>
+                  <div className="grid grid-cols-1 gap-3">
+                    {activeCapsule.mcqs.slice(0, 3).map((q, idx) => (
+                      <div key={q.id} className="text-xs p-3 bg-white rounded-xl border border-black/10 space-y-1.5">
+                        <div className="font-bold text-ink">
+                          Q{idx + 1}. [{q.targetExam}] {q.question}
+                        </div>
+                        <div className="grid grid-cols-2 gap-2 text-[11px] text-ink2">
+                          {q.options.map((opt, oI) => (
+                            <div key={oI} className={cn("p-1 rounded", oI === q.correctAnswer && "bg-emerald-100 text-emerald-900 font-bold")}>
+                              {String.fromCharCode(65 + oI)}. {opt} {oI === q.correctAnswer && "✓"}
+                            </div>
+                          ))}
+                        </div>
+                        <div className="text-[11px] text-ink3 italic bg-amber-50 p-2 rounded border border-amber-200">
+                          <strong>💡 Fact:</strong> {q.explanation}
+                        </div>
+                      </div>
+                    ))}
+                    <div className="text-center text-xs font-mono text-ink3 py-1">
+                      + 2 more questions included on Page 1 of the downloadable PDF capsule...
+                    </div>
+                  </div>
+                </div>
+              )}
+
+              {/* Page 2 Preview: News Digest */}
+              {pdfPreviewPage === 2 && (
+                <div className="space-y-4">
+                  <div className="text-xs font-mono font-bold uppercase tracking-wider text-[#1A56DB] border-b border-black/10 pb-1">
+                    Part II: Daily Current Affairs Digest & Exam Pointers
+                  </div>
+                  <div className="space-y-3">
+                    {activeCapsule.currentAffairs.map((ca, idx) => (
+                      <div key={ca.id} className="text-xs p-3 bg-white rounded-xl border border-black/10 space-y-1">
+                        <div className="font-bold text-ink text-sm">
+                          0{idx + 1}. {ca.title}
+                        </div>
+                        <p className="text-ink2 text-xs">{ca.summary}</p>
+                        <div className="text-[11px] text-blue-900 bg-blue-50 p-2 rounded border border-blue-200 font-sans">
+                          <strong>🎯 Prelims Focus:</strong> {ca.examAngle}
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
+
+              {/* Sheet Watermark & Footer */}
+              <div className="border-t border-black/10 pt-3 flex items-center justify-between text-[10px] font-mono text-ink3">
+                <span>Free Student Handout • FactHub Educational Initiative</span>
+                <span>Download daily at facthub.com/exam-prep</span>
+              </div>
+
+            </div>
+          </div>
+
+          {/* Monthly Compendiums Fast Access */}
+          <div className="pt-4 border-t border-white/10 flex flex-wrap items-center justify-between gap-4 text-xs text-white/70">
+            <span className="font-semibold text-white">Need Previous Full Month Archives?</span>
+            <div className="flex items-center gap-2">
+              <button 
+                onClick={() => showToast('📥 Downloading September 2026 Full Monthly Current Affairs Compilation (1.2 MB)...')}
+                className="px-3 py-1.5 rounded-lg bg-white/10 hover:bg-white/20 text-white font-bold transition-colors cursor-pointer"
+              >
+                September 2026 Full Month PDF (1.2 MB)
+              </button>
+              <button 
+                onClick={() => showToast('📥 Downloading August 2026 Full Monthly Current Affairs Compilation (1.1 MB)...')}
+                className="px-3 py-1.5 rounded-lg bg-white/10 hover:bg-white/20 text-white font-bold transition-colors cursor-pointer"
+              >
+                August 2026 Full Month PDF (1.1 MB)
+              </button>
+            </div>
+          </div>
+
+        </section>
+
       </div>
+
+      {/* ── FULLSCREEN PDF PREVIEW MODAL ── */}
+      {showPdfPreviewModal && (
+        <div className="fixed inset-0 z-50 bg-black/80 backdrop-blur-sm flex items-center justify-center p-4 animate-in fade-in">
+          <div className="bg-white dark:bg-[#1a1b22] text-ink dark:text-white rounded-3xl max-w-3xl w-full max-h-[90vh] flex flex-col shadow-2xl border border-white/20 overflow-hidden">
+            
+            {/* Modal Header */}
+            <div className="p-4 sm:p-5 border-b border-black/10 dark:border-white/10 flex items-center justify-between bg-paper2 dark:bg-[#121316]">
+              <div>
+                <h3 className="font-serif font-bold text-base sm:text-lg">
+                  PDF Capsule Preview • {activeCapsule.displayDate}
+                </h3>
+                <p className="text-xs text-ink3 dark:text-white/60">
+                  {activeCapsule.pdfFileName} ({activeCapsule.pdfFileSize}) • 2 Pages A4
+                </p>
+              </div>
+
+              <div className="flex items-center gap-2">
+                <button
+                  onClick={handleDownloadPdf}
+                  className="px-3 py-1.5 bg-gold hover:bg-gold-l text-black font-bold text-xs rounded-xl flex items-center gap-1.5 cursor-pointer shadow-xs"
+                >
+                  <Download size={13} />
+                  <span>Download</span>
+                </button>
+                <button
+                  onClick={() => setShowPdfPreviewModal(false)}
+                  className="w-8 h-8 rounded-full bg-black/5 dark:bg-white/10 flex items-center justify-center text-ink3 hover:text-ink dark:text-white/60 dark:hover:text-white cursor-pointer"
+                >
+                  ✕
+                </button>
+              </div>
+            </div>
+
+            {/* Modal Body */}
+            <div className="p-6 overflow-y-auto space-y-6 text-xs sm:text-sm leading-relaxed">
+              <div className="p-4 bg-emerald-50 dark:bg-emerald-950/30 border border-emerald-500/30 rounded-xl text-emerald-900 dark:text-emerald-200">
+                <strong>✓ Print-Ready Formatting:</strong> This capsule is structured in 2 pages so you can print it front-and-back on a single sheet of A4 paper for fast revision.
+              </div>
+
+              <div className="space-y-3">
+                <h4 className="font-bold text-sm text-[#1A56DB] dark:text-blue-400 uppercase tracking-wider">
+                  Page 1: 5 Daily Practice Questions & Answers
+                </h4>
+                {activeCapsule.mcqs.map((q, idx) => (
+                  <div key={q.id} className="p-3.5 bg-paper2 dark:bg-white/5 rounded-xl border border-black/5 dark:border-white/5 space-y-1">
+                    <div className="font-bold text-ink dark:text-white">Q{idx + 1}. {q.question}</div>
+                    <div className="text-emerald-700 dark:text-emerald-400 font-bold">
+                      Answer: {String.fromCharCode(65 + q.correctAnswer)}. {q.options[q.correctAnswer]}
+                    </div>
+                    <div className="text-xs text-ink3 dark:text-white/70">{q.explanation}</div>
+                  </div>
+                ))}
+              </div>
+
+              <div className="space-y-3 pt-4 border-t border-black/10 dark:border-white/10">
+                <h4 className="font-bold text-sm text-[#1A56DB] dark:text-blue-400 uppercase tracking-wider">
+                  Page 2: Daily Current Affairs Summary
+                </h4>
+                {activeCapsule.currentAffairs.map((ca, idx) => (
+                  <div key={ca.id} className="p-3.5 bg-paper2 dark:bg-white/5 rounded-xl border border-black/5 dark:border-white/5 space-y-1">
+                    <div className="font-bold text-ink dark:text-white">0{idx + 1}. {ca.title}</div>
+                    <p className="text-ink2 dark:text-white/80 text-xs">{ca.summary}</p>
+                    <div className="text-xs text-amber-800 dark:text-amber-300 font-medium">Exam Angle: {ca.examAngle}</div>
+                  </div>
+                ))}
+              </div>
+            </div>
+
+            {/* Modal Footer */}
+            <div className="p-4 border-t border-black/10 dark:border-white/10 bg-paper2 dark:bg-[#121316] flex items-center justify-between">
+              <button
+                onClick={handlePrintCapsule}
+                className="inline-flex items-center gap-1.5 px-4 py-2 bg-paper dark:bg-white/10 text-ink dark:text-white font-bold text-xs rounded-xl border border-black/10 dark:border-white/10 cursor-pointer"
+              >
+                <Printer size={13} />
+                <span>Print Document</span>
+              </button>
+              <button
+                onClick={() => setShowPdfPreviewModal(false)}
+                className="px-5 py-2 bg-ink text-white dark:bg-white dark:text-black font-bold text-xs rounded-xl cursor-pointer"
+              >
+                Close Preview
+              </button>
+            </div>
+
+          </div>
+        </div>
+      )}
+
     </div>
   );
 };
+
+export default ExamPrep;

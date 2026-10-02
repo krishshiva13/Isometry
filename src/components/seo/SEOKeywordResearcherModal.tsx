@@ -73,6 +73,11 @@ export const SEOKeywordResearcherModal: React.FC<SEOKeywordResearcherModalProps>
     setTimeout(() => setCopiedKey(null), 2000);
   };
 
+  const handleTopicChange = (newVal: string) => {
+    setTopicInput(newVal);
+    if (error) setError(null);
+  };
+
   const validation = React.useMemo(() => validateKeywordQuery(topicInput), [topicInput]);
 
   const handleRunResearch = async (e?: React.FormEvent) => {
@@ -215,8 +220,9 @@ export const SEOKeywordResearcherModal: React.FC<SEOKeywordResearcherModalProps>
                   <div className="flex flex-col sm:flex-row gap-3 items-start">
                     <div className="flex-1 w-full">
                       <KeywordResearchInputField
+                        id="modal-seo-topic"
                         value={topicInput}
-                        onChange={setTopicInput}
+                        onChange={handleTopicChange}
                         showQuickSuggestions={true}
                         suggestions={['Fall of Berlin Wall', 'Chandrayaan 3', 'Penicillin Discovery', 'Wright Brothers']}
                       />

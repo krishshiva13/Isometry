@@ -44,6 +44,9 @@ import { AIGenerationSkeleton } from '../components/admin/AIGenerationSkeleton';
 import { AIGenerationErrorState } from '../components/admin/AIGenerationErrorState';
 import { adminLogService } from '../services/adminLogService';
 import { fetchWithExponentialBackoff, RetryProgress } from '../lib/apiRetry';
+import { validateKeywordQuery } from '../services/seoService';
+import { Wand2 } from 'lucide-react';
+import { cn } from '../lib/utils';
 
 const COLOR_OPTIONS = [
   { name: 'gold', label: 'Gold', bg: 'bg-[#d9ad42]', text: 'text-[#d9ad42]' },
@@ -135,6 +138,9 @@ export const AdminAIPanel = () => {
   const [keywordQuery, setKeywordQuery] = useState('');
   const [keywordTargetExam, setKeywordTargetExam] = useState('UPSC Civil Services GS I/II/III, SSC CGL & Competitive Exams');
   const [keywordTopicType, setKeywordTopicType] = useState('exam_gk');
+
+  const customKeywordValidation = React.useMemo(() => validateKeywordQuery(customKeywordInput), [customKeywordInput]);
+  const keywordQueryValidation = React.useMemo(() => validateKeywordQuery(keywordQuery), [keywordQuery]);
 
   // Custom single generator input
   const [customTopic, setCustomTopic] = useState('');
@@ -1040,24 +1046,47 @@ export const AdminAIPanel = () => {
               </div>
 
               {/* Add Custom Term Input */}
-              <form onSubmit={handleAddCustomKeyword} className="flex gap-2 items-center bg-paper2 p-3 rounded-2xl border border-black/5">
-                <Tag size={16} className="text-gold flex-shrink-0 ml-1" />
-                <input
-                  type="text"
-                  value={customKeywordInput}
-                  onChange={(e) => setCustomKeywordInput(e.target.value)}
-                  placeholder="Add custom keyword search term (e.g. Semiconductor, Chandrayaan, GST Council, Gaganyaan)..."
-                  className="flex-1 bg-transparent text-xs text-ink placeholder:text-ink3/70 outline-none font-medium"
-                />
-                <button
-                  type="submit"
-                  disabled={!customKeywordInput.trim()}
-                  className="px-3.5 py-1.5 bg-ink text-white rounded-xl text-xs font-bold hover:bg-gold hover:text-ink disabled:opacity-30 transition-all flex items-center gap-1"
-                >
-                  <Plus size={12} />
-                  <span>Add Term</span>
-                </button>
-              </form>
+              <div className="space-y-1.5">
+                <form onSubmit={handleAddCustomKeyword} className="flex gap-2 items-center bg-paper2 p-3 rounded-2xl border border-black/5">
+                  <Tag size={16} className="text-gold flex-shrink-0 ml-1" />
+                  <input
+                    type="text"
+                    value={customKeywordInput}
+                    onChange={(e) => setCustomKeywordInput(e.target.value)}
+                    placeholder="Add custom keyword search term (e.g. Semiconductor, Chandrayaan, GST Council, Gaganyaan)..."
+                    className="flex-1 bg-transparent text-xs text-ink placeholder:text-ink3/70 outline-none font-medium"
+                  />
+                  <button
+                    type="submit"
+                    disabled={!customKeywordInput.trim() || !customKeywordValidation.isValid}
+                    className="px-3.5 py-1.5 bg-ink text-white rounded-xl text-xs font-bold hover:bg-gold hover:text-ink disabled:opacity-30 transition-all flex items-center gap-1 cursor-pointer"
+                  >
+                    <Plus size={12} />
+                    <span>Add Term</span>
+                  </button>
+                </form>
+
+                {customKeywordInput.trim() && (
+                  <div className="flex flex-wrap items-center justify-between text-[11px] px-3 py-1.5 bg-paper2/80 rounded-xl border border-black/5 gap-2">
+                    <span className={cn(
+                      "flex items-center gap-1.5 font-medium",
+                      customKeywordValidation.isValid ? "text-emerald-700 dark:text-emerald-400" : "text-amber-700 dark:text-amber-400"
+                    )}>
+                      {customKeywordValidation.isValid ? <CheckCircle2 size={13} /> : <AlertCircle size={13} />}
+                      <span>{customKeywordValidation.message}</span>
+                    </span>
+                    {customKeywordValidation.canAutoClean && (
+                      <button
+                        type="button"
+                        onClick={() => setCustomKeywordInput(customKeywordValidation.cleanedQuery)}
+                        className="text-[10px] font-bold text-ink dark:text-white bg-gold/20 hover:bg-gold px-2 py-0.5 rounded-md flex items-center gap-1 transition-colors cursor-pointer"
+                      >
+                        <Wand2 size={10} /> Auto-clean: "{customKeywordValidation.cleanedQuery}"
+                      </button>
+                    )}
+                  </div>
+                )}
+              </div>
 
               {/* Custom Search Angle & Parameters */}
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4 pt-2">
@@ -1074,7 +1103,28 @@ export const AdminAIPanel = () => {
                     placeholder="e.g. Latest breakthrough on ISRO Gaganyaan mission test or UPSC GS3 tech..."
                     className="w-full bg-paper2 border border-black/10 rounded-xl p-3 text-xs font-medium text-ink outline-none focus:border-gold"
                   />
-                  <p className="text-[10px] text-ink3">Leave empty for broad scan across all selected keywords.</p>
+                  {keywordQuery.trim() ? (
+                    <div className="flex flex-wrap items-center justify-between text-[11px] px-2.5 py-1 bg-paper2 rounded-lg border border-black/5 gap-1.5">
+                      <span className={cn(
+                        "flex items-center gap-1 font-medium",
+                        keywordQueryValidation.isValid ? "text-emerald-700 dark:text-emerald-400" : "text-amber-700 dark:text-amber-400"
+                      )}>
+                        {keywordQueryValidation.isValid ? <CheckCircle2 size={12} /> : <AlertCircle size={12} />}
+                        <span>{keywordQueryValidation.message}</span>
+                      </span>
+                      {keywordQueryValidation.canAutoClean && (
+                        <button
+                          type="button"
+                          onClick={() => setKeywordQuery(keywordQueryValidation.cleanedQuery)}
+                          className="text-[10px] font-bold text-ink bg-gold/20 hover:bg-gold px-1.5 py-0.5 rounded flex items-center gap-1 cursor-pointer"
+                        >
+                          <Wand2 size={9} /> Clean: "{keywordQueryValidation.cleanedQuery}"
+                        </button>
+                      )}
+                    </div>
+                  ) : (
+                    <p className="text-[10px] text-ink3">Leave empty for broad scan across all selected keywords.</p>
+                  )}
                 </div>
 
                 {/* Target Syllabus / Exam Focus */}

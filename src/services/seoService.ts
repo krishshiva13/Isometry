@@ -1,5 +1,12 @@
 import { SEOAuditReport, SEOAuditCheckItem, SEOKeywordResearchResult, Fact } from '../types';
 
+export interface KeywordValidationRule {
+  id: string;
+  label: string;
+  passed: boolean;
+  hint: string;
+}
+
 export interface KeywordValidationResult {
   isValid: boolean;
   status: 'empty' | 'invalid' | 'warning' | 'valid';
@@ -10,10 +17,13 @@ export interface KeywordValidationResult {
   cleanedQuery: string;
   canAutoClean: boolean;
   warnings: string[];
+  rules: KeywordValidationRule[];
+  score: number; // 0 to 100 formatting quality score
 }
 
 /**
  * Real-time validator for Google SEO Keyword Research queries
+ * Provides immediate feedback on query length, word count, syntax, search operators, and formatting
  */
 export function validateKeywordQuery(rawQuery: string): KeywordValidationResult {
   const query = rawQuery || '';
@@ -31,47 +41,102 @@ export function validateKeywordQuery(rawQuery: string): KeywordValidationResult 
       wordCount: 0,
       cleanedQuery: '',
       canAutoClean: false,
-      warnings: []
+      warnings: [],
+      rules: [
+        { id: 'length', label: 'Length: 2-80 characters', passed: false, hint: 'Minimum 2 characters needed' },
+        { id: 'words', label: 'Word Count: 2-5 words recommended', passed: false, hint: 'Target 2-5 words for optimal Page 1 results' },
+        { id: 'clean', label: 'Clean Syntax: No URLs, symbols, or operators', passed: false, hint: 'Avoid syntax characters and pasted links' },
+        { id: 'entity', label: 'Entity: Clear topical subject', passed: false, hint: 'Enter a person, event, concept, or invention' }
+      ],
+      score: 0
     };
   }
 
   const warnings: string[] = [];
   let cleaned = trimmed;
 
-  // Check 1: URL pasted
-  const isUrl = /^https?:\/\//i.test(trimmed) || /^www\./i.test(trimmed);
+  // Rule checks
+  let isCleanSyntax = true;
+  let isGoodEntity = true;
+
+  // Check 1: HTML tags pasted
+  if (/<[^>]*>/g.test(cleaned)) {
+    warnings.push('HTML tags detected. Stripping markup for clean search analysis.');
+    cleaned = cleaned.replace(/<[^>]*>/g, ' ').replace(/\s+/g, ' ').trim();
+    isCleanSyntax = false;
+  }
+
+  // Check 2: Google Advanced Search Operators (site:, intitle:, filetype:, inurl:, cache:)
+  const operatorMatch = cleaned.match(/\b(site|inurl|intitle|allintitle|filetype|related|cache):[^\s]+/gi);
+  if (operatorMatch) {
+    warnings.push(`Search operator (${operatorMatch[0]}) detected. Keyword research evaluates organic topic phrases without operators.`);
+    cleaned = cleaned.replace(/\b(site|inurl|intitle|allintitle|filetype|related|cache):[^\s]+/gi, '').replace(/\s+/g, ' ').trim();
+    isCleanSyntax = false;
+  }
+
+  // Check 3: URL pasted
+  const isUrl = /^https?:\/\//i.test(cleaned) || /^www\./i.test(cleaned) || /\.[a-z]{2,6}\/[^\s]*/i.test(cleaned);
   if (isUrl) {
     try {
-      const urlObj = new URL(trimmed.startsWith('http') ? trimmed : `https://${trimmed}`);
+      const urlCandidate = cleaned.startsWith('http') ? cleaned : `https://${cleaned}`;
+      const urlObj = new URL(urlCandidate);
       const pathname = decodeURIComponent(urlObj.pathname).replace(/[\/_+-]+/g, ' ').trim();
-      if (pathname.length >= 2) {
+      const searchParam = urlObj.searchParams.get('q') || urlObj.searchParams.get('query') || urlObj.searchParams.get('search');
+      if (searchParam && searchParam.length >= 2) {
+        cleaned = searchParam.replace(/[\/_+-]+/g, ' ').trim();
+      } else if (pathname.length >= 2) {
         cleaned = pathname;
       }
     } catch {
-      cleaned = trimmed.replace(/^https?:\/\/(www\.)?/, '').replace(/[\/_+-]+/g, ' ').trim();
+      cleaned = cleaned.replace(/^https?:\/\/(www\.)?/, '').replace(/[\/_+-]+/g, ' ').trim();
     }
-    warnings.push('URL detected. We extracted the clean topic phrase for search intent.');
+    warnings.push('URL format detected. Extracted the clean topic phrase for search intent.');
+    isCleanSyntax = false;
   }
 
-  // Check 2: Wrapping quotes
+  // Check 4: Kebab-case or snake_case slug format (e.g. james_webb_telescope, moon-landing)
+  if (/[a-zA-Z0-9]+[-_][a-zA-Z0-9]+/.test(cleaned)) {
+    warnings.push('Slug formatting (hyphens/underscores) detected. Auto-clean replaces separators with spaces.');
+    cleaned = cleaned.replace(/[-_]+/g, ' ').replace(/\s+/g, ' ').trim();
+    isCleanSyntax = false;
+  }
+
+  // Check 5: Wrapping quotes
   if ((cleaned.startsWith('"') && cleaned.endsWith('"')) || (cleaned.startsWith("'") && cleaned.endsWith("'"))) {
     cleaned = cleaned.slice(1, -1).trim();
+    warnings.push('Quotes detected. Search volume metrics are best calculated on unquoted phrases.');
+    isCleanSyntax = false;
   }
 
-  // Check 3: Trailing / excessive punctuation
+  // Check 6: Trailing / excessive punctuation
   if (/[!?,.:;#$%^&*()_=+\[\]{}<>\\/|`~]+$/.test(cleaned)) {
     warnings.push('Trailing punctuation detected. Stripping symbols for cleaner Google matching.');
     cleaned = cleaned.replace(/[!?,.:;#$%^&*()_=+\[\]{}<>\\/|`~]+$/g, '').trim();
+    isCleanSyntax = false;
   }
 
   if (/([!?#$*~+=]{2,})/g.test(cleaned)) {
-    warnings.push('Excessive symbols or punctuation found in keyword.');
+    warnings.push('Excessive symbols or punctuation found in query.');
     cleaned = cleaned.replace(/([!?#$*~+=]{2,})/g, ' ').replace(/\s+/g, ' ').trim();
+    isCleanSyntax = false;
   }
 
-  const canAutoClean = cleaned.toLowerCase() !== trimmed.toLowerCase() && cleaned.length >= 2;
+  // Check 7: Multiple consecutive whitespace
+  if (/\s{2,}/.test(cleaned)) {
+    cleaned = cleaned.replace(/\s+/g, ' ').trim();
+  }
 
-  // Check 4: Too short
+  // Auto Capitalize first letters of words in cleaned if input was all lowercase
+  if (cleaned.length > 2 && cleaned === cleaned.toLowerCase() && !cleaned.includes('.')) {
+    cleaned = cleaned
+      .split(' ')
+      .map(w => w.charAt(0).toUpperCase() + w.slice(1))
+      .join(' ');
+  }
+
+  const canAutoClean = cleaned.toLowerCase() !== trimmed.toLowerCase() || cleaned !== trimmed;
+
+  // Check 8: Too short (< 2 characters)
   if (trimmed.length < 2) {
     return {
       isValid: false,
@@ -81,13 +146,42 @@ export function validateKeywordQuery(rawQuery: string): KeywordValidationResult 
       wordCount,
       cleanedQuery: cleaned,
       canAutoClean: false,
-      warnings: ['Minimum 2 characters required.']
+      warnings: ['Minimum 2 characters required.'],
+      rules: [
+        { id: 'length', label: 'Length: 2-80 characters', passed: false, hint: 'At least 2 characters required' },
+        { id: 'words', label: 'Word Count: 2-5 words recommended', passed: false, hint: 'Single letters cannot be analyzed' },
+        { id: 'clean', label: 'Clean Syntax: No URLs, symbols, or operators', passed: isCleanSyntax, hint: 'Check for punctuation' },
+        { id: 'entity', label: 'Entity: Clear topical subject', passed: false, hint: 'Specify a topic or entity' }
+      ],
+      score: 15
     };
   }
 
-  // Check 5: Single stop word
-  const stopWords = new Set(['the', 'a', 'an', 'and', 'or', 'in', 'on', 'at', 'to', 'for', 'of', 'with', 'by', 'is']);
+  // Check 9: Only symbols / punctuation
+  if (!/[a-zA-Z0-9]/.test(trimmed)) {
+    return {
+      isValid: false,
+      status: 'invalid',
+      message: 'Query contains only symbols. Please enter letters or topic terms.',
+      charCount,
+      wordCount: 0,
+      cleanedQuery: '',
+      canAutoClean: false,
+      warnings: ['No alphanumeric characters found.'],
+      rules: [
+        { id: 'length', label: 'Length: 2-80 characters', passed: true, hint: 'Meets length' },
+        { id: 'words', label: 'Word Count: 2-5 words recommended', passed: false, hint: 'No words found' },
+        { id: 'clean', label: 'Clean Syntax: No URLs, symbols, or operators', passed: false, hint: 'All punctuation' },
+        { id: 'entity', label: 'Entity: Clear topical subject', passed: false, hint: 'No subject found' }
+      ],
+      score: 10
+    };
+  }
+
+  // Check 10: Single stop word
+  const stopWords = new Set(['the', 'a', 'an', 'and', 'or', 'in', 'on', 'at', 'to', 'for', 'of', 'with', 'by', 'is', 'it', 'what', 'how', 'when', 'why']);
   if (wordCount === 1 && stopWords.has(trimmed.toLowerCase())) {
+    isGoodEntity = false;
     return {
       isValid: false,
       status: 'invalid',
@@ -96,12 +190,20 @@ export function validateKeywordQuery(rawQuery: string): KeywordValidationResult 
       wordCount,
       cleanedQuery: cleaned,
       canAutoClean,
-      warnings: ['Generic stop word without topic entity.']
+      warnings: ['Generic stop word without topic entity.'],
+      rules: [
+        { id: 'length', label: 'Length: 2-80 characters', passed: true, hint: 'Length OK' },
+        { id: 'words', label: 'Word Count: 2-5 words recommended', passed: false, hint: 'Single stop-word' },
+        { id: 'clean', label: 'Clean Syntax: No URLs, symbols, or operators', passed: isCleanSyntax, hint: 'Syntax OK' },
+        { id: 'entity', label: 'Entity: Clear topical subject', passed: false, hint: 'Add a subject entity' }
+      ],
+      score: 25
     };
   }
 
-  // Check 6: Numbers only
+  // Check 11: Numbers only
   if (/^\d+$/.test(trimmed)) {
+    isGoodEntity = false;
     warnings.push('Numerical query: add topical context (e.g., "Year 1969 Moon Landing" or "Apollo 11").');
     return {
       isValid: true,
@@ -112,37 +214,73 @@ export function validateKeywordQuery(rawQuery: string): KeywordValidationResult 
       keywordType: 'Short-Tail',
       cleanedQuery: cleaned,
       canAutoClean,
-      warnings
+      warnings,
+      rules: [
+        { id: 'length', label: 'Length: 2-80 characters', passed: true, hint: 'Length OK' },
+        { id: 'words', label: 'Word Count: 2-5 words recommended', passed: false, hint: 'Numerical only' },
+        { id: 'clean', label: 'Clean Syntax: No URLs, symbols, or operators', passed: isCleanSyntax, hint: 'Syntax OK' },
+        { id: 'entity', label: 'Entity: Clear topical subject', passed: false, hint: 'Add descriptive topic' }
+      ],
+      score: 55
     };
   }
 
-  // Check 7: Excessively long query (> 70 chars or > 8 words)
-  if (charCount > 80 || wordCount > 8) {
-    warnings.push('Unusually long query (>8 words). Keyword search engines perform best with 2 to 5 words.');
-    return {
-      isValid: true,
-      status: 'warning',
-      message: `Query is quite long (${wordCount} words, ${charCount} chars). Focus on core 2-5 word topics for optimal Page 1 research.`,
-      charCount,
-      wordCount,
-      keywordType: 'Long-Tail',
-      cleanedQuery: cleaned,
-      canAutoClean,
-      warnings
-    };
+  // Check 12: Excessively long query (> 80 chars or > 8 words)
+  const isGoodLength = charCount <= 80 && wordCount <= 8;
+  if (!isGoodLength) {
+    warnings.push(`Query is quite long (${wordCount} words, ${charCount} chars). Focus on core 2-5 word topics for optimal Page 1 research.`);
   }
 
   // Classify keyword tail & formulate feedback
   let keywordType: KeywordValidationResult['keywordType'] = 'Mid-Tail (Optimal)';
   let message = 'Optimal mid-tail phrase: Ideal balance of search volume and Page 1 ranking intent.';
+  let isOptimalWords = true;
 
   if (wordCount === 1) {
     keywordType = 'Short-Tail';
     message = 'Short-tail keyword: High monthly search volume with broader competitive landscape.';
-  } else if (wordCount >= 5) {
+    isOptimalWords = false;
+  } else if (wordCount > 5) {
     keywordType = 'Long-Tail';
     message = 'Long-tail query: High searcher intent, excellent for featured snippets and quick ranking.';
+    isOptimalWords = wordCount <= 8;
   }
+
+  // Calculate formatting quality score (0 to 100)
+  let score = 100;
+  if (!isGoodLength) score -= 25;
+  if (!isCleanSyntax) score -= 20;
+  if (wordCount === 1) score -= 15;
+  if (wordCount > 6) score -= 15;
+  if (warnings.length > 0) score -= warnings.length * 10;
+  score = Math.max(30, Math.min(100, score));
+
+  const rules: KeywordValidationRule[] = [
+    {
+      id: 'length',
+      label: `Length: ${charCount}/80 chars`,
+      passed: charCount >= 2 && charCount <= 80,
+      hint: charCount > 80 ? 'Query exceeds 80 characters' : 'Length is within optimal index limits'
+    },
+    {
+      id: 'words',
+      label: `Word Count: ${wordCount} words (${keywordType})`,
+      passed: wordCount >= 2 && wordCount <= 6,
+      hint: wordCount === 1 ? '1 word: broader search volume' : wordCount > 6 ? '7+ words: long phrase' : 'Optimal 2-5 words'
+    },
+    {
+      id: 'clean',
+      label: 'Clean Syntax: No URLs or operators',
+      passed: isCleanSyntax,
+      hint: isCleanSyntax ? 'No syntax pollution detected' : 'Formatting issues detected (click Auto-Format)'
+    },
+    {
+      id: 'entity',
+      label: 'Entity: Clear topical subject',
+      passed: isGoodEntity,
+      hint: 'Identifies a recognizable historical, scientific, or general topic'
+    }
+  ];
 
   const finalStatus = warnings.length > 0 ? 'warning' : 'valid';
 
@@ -155,7 +293,9 @@ export function validateKeywordQuery(rawQuery: string): KeywordValidationResult 
     keywordType,
     cleanedQuery: cleaned,
     canAutoClean,
-    warnings
+    warnings,
+    rules,
+    score
   };
 }
 

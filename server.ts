@@ -2021,14 +2021,21 @@ async function startServer() {
         immutable: true,
       })
     );
+    // Explicitly return 404 for missing assets or script chunks so they don't fall back to index.html
+    app.get("/assets/*", (req, res) => {
+      res.status(404).json({ error: "Asset chunk not found", path: req.path });
+    });
     // Cache general static files (favicon, manifest, etc.) for 1 hour
     app.use(
       express.static(distPath, {
         maxAge: "1h",
       })
     );
-    // Instant index.html fallback for client SPA routes
+    // Instant index.html fallback for client SPA routes (excluding script/asset paths)
     app.get("*", (req, res) => {
+      if (req.path.startsWith("/assets/") || req.path.endsWith(".js") || req.path.endsWith(".css") || req.path.endsWith(".map")) {
+        return res.status(404).send("File not found");
+      }
       res.setHeader("Cache-Control", "no-cache");
       res.sendFile(path.join(distPath, "index.html"));
     });

@@ -29,6 +29,7 @@ export const Footer = () => {
         <div className="space-y-6">
           <h4 className="text-white font-bold text-xs uppercase tracking-widest">Study Tools & GK Hub</h4>
           <ul className="space-y-3 text-sm">
+            <li><Link to="/exam-prep" className="hover:text-gold-l text-amber-300 font-bold transition-colors">📚 Daily Current Affairs + MCQs + PDF</Link></li>
             <li><Link to="/daily-streak" className="hover:text-gold-l text-gold font-bold transition-colors">🔥 Daily 5-Q Streak Challenge</Link></li>
             <li><Link to="/notebook" className="hover:text-gold-l transition-colors">📓 Student Study Notebook</Link></li>
             <li><Link to="/flashcards" className="hover:text-gold-l transition-colors">🧠 Smart Flashcards (Spaced Repetition)</Link></li>

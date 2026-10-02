@@ -41,10 +41,10 @@ export const Header = () => {
   };
 
   const primaryNavLinks = [
+    { name: 'Exam Prep', path: '/exam-prep', emoji: '📚', badge: 'Daily' },
     { name: 'History', path: '/category/history', color: '#c94a2b' },
     { name: 'Science', path: '/category/science', color: '#0a7c6e' },
     ...(isAdmin ? [
-      { name: 'Exam Prep', path: '/exam-prep', emoji: '📚', badge: 'Admin' },
       { name: 'Magazine', path: '/magazine', emoji: '📖', badge: 'Admin' },
     ] : []),
   ];

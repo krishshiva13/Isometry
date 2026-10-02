@@ -83,12 +83,17 @@ export const SEOToolkit: React.FC = () => {
     setTimeout(() => setCopiedKey(null), 2000);
   };
 
+  const handleTopicChange = (newTopic: string) => {
+    setTopic(newTopic);
+    if (error) setError(null);
+  };
+
   const validation = React.useMemo(() => validateKeywordQuery(topic), [topic]);
 
   const handleRunResearch = async (e?: React.FormEvent) => {
     if (e) e.preventDefault();
     if (!validation.isValid) {
-      setError(validation.message || 'Please format your keyword query correctly.');
+      setError(validation.message || 'Please format your keyword query correctly before executing search.');
       return;
     }
 
@@ -190,8 +195,9 @@ export const SEOToolkit: React.FC = () => {
                   Topic / Seed Keyword
                 </label>
                 <KeywordResearchInputField
+                  id="seo-toolkit-topic"
                   value={topic}
-                  onChange={setTopic}
+                  onChange={handleTopicChange}
                   placeholder="e.g., Harappan Civilization, Wright Brothers First Flight, Black Holes"
                   showQuickSuggestions={true}
                   suggestions={['Harappan Civilization', 'James Webb Telescope', 'Wright Brothers First Flight', 'Quantum Computing']}
