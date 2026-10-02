@@ -21,7 +21,8 @@ window.addEventListener('error', (event) => {
     event.message &&
     (event.message.includes('Failed to fetch dynamically imported module') ||
      event.message.includes('Importing a module script failed') ||
-     event.message.includes('error loading dynamically imported module'))
+     event.message.includes('error loading dynamically imported module') ||
+     event.message.includes('Cannot read properties of undefined') && event.message.includes('ExamPrep'))
   ) {
     const reloadKey = 'facthub_chunk_reload_ts';
     const lastReload = sessionStorage.getItem(reloadKey);

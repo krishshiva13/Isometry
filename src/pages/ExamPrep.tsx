@@ -32,6 +32,8 @@ import { cn } from '../lib/utils';
 import { factService } from '../services/factService';
 import { notebookService } from '../services/notebookService';
 import { recordQuizCompleted } from '../components/DailyGoalTracker';
+import { PDFDocumentViewer } from '../components/exam/PDFDocumentViewer';
+import { downloadCurrentAffairsPdf } from '../lib/currentAffairsPdfExport';
 
 // ═══════════════════════════════════════════════════════════
 // TYPES & DATA STRUCTURES
@@ -509,117 +511,27 @@ export const ExamPrep: React.FC = () => {
     window.print();
   };
 
-  // Client-side instant PDF Download (Creates a self-contained, high-resolution printable HTML/PDF file)
+  // Client-side instant PDF Download (Generates a authentic 2-page print-ready A4 PDF)
   const handleDownloadPdf = () => {
-    const capsule = activeCapsule;
-    const printHtml = `
-      <!DOCTYPE html>
-      <html lang="en">
-      <head>
-        <meta charset="UTF-8">
-        <title>${capsule.pdfFileName}</title>
-        <style>
-          @page { size: A4; margin: 15mm; }
-          body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Georgia, serif; color: #111; line-height: 1.45; font-size: 11pt; }
-          .header { border-bottom: 2px solid #09142A; padding-bottom: 8px; margin-bottom: 12px; display: flex; justify-content: space-between; align-items: flex-end; }
-          .logo { font-size: 18pt; font-weight: 900; letter-spacing: -0.5px; }
-          .logo span { color: #d9ad42; }
-          .badge { font-size: 9pt; background: #09142A; color: #fff; padding: 2px 8px; border-radius: 4px; font-weight: bold; }
-          .meta { font-size: 9pt; color: #555; }
-          .section-title { font-size: 13pt; font-weight: bold; color: #09142A; border-bottom: 1px solid #ccc; padding-bottom: 4px; margin-top: 14px; margin-bottom: 8px; text-transform: uppercase; letter-spacing: 0.5px; }
-          .mcq-item { margin-bottom: 12px; page-break-inside: avoid; }
-          .mcq-q { font-weight: bold; font-size: 10.5pt; margin-bottom: 4px; }
-          .options-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 4px; font-size: 10pt; margin-bottom: 4px; }
-          .opt { padding: 3px 6px; background: #f8f8f8; border: 1px solid #e2e2e2; border-radius: 4px; }
-          .opt.correct { background: #e6f4ea; border-color: #34a853; font-weight: bold; color: #0d652d; }
-          .exp-box { background: #fffbe6; border-left: 3px solid #d9ad42; padding: 6px 10px; font-size: 9pt; color: #333; margin-top: 4px; border-radius: 2px; }
-          .page-break { page-break-after: always; }
-          .ca-item { margin-bottom: 10px; page-break-inside: avoid; }
-          .ca-title { font-weight: bold; font-size: 11pt; color: #09142A; }
-          .ca-body { font-size: 10pt; color: #333; margin: 3px 0; }
-          .ca-angle { background: #f3f4f6; border-left: 3px solid #1a56db; padding: 4px 8px; font-size: 9pt; color: #1e3a8a; }
-          .footer { text-align: center; font-size: 8pt; color: #888; border-top: 1px solid #eee; padding-top: 6px; margin-top: 14px; }
-        </style>
-      </head>
-      <body>
-        <div class="header">
-          <div>
-            <div class="logo">F<span>A</span>ctHub Exam Capsule</div>
-            <div class="meta">Daily Current Affairs & Practice MCQs • UPSC, SSC, Banking, State PSC</div>
-          </div>
-          <div style="text-align: right;">
-            <div class="badge">${capsule.displayDate}</div>
-            <div class="meta" style="margin-top: 3px;">Page 1 of 2: Today's 5 Practice MCQs</div>
-          </div>
-        </div>
-
-        <div class="section-title">Part I: Daily Current Affairs MCQs with Answers & Traps</div>
-        ${capsule.mcqs.map((q, idx) => `
-          <div class="mcq-item">
-            <div class="mcq-q">Q${idx + 1}. [${q.targetExam}] ${q.question}</div>
-            <div class="options-grid">
-              ${q.options.map((opt, oIdx) => `
-                <div class="opt ${oIdx === q.correctAnswer ? 'correct' : ''}">
-                  <strong>${String.fromCharCode(65 + oIdx)}.</strong> ${opt} ${oIdx === q.correctAnswer ? '✓ (Correct)' : ''}
-                </div>
-              `).join('')}
-            </div>
-            <div class="exp-box">
-              <strong>💡 Explanation:</strong> ${q.explanation}<br/>
-              <strong>⚠️ Exam Trap:</strong> ${q.examTrap}
-            </div>
-          </div>
-        `).join('')}
-
-        <div class="footer">FActHub Daily Capsule • Downloaded for offline student study • facthub.com</div>
-
-        <div class="page-break"></div>
-
-        <div class="header">
-          <div>
-            <div class="logo">F<span>A</span>ctHub Exam Capsule</div>
-            <div class="meta">${capsule.displayDate} • Curated from The Hindu, PIB & Official Gazettes</div>
-          </div>
-          <div style="text-align: right;">
-            <div class="badge">Current Affairs Digest</div>
-            <div class="meta" style="margin-top: 3px;">Page 2 of 2: Core News & Exam Angles</div>
-          </div>
-        </div>
-
-        <div class="section-title">Part II: Core News & Examiner Focus Points</div>
-        ${capsule.currentAffairs.map((ca, idx) => `
-          <div class="ca-item">
-            <div class="ca-title">0${idx + 1}. ${ca.title}</div>
-            <div class="ca-body">${ca.summary}</div>
-            <div class="ca-angle">
-              <strong>🎯 Exam Angle:</strong> ${ca.examAngle}<br/>
-              <strong>📌 Key Fact for Prelims:</strong> ${ca.keyTakeaway}
-            </div>
-          </div>
-        `).join('')}
-
-        <div style="margin-top: 16px; padding: 10px; background: #fafafa; border: 1px dashed #ccc; border-radius: 6px; font-size: 9pt;">
-          <strong>Student Quick Revision Notes:</strong>
-          <ul>
-            ${capsule.quickPointers.map(p => `<li>${p}</li>`).join('')}
-          </ul>
-        </div>
-
-        <div class="footer">FActHub Daily Capsule • All rights reserved • Practice daily at facthub.com/exam-prep</div>
-      </body>
-      </html>
-    `;
-
-    const blob = new Blob([printHtml], { type: 'text/html;charset=utf-8' });
-    const url = URL.createObjectURL(blob);
-    const link = document.createElement('a');
-    link.href = url;
-    link.download = capsule.pdfFileName.replace('.pdf', '.html');
-    document.body.appendChild(link);
-    link.click();
-    document.body.removeChild(link);
-    URL.revokeObjectURL(url);
-    showToast(`📥 Capsule downloaded: "${capsule.pdfFileName}" (Open in browser to print or save as PDF)`);
+    try {
+      downloadCurrentAffairsPdf(activeCapsule);
+      showToast(`📥 PDF Capsule downloaded: "${activeCapsule.pdfFileName}" (A4 2-Page Print Edition)`);
+    } catch (err) {
+      console.warn('PDF direct generation fallback', err);
+      // Fallback to printable HTML version
+      const capsule = activeCapsule;
+      const printHtml = `<!DOCTYPE html><html><head><meta charset="UTF-8"><title>${capsule.pdfFileName}</title></head><body><h1>${capsule.pdfFileName}</h1></body></html>`;
+      const blob = new Blob([printHtml], { type: 'text/html;charset=utf-8' });
+      const url = URL.createObjectURL(blob);
+      const link = document.createElement('a');
+      link.href = url;
+      link.download = capsule.pdfFileName.replace('.pdf', '.html');
+      document.body.appendChild(link);
+      link.click();
+      document.body.removeChild(link);
+      URL.revokeObjectURL(url);
+      showToast(`📥 Capsule downloaded: "${capsule.pdfFileName}"`);
+    }
   };
 
   const filteredAffairs = activeCapsule.currentAffairs.filter(item => {
@@ -667,19 +579,27 @@ export const ExamPrep: React.FC = () => {
                 Daily Current Affairs + 5 Practice MCQs + PDF
               </h1>
               <p className="text-xs sm:text-sm text-white/70 max-w-2xl leading-relaxed">
-                Test your knowledge with 5 high-yield questions above, digest key national and international news in the middle, and download your printable 2-page PDF capsule below.
+                Test your knowledge with 5 high-yield questions above, read study materials in the interactive PDF viewer directly beneath, and download your printable 2-page PDF capsule.
               </p>
             </div>
 
             {/* Quick Actions */}
             <div className="flex items-center gap-2 shrink-0">
+              <a
+                href="#pdf-viewer-section"
+                className="inline-flex items-center gap-1.5 px-3.5 py-2 rounded-xl bg-white/10 hover:bg-white/20 text-white font-bold text-xs border border-white/15 transition-all cursor-pointer"
+                title="Jump to in-app PDF document viewer"
+              >
+                <Eye size={14} />
+                <span>PDF Viewer</span>
+              </a>
               <button
                 onClick={handlePrintCapsule}
                 className="inline-flex items-center gap-1.5 px-3.5 py-2 rounded-xl bg-white/10 hover:bg-white/20 text-white font-bold text-xs border border-white/15 transition-all cursor-pointer"
                 title="Print clean 2-page student handout"
               >
                 <Printer size={14} />
-                <span>Print Handout</span>
+                <span>Print</span>
               </button>
               <button
                 onClick={handleDownloadPdf}
@@ -972,10 +892,10 @@ export const ExamPrep: React.FC = () => {
               </div>
 
               <a
-                href="#current-affairs-digest"
-                className="inline-flex items-center gap-1.5 px-4 py-2 bg-emerald-600 hover:bg-emerald-500 text-white rounded-xl text-xs font-bold shadow-sm transition-all whitespace-nowrap"
+                href="#pdf-viewer-section"
+                className="inline-flex items-center gap-1.5 px-4 py-2 bg-emerald-600 hover:bg-emerald-500 text-white rounded-xl text-xs font-bold shadow-sm transition-all whitespace-nowrap cursor-pointer"
               >
-                <span>Read Current Affairs</span>
+                <span>Read in PDF Viewer</span>
                 <ChevronRight size={14} />
               </a>
             </div>
@@ -985,7 +905,53 @@ export const ExamPrep: React.FC = () => {
 
 
         {/* ═══════════════════════════════════════════════════════════
-            SECTION 2: MIDDLE — TODAY'S CURRENT AFFAIRS DIGEST
+            SECTION 2: PDF DOCUMENT VIEWER (BENEATH MCQ SECTION)
+            (Allows students to read 2-page A4 capsule directly in app)
+           ═══════════════════════════════════════════════════════════ */}
+        <section id="pdf-viewer-section" className="space-y-4">
+          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 border-b border-black/10 dark:border-white/10 pb-3">
+            <div>
+              <div className="flex items-center gap-2 text-xs font-mono font-bold text-[#1A56DB] dark:text-blue-400 uppercase tracking-widest">
+                <FileText size={14} className="text-gold" />
+                <span>Step 2: Read Study Materials Directly in App</span>
+                <span>•</span>
+                <span>{activeCapsule.displayDate}</span>
+              </div>
+              <h2 className="text-xl sm:text-2xl font-serif font-black text-ink dark:text-white mt-0.5">
+                Daily Study Capsule & Interactive PDF Viewer
+              </h2>
+            </div>
+
+            <div className="flex items-center gap-2 text-xs font-mono">
+              <span className="bg-paper2 dark:bg-white/10 text-ink2 dark:text-white/70 px-3 py-1.5 rounded-xl border border-black/5 dark:border-white/10 flex items-center gap-1.5">
+                <BookOpen size={13} className="text-gold" />
+                <span>{activeCapsule.pdfFileName}</span>
+              </span>
+            </div>
+          </div>
+
+          {/* Reusable PDF Previewer Component */}
+          <PDFDocumentViewer
+            capsule={activeCapsule}
+            title={`FactHub Daily Current Affairs Capsule • ${activeCapsule.displayDate}`}
+            subtitle={`${activeCapsule.dayBadge} — 5 MCQs on Page 1 & Core Digest on Page 2`}
+            fileName={activeCapsule.pdfFileName}
+            fileSize={activeCapsule.pdfFileSize}
+            pageCount={2}
+            initialPage={pdfPreviewPage}
+            onDownload={handleDownloadPdf}
+            onPrint={handlePrintCapsule}
+            onSaveQuestion={(qId) => {
+              const mcq = activeCapsule.mcqs.find(q => q.id === qId);
+              if (mcq) handleSaveToNotebook(mcq);
+            }}
+            savedQuestions={savedQuestions}
+          />
+        </section>
+
+
+        {/* ═══════════════════════════════════════════════════════════
+            SECTION 3: MIDDLE — TODAY'S CURRENT AFFAIRS DIGEST
             (High-Yield News with Exam Angles)
            ═══════════════════════════════════════════════════════════ */}
         <section id="current-affairs-digest" className="space-y-6">
@@ -994,7 +960,7 @@ export const ExamPrep: React.FC = () => {
           <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 border-b border-black/10 dark:border-white/10 pb-4">
             <div>
               <div className="flex items-center gap-2 text-xs font-mono font-bold text-[#1A56DB] dark:text-blue-400 uppercase tracking-widest">
-                <span>Step 2: Core Exam Digest</span>
+                <span>Step 3: Core Exam Digest & Feed</span>
                 <span>•</span>
                 <span>{activeCapsule.displayDate}</span>
               </div>
@@ -1143,7 +1109,7 @@ export const ExamPrep: React.FC = () => {
             <div className="space-y-2">
               <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-gold/20 text-gold font-mono text-[11px] font-bold uppercase tracking-wider border border-gold/30">
                 <FileText size={14} />
-                <span>Step 3: Offline Revision Capsule</span>
+                <span>Step 4: Offline Revision & Download Center</span>
               </div>
               <h2 className="text-2xl sm:text-3xl font-serif font-black text-white leading-tight">
                 Download Daily Current Affairs PDF ({activeCapsule.displayDate})

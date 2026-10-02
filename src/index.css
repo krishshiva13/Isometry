@@ -64,9 +64,47 @@ html.dark .bg-ink .text-paper,
   color: #f7f7f4 !important;
 }
 
-/* Solid white cards become dark charcoal in dark mode */
-html.dark .bg-white:not([class*="bg-white/"]):not([class*="dark:bg-"]) {
+/* Solid white cards become dark charcoal in dark mode (excluding document viewer paper sheets) */
+html.dark .bg-white:not([class*="bg-white/"]):not([class*="dark:bg-"]):not([data-paper-preserve="true"]):not([data-sheet="paper"] *):not(.facthub-paper-card) {
   background-color: #171715 !important;
+}
+
+/* Ensure paper document sheets in PDF previewer retain crisp light paper & dark ink */
+.facthub-paper-sheet,
+[data-sheet="paper"] {
+  background-color: #FAF8F5 !important;
+  color: #0F172A !important;
+}
+
+.facthub-paper-sheet .facthub-paper-card,
+[data-sheet="paper"] .facthub-paper-card {
+  background-color: #FFFFFF !important;
+  color: #0F172A !important;
+  border-color: #E2E8F0 !important;
+}
+
+.facthub-paper-sheet .facthub-paper-title,
+[data-sheet="paper"] .facthub-paper-title {
+  color: #0F172A !important;
+}
+
+.facthub-paper-sheet .facthub-paper-body,
+[data-sheet="paper"] .facthub-paper-body {
+  color: #334155 !important;
+}
+
+.facthub-paper-sheet .facthub-paper-opt,
+[data-sheet="paper"] .facthub-paper-opt {
+  background-color: #F8FAFC !important;
+  color: #1E293B !important;
+  border-color: #E2E8F0 !important;
+}
+
+.facthub-paper-sheet .facthub-paper-opt-correct,
+[data-sheet="paper"] .facthub-paper-opt-correct {
+  background-color: #ECFDF5 !important;
+  color: #065F46 !important;
+  border-color: #6EE7B7 !important;
 }
 
 /* Retain translucent white utility overlays in dark mode */

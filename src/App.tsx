@@ -14,19 +14,20 @@ import { RefreshCw, Home as HomeIcon, AlertCircle } from 'lucide-react';
  * Resilient lazy loader that auto-recovers from dynamic import errors caused by stale build chunks
  */
 function lazyWithRetry<T extends React.ComponentType<any>>(
-  factory: () => Promise<{ default: T } | any>,
+  factory: () => Promise<any>,
   componentName: string
 ) {
   return lazy(async () => {
     try {
       const module: any = await factory();
-      if (module && module.default) {
-        return { default: module.default };
+      if (!module) {
+        throw new Error(`Failed to load module for ${componentName} (module is undefined)`);
       }
-      if (module && module[componentName]) {
-        return { default: module[componentName] };
+      const Component = module.default || module[componentName] || module;
+      if (!Component) {
+        throw new Error(`Component "${componentName}" was not found in module`);
       }
-      return { default: module };
+      return { default: Component };
     } catch (error: any) {
       console.warn(`Dynamic chunk loading failed for ${componentName}:`, error);
       const retryKey = `retry_import_${componentName}`;
@@ -57,7 +58,9 @@ class RouteErrorBoundary extends Component<{ children: ReactNode }, { hasError: 
       (error.message.includes('Failed to fetch dynamically imported module') ||
        error.message.includes('dynamically imported module') ||
        error.message.includes('Loading chunk') ||
-       error.message.includes('Importing a module script failed'))
+       error.message.includes('Importing a module script failed') ||
+       error.message.includes('Cannot read properties of undefined') ||
+       error.message.includes('error loading dynamically imported module'))
     );
     return { hasError: true, isChunkError: isChunk, error };
   }
@@ -119,29 +122,29 @@ class RouteErrorBoundary extends Component<{ children: ReactNode }, { hasError: 
   }
 }
 
-const Home = lazyWithRetry(() => import('./pages/Home').then(m => ({ default: m.Home })), 'Home');
-const Article = lazyWithRetry(() => import('./pages/Article').then(m => ({ default: m.Article })), 'Article');
-const Section = lazyWithRetry(() => import('./pages/Section').then(m => ({ default: m.Section })), 'Section');
-const Quiz = lazyWithRetry(() => import('./pages/Quiz').then(m => ({ default: m.Quiz })), 'Quiz');
-const Birthdays = lazyWithRetry(() => import('./pages/Birthdays').then(m => ({ default: m.Birthdays })), 'Birthdays');
-const About = lazyWithRetry(() => import('./pages/StaticPages').then(m => ({ default: m.About })), 'About');
-const Contact = lazyWithRetry(() => import('./pages/StaticPages').then(m => ({ default: m.Contact })), 'Contact');
-const Privacy = lazyWithRetry(() => import('./pages/Privacy').then(m => ({ default: m.Privacy })), 'Privacy');
-const Advertise = lazyWithRetry(() => import('./pages/Advertise').then(m => ({ default: m.Advertise })), 'Advertise');
-const Sitemap = lazyWithRetry(() => import('./pages/Sitemap').then(m => ({ default: m.Sitemap })), 'Sitemap');
-const ExamPrep = lazyWithRetry(() => import('./pages/ExamPrep').then(m => ({ default: m.ExamPrep || m.default })), 'ExamPrep');
-const Magazine = lazyWithRetry(() => import('./pages/Magazine').then(m => ({ default: m.Magazine })), 'Magazine');
-const AdminAIPanel = lazyWithRetry(() => import('./pages/AdminAIPanel').then(m => ({ default: m.AdminAIPanel })), 'AdminAIPanel');
-const DailyStreakChallenge = lazyWithRetry(() => import('./pages/DailyStreakChallenge').then(m => ({ default: m.DailyStreakChallenge })), 'DailyStreakChallenge');
-const StudentNotebook = lazyWithRetry(() => import('./pages/StudentNotebook').then(m => ({ default: m.StudentNotebook })), 'StudentNotebook');
-const Bookmarks = lazyWithRetry(() => import('./pages/Bookmarks').then(m => ({ default: m.Bookmarks })), 'Bookmarks');
-const Flashcards = lazyWithRetry(() => import('./pages/Flashcards').then(m => ({ default: m.Flashcards })), 'Flashcards');
-const CalendarExplorer = lazyWithRetry(() => import('./pages/CalendarExplorer').then(m => ({ default: m.CalendarExplorer })), 'CalendarExplorer');
-const InteractiveTimeline = lazyWithRetry(() => import('./pages/InteractiveTimeline').then(m => ({ default: m.InteractiveTimeline })), 'InteractiveTimeline');
-const TopicComparison = lazyWithRetry(() => import('./pages/TopicComparison').then(m => ({ default: m.TopicComparison })), 'TopicComparison');
-const DailyStudySheet = lazyWithRetry(() => import('./pages/DailyStudySheet').then(m => ({ default: m.DailyStudySheet })), 'DailyStudySheet');
-const CommunitySubmit = lazyWithRetry(() => import('./pages/CommunitySubmit').then(m => ({ default: m.CommunitySubmit })), 'CommunitySubmit');
-const SEOToolkit = lazyWithRetry(() => import('./pages/SEOToolkit').then(m => ({ default: m.SEOToolkit })), 'SEOToolkit');
+const Home = lazyWithRetry(() => import('./pages/Home'), 'Home');
+const Article = lazyWithRetry(() => import('./pages/Article'), 'Article');
+const Section = lazyWithRetry(() => import('./pages/Section'), 'Section');
+const Quiz = lazyWithRetry(() => import('./pages/Quiz'), 'Quiz');
+const Birthdays = lazyWithRetry(() => import('./pages/Birthdays'), 'Birthdays');
+const About = lazyWithRetry(() => import('./pages/StaticPages').then(m => m.About), 'About');
+const Contact = lazyWithRetry(() => import('./pages/StaticPages').then(m => m.Contact), 'Contact');
+const Privacy = lazyWithRetry(() => import('./pages/Privacy'), 'Privacy');
+const Advertise = lazyWithRetry(() => import('./pages/Advertise'), 'Advertise');
+const Sitemap = lazyWithRetry(() => import('./pages/Sitemap'), 'Sitemap');
+const ExamPrep = lazyWithRetry(() => import('./pages/ExamPrep'), 'ExamPrep');
+const Magazine = lazyWithRetry(() => import('./pages/Magazine'), 'Magazine');
+const AdminAIPanel = lazyWithRetry(() => import('./pages/AdminAIPanel'), 'AdminAIPanel');
+const DailyStreakChallenge = lazyWithRetry(() => import('./pages/DailyStreakChallenge'), 'DailyStreakChallenge');
+const StudentNotebook = lazyWithRetry(() => import('./pages/StudentNotebook'), 'StudentNotebook');
+const Bookmarks = lazyWithRetry(() => import('./pages/Bookmarks'), 'Bookmarks');
+const Flashcards = lazyWithRetry(() => import('./pages/Flashcards'), 'Flashcards');
+const CalendarExplorer = lazyWithRetry(() => import('./pages/CalendarExplorer'), 'CalendarExplorer');
+const InteractiveTimeline = lazyWithRetry(() => import('./pages/InteractiveTimeline'), 'InteractiveTimeline');
+const TopicComparison = lazyWithRetry(() => import('./pages/TopicComparison'), 'TopicComparison');
+const DailyStudySheet = lazyWithRetry(() => import('./pages/DailyStudySheet'), 'DailyStudySheet');
+const CommunitySubmit = lazyWithRetry(() => import('./pages/CommunitySubmit'), 'CommunitySubmit');
+const SEOToolkit = lazyWithRetry(() => import('./pages/SEOToolkit'), 'SEOToolkit');
 
 const LoadingSpinner = () => (
   <div className="min-h-[60vh] flex items-center justify-center">
