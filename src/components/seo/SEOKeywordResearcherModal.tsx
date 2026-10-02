@@ -20,9 +20,10 @@ import {
   BarChart3
 } from 'lucide-react';
 import { SEOKeywordResearchResult, Fact } from '../../types';
-import { researchKeywordsWithAI, analyzeOnPageSEO } from '../../services/seoService';
+import { researchKeywordsWithAI, analyzeOnPageSEO, validateKeywordQuery } from '../../services/seoService';
 import { GoogleSERPPreview } from './GoogleSERPPreview';
 import { SEOAuditCard } from './SEOAuditCard';
+import { KeywordResearchInputField } from './KeywordResearchInputField';
 import { cn } from '../../lib/utils';
 
 interface SEOKeywordResearcherModalProps {
@@ -72,16 +73,21 @@ export const SEOKeywordResearcherModal: React.FC<SEOKeywordResearcherModalProps>
     setTimeout(() => setCopiedKey(null), 2000);
   };
 
+  const validation = React.useMemo(() => validateKeywordQuery(topicInput), [topicInput]);
+
   const handleRunResearch = async (e?: React.FormEvent) => {
     if (e) e.preventDefault();
-    if (!topicInput.trim()) return;
+    if (!validation.isValid) {
+      setError(validation.message || 'Please format your keyword correctly before analyzing.');
+      return;
+    }
 
     setIsLoading(true);
     setError(null);
 
     try {
       const res = await researchKeywordsWithAI({
-        topic: topicInput.trim(),
+        topic: validation.cleanedQuery || topicInput.trim(),
         category: categoryInput
       });
       setResearchResult(res);
@@ -205,62 +211,50 @@ export const SEOKeywordResearcherModal: React.FC<SEOKeywordResearcherModalProps>
                   <span>Enter Your Article Topic or Target Keyword</span>
                 </div>
                 
-                <div className="flex flex-col sm:flex-row gap-3">
-                  <div className="flex-1 relative">
-                    <input
-                      type="text"
-                      value={topicInput}
-                      onChange={(e) => setTopicInput(e.target.value)}
-                      placeholder="e.g. Industrial Revolution, James Webb Telescope, Harappan Civilization"
-                      className="w-full bg-paper2 dark:bg-[#121316] border border-black/10 dark:border-white/10 rounded-xl px-4 py-2.5 text-xs sm:text-sm text-ink dark:text-white focus:outline-none focus:border-gold"
-                    />
+                <div className="space-y-3">
+                  <div className="flex flex-col sm:flex-row gap-3 items-start">
+                    <div className="flex-1 w-full">
+                      <KeywordResearchInputField
+                        value={topicInput}
+                        onChange={setTopicInput}
+                        showQuickSuggestions={true}
+                        suggestions={['Fall of Berlin Wall', 'Chandrayaan 3', 'Penicillin Discovery', 'Wright Brothers']}
+                      />
+                    </div>
+
+                    <div className="flex items-center gap-2 w-full sm:w-auto shrink-0">
+                      <select
+                        value={categoryInput}
+                        onChange={(e) => setCategoryInput(e.target.value)}
+                        className="bg-paper2 dark:bg-[#121316] border border-black/10 dark:border-white/10 rounded-xl px-3 py-2.5 text-xs font-bold text-ink dark:text-white focus:outline-none focus:border-gold h-[42px]"
+                      >
+                        <option value="history">History</option>
+                        <option value="science">Science</option>
+                        <option value="inventions">Inventions</option>
+                        <option value="discoveries">Discoveries</option>
+                        <option value="birthdays">Birthdays</option>
+                      </select>
+
+                      <button
+                        type="submit"
+                        disabled={isLoading || !validation.isValid}
+                        title={!validation.isValid ? validation.message : 'Analyze Google Page 1 SEO factors'}
+                        className="flex-1 sm:flex-none flex items-center justify-center gap-2 px-6 py-2.5 bg-gold hover:bg-gold-l text-black font-bold text-xs rounded-xl shadow transition-all disabled:opacity-40 disabled:cursor-not-allowed shrink-0 h-[42px] cursor-pointer"
+                      >
+                        {isLoading ? (
+                          <>
+                            <div className="w-4 h-4 border-2 border-black border-t-transparent rounded-full animate-spin" />
+                            <span>Researching...</span>
+                          </>
+                        ) : (
+                          <>
+                            <Sparkles size={14} />
+                            <span>Analyze Keyword</span>
+                          </>
+                        )}
+                      </button>
+                    </div>
                   </div>
-
-                  <select
-                    value={categoryInput}
-                    onChange={(e) => setCategoryInput(e.target.value)}
-                    className="bg-paper2 dark:bg-[#121316] border border-black/10 dark:border-white/10 rounded-xl px-3 py-2 text-xs font-bold text-ink dark:text-white focus:outline-none focus:border-gold"
-                  >
-                    <option value="history">History</option>
-                    <option value="science">Science</option>
-                    <option value="inventions">Inventions</option>
-                    <option value="discoveries">Discoveries</option>
-                    <option value="birthdays">Birthdays</option>
-                  </select>
-
-                  <button
-                    type="submit"
-                    disabled={isLoading || !topicInput.trim()}
-                    className="flex items-center justify-center gap-2 px-6 py-2.5 bg-gold hover:bg-gold-l text-black font-bold text-xs rounded-xl shadow transition-all disabled:opacity-50 shrink-0"
-                  >
-                    {isLoading ? (
-                      <>
-                        <div className="w-4 h-4 border-2 border-black border-t-transparent rounded-full animate-spin" />
-                        <span>Researching Trends...</span>
-                      </>
-                    ) : (
-                      <>
-                        <Sparkles size={14} />
-                        <span>Analyze Keyword</span>
-                      </>
-                    )}
-                  </button>
-                </div>
-
-                <div className="flex items-center gap-2 text-[11px] text-ink3 dark:text-white/50">
-                  <span>Popular quick ideas:</span>
-                  {['Fall of Berlin Wall', 'Chandrayaan 3', 'Penicillin Discovery', 'Wright Brothers'].map((s) => (
-                    <button
-                      key={s}
-                      type="button"
-                      onClick={() => {
-                        setTopicInput(s);
-                      }}
-                      className="hover:text-gold underline cursor-pointer"
-                    >
-                      {s}
-                    </button>
-                  ))}
                 </div>
               </form>
 

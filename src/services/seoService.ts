@@ -1,5 +1,164 @@
 import { SEOAuditReport, SEOAuditCheckItem, SEOKeywordResearchResult, Fact } from '../types';
 
+export interface KeywordValidationResult {
+  isValid: boolean;
+  status: 'empty' | 'invalid' | 'warning' | 'valid';
+  message: string;
+  charCount: number;
+  wordCount: number;
+  keywordType?: 'Short-Tail' | 'Mid-Tail (Optimal)' | 'Long-Tail';
+  cleanedQuery: string;
+  canAutoClean: boolean;
+  warnings: string[];
+}
+
+/**
+ * Real-time validator for Google SEO Keyword Research queries
+ */
+export function validateKeywordQuery(rawQuery: string): KeywordValidationResult {
+  const query = rawQuery || '';
+  const trimmed = query.trim();
+  const charCount = query.length;
+  const words = trimmed ? trimmed.split(/\s+/).filter(Boolean) : [];
+  const wordCount = words.length;
+
+  if (!trimmed) {
+    return {
+      isValid: false,
+      status: 'empty',
+      message: 'Type an article topic or focus keyword to research search trends.',
+      charCount: 0,
+      wordCount: 0,
+      cleanedQuery: '',
+      canAutoClean: false,
+      warnings: []
+    };
+  }
+
+  const warnings: string[] = [];
+  let cleaned = trimmed;
+
+  // Check 1: URL pasted
+  const isUrl = /^https?:\/\//i.test(trimmed) || /^www\./i.test(trimmed);
+  if (isUrl) {
+    try {
+      const urlObj = new URL(trimmed.startsWith('http') ? trimmed : `https://${trimmed}`);
+      const pathname = decodeURIComponent(urlObj.pathname).replace(/[\/_+-]+/g, ' ').trim();
+      if (pathname.length >= 2) {
+        cleaned = pathname;
+      }
+    } catch {
+      cleaned = trimmed.replace(/^https?:\/\/(www\.)?/, '').replace(/[\/_+-]+/g, ' ').trim();
+    }
+    warnings.push('URL detected. We extracted the clean topic phrase for search intent.');
+  }
+
+  // Check 2: Wrapping quotes
+  if ((cleaned.startsWith('"') && cleaned.endsWith('"')) || (cleaned.startsWith("'") && cleaned.endsWith("'"))) {
+    cleaned = cleaned.slice(1, -1).trim();
+  }
+
+  // Check 3: Trailing / excessive punctuation
+  if (/[!?,.:;#$%^&*()_=+\[\]{}<>\\/|`~]+$/.test(cleaned)) {
+    warnings.push('Trailing punctuation detected. Stripping symbols for cleaner Google matching.');
+    cleaned = cleaned.replace(/[!?,.:;#$%^&*()_=+\[\]{}<>\\/|`~]+$/g, '').trim();
+  }
+
+  if (/([!?#$*~+=]{2,})/g.test(cleaned)) {
+    warnings.push('Excessive symbols or punctuation found in keyword.');
+    cleaned = cleaned.replace(/([!?#$*~+=]{2,})/g, ' ').replace(/\s+/g, ' ').trim();
+  }
+
+  const canAutoClean = cleaned.toLowerCase() !== trimmed.toLowerCase() && cleaned.length >= 2;
+
+  // Check 4: Too short
+  if (trimmed.length < 2) {
+    return {
+      isValid: false,
+      status: 'invalid',
+      message: 'Query is too short. Please enter at least 2 characters.',
+      charCount,
+      wordCount,
+      cleanedQuery: cleaned,
+      canAutoClean: false,
+      warnings: ['Minimum 2 characters required.']
+    };
+  }
+
+  // Check 5: Single stop word
+  const stopWords = new Set(['the', 'a', 'an', 'and', 'or', 'in', 'on', 'at', 'to', 'for', 'of', 'with', 'by', 'is']);
+  if (wordCount === 1 && stopWords.has(trimmed.toLowerCase())) {
+    return {
+      isValid: false,
+      status: 'invalid',
+      message: `"${trimmed}" is a generic grammatical word. Add an entity or concept (e.g., "${trimmed.charAt(0).toUpperCase() + trimmed.slice(1)} Silk Road").`,
+      charCount,
+      wordCount,
+      cleanedQuery: cleaned,
+      canAutoClean,
+      warnings: ['Generic stop word without topic entity.']
+    };
+  }
+
+  // Check 6: Numbers only
+  if (/^\d+$/.test(trimmed)) {
+    warnings.push('Numerical query: add topical context (e.g., "Year 1969 Moon Landing" or "Apollo 11").');
+    return {
+      isValid: true,
+      status: 'warning',
+      message: 'Numbers only: consider specifying the context (e.g., "Apollo 11" instead of "11").',
+      charCount,
+      wordCount,
+      keywordType: 'Short-Tail',
+      cleanedQuery: cleaned,
+      canAutoClean,
+      warnings
+    };
+  }
+
+  // Check 7: Excessively long query (> 70 chars or > 8 words)
+  if (charCount > 80 || wordCount > 8) {
+    warnings.push('Unusually long query (>8 words). Keyword search engines perform best with 2 to 5 words.');
+    return {
+      isValid: true,
+      status: 'warning',
+      message: `Query is quite long (${wordCount} words, ${charCount} chars). Focus on core 2-5 word topics for optimal Page 1 research.`,
+      charCount,
+      wordCount,
+      keywordType: 'Long-Tail',
+      cleanedQuery: cleaned,
+      canAutoClean,
+      warnings
+    };
+  }
+
+  // Classify keyword tail & formulate feedback
+  let keywordType: KeywordValidationResult['keywordType'] = 'Mid-Tail (Optimal)';
+  let message = 'Optimal mid-tail phrase: Ideal balance of search volume and Page 1 ranking intent.';
+
+  if (wordCount === 1) {
+    keywordType = 'Short-Tail';
+    message = 'Short-tail keyword: High monthly search volume with broader competitive landscape.';
+  } else if (wordCount >= 5) {
+    keywordType = 'Long-Tail';
+    message = 'Long-tail query: High searcher intent, excellent for featured snippets and quick ranking.';
+  }
+
+  const finalStatus = warnings.length > 0 ? 'warning' : 'valid';
+
+  return {
+    isValid: true,
+    status: finalStatus,
+    message: warnings.length > 0 ? warnings[0] : message,
+    charCount,
+    wordCount,
+    keywordType,
+    cleanedQuery: cleaned,
+    canAutoClean,
+    warnings
+  };
+}
+
 /**
  * Calculates keyword count and density in text
  */

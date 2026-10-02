@@ -21,9 +21,10 @@ import {
   Award
 } from 'lucide-react';
 import { SEOKeywordResearchResult, Fact } from '../types';
-import { researchKeywordsWithAI, analyzeOnPageSEO } from '../services/seoService';
+import { researchKeywordsWithAI, analyzeOnPageSEO, validateKeywordQuery } from '../services/seoService';
 import { GoogleSERPPreview } from '../components/seo/GoogleSERPPreview';
 import { SEOAuditCard } from '../components/seo/SEOAuditCard';
+import { KeywordResearchInputField } from '../components/seo/KeywordResearchInputField';
 import { INITIAL_FACTS } from '../seed';
 import { useAuth } from '../contexts/AuthContext';
 import { getFirestore, collection, getDocs } from 'firebase/firestore';
@@ -82,16 +83,21 @@ export const SEOToolkit: React.FC = () => {
     setTimeout(() => setCopiedKey(null), 2000);
   };
 
+  const validation = React.useMemo(() => validateKeywordQuery(topic), [topic]);
+
   const handleRunResearch = async (e?: React.FormEvent) => {
     if (e) e.preventDefault();
-    if (!topic.trim()) return;
+    if (!validation.isValid) {
+      setError(validation.message || 'Please format your keyword query correctly.');
+      return;
+    }
 
     setIsLoading(true);
     setError(null);
 
     try {
       const res = await researchKeywordsWithAI({
-        topic: topic.trim(),
+        topic: validation.cleanedQuery || topic.trim(),
         category
       });
       setResearchResult(res);
@@ -178,17 +184,17 @@ export const SEOToolkit: React.FC = () => {
           </div>
 
           <form onSubmit={handleRunResearch} className="space-y-4">
-            <div className="grid grid-cols-1 sm:grid-cols-12 gap-3">
+            <div className="grid grid-cols-1 sm:grid-cols-12 gap-3 items-start">
               <div className="sm:col-span-8">
                 <label className="text-[11px] font-bold uppercase tracking-wider text-ink3 dark:text-white/50 block mb-1">
                   Topic / Seed Keyword
                 </label>
-                <input
-                  type="text"
+                <KeywordResearchInputField
                   value={topic}
-                  onChange={(e) => setTopic(e.target.value)}
+                  onChange={setTopic}
                   placeholder="e.g., Harappan Civilization, Wright Brothers First Flight, Black Holes"
-                  className="w-full bg-paper2 dark:bg-[#111215] border border-black/10 dark:border-white/10 rounded-xl px-4 py-2.5 text-xs sm:text-sm text-ink dark:text-white focus:outline-none focus:border-gold"
+                  showQuickSuggestions={true}
+                  suggestions={['Harappan Civilization', 'James Webb Telescope', 'Wright Brothers First Flight', 'Quantum Computing']}
                 />
               </div>
 
@@ -199,7 +205,7 @@ export const SEOToolkit: React.FC = () => {
                 <select
                   value={category}
                   onChange={(e) => setCategory(e.target.value)}
-                  className="w-full bg-paper2 dark:bg-[#111215] border border-black/10 dark:border-white/10 rounded-xl px-3 py-2.5 text-xs font-bold text-ink dark:text-white focus:outline-none focus:border-gold"
+                  className="w-full bg-paper2 dark:bg-[#111215] border border-black/10 dark:border-white/10 rounded-xl px-3 py-2.5 text-xs font-bold text-ink dark:text-white focus:outline-none focus:border-gold h-[42px]"
                 >
                   <option value="history">History</option>
                   <option value="science">Science</option>
@@ -209,11 +215,12 @@ export const SEOToolkit: React.FC = () => {
                 </select>
               </div>
 
-              <div className="sm:col-span-2 flex items-end">
+              <div className="sm:col-span-2 flex items-start pt-[21px]">
                 <button
                   type="submit"
-                  disabled={isLoading || !topic.trim()}
-                  className="w-full flex items-center justify-center gap-2 px-4 py-2.5 bg-gold hover:bg-gold-l text-black font-bold text-xs rounded-xl shadow transition-all disabled:opacity-50 h-[42px]"
+                  disabled={isLoading || !validation.isValid}
+                  title={!validation.isValid ? validation.message : 'Analyze Google Page 1 SEO factors'}
+                  className="w-full flex items-center justify-center gap-2 px-4 py-2.5 bg-gold hover:bg-gold-l text-black font-bold text-xs rounded-xl shadow transition-all disabled:opacity-40 disabled:cursor-not-allowed h-[42px] cursor-pointer"
                 >
                   {isLoading ? (
                     <>
