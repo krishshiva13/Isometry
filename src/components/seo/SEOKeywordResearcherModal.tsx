@@ -344,7 +344,7 @@ export const SEOKeywordResearcherModal: React.FC<SEOKeywordResearcherModalProps>
                       <span>High-CTR Title Tag Recommendations (&lt; 60 Chars)</span>
                     </div>
                     <div className="space-y-2">
-                      {researchResult.titleTagIdeas.map((idea, idx) => (
+                      {(researchResult.titleTagIdeas || []).map((idea, idx) => (
                         <div
                           key={idx}
                           className="p-3 rounded-xl bg-paper2 dark:bg-black/30 border border-black/5 dark:border-white/5 flex items-center justify-between gap-3 text-xs"
@@ -404,7 +404,7 @@ export const SEOKeywordResearcherModal: React.FC<SEOKeywordResearcherModalProps>
                       <span>Secondary & LSI Keywords to Sprinkle in Body</span>
                     </div>
                     <div className="flex flex-wrap gap-2">
-                      {researchResult.secondaryKeywords.map((kw, i) => (
+                      {(researchResult.secondaryKeywords || []).map((kw, i) => (
                         <span
                           key={i}
                           onClick={() => handleCopy(kw, `kw-${i}`)}
@@ -425,7 +425,7 @@ export const SEOKeywordResearcherModal: React.FC<SEOKeywordResearcherModalProps>
                       <span>Google "People Also Ask" Queries (Use as H2 Subheadings)</span>
                     </div>
                     <div className="space-y-2.5">
-                      {researchResult.peopleAlsoAsk.map((paa, idx) => (
+                      {(researchResult.peopleAlsoAsk || []).map((paa, idx) => (
                         <div
                           key={idx}
                           className="p-3 rounded-xl bg-paper2 dark:bg-black/30 border border-black/5 dark:border-white/5 space-y-1 text-xs"
@@ -460,7 +460,7 @@ export const SEOKeywordResearcherModal: React.FC<SEOKeywordResearcherModalProps>
                       Target Search Tags
                     </div>
                     <div className="flex flex-wrap gap-1.5">
-                      {researchResult.suggestedTags.map((tag, idx) => (
+                      {(researchResult.suggestedTags || []).map((tag, idx) => (
                         <span
                           key={idx}
                           className="text-xs bg-paper2 dark:bg-white/5 text-ink3 dark:text-white/70 px-2.5 py-1 rounded-lg font-mono"

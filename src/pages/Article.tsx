@@ -23,7 +23,8 @@ import { ArticleExamQuizSection } from '../components/article/ArticleExamQuizSec
 import { ExamQuestionsAndFaqEditor } from '../components/admin/ExamQuestionsAndFaqEditor';
 import { normalizeImageUrl } from '../lib/imageUtils';
 import { recordFactRead } from '../components/DailyGoalTracker';
-import { TableOfContents, slugify } from '../components/seo/TableOfContents';
+import { TableOfContents, slugify, stripMarkupTags } from '../components/seo/TableOfContents';
+import { FactOfTheDayCard } from '../components/article/FactOfTheDayCard';
 import { SEOKeywordResearcherModal } from '../components/seo/SEOKeywordResearcherModal';
 import { ReadingProgressBar } from '../components/article/ReadingProgressBar';
 import { SocialShareToolbar } from '../components/article/SocialShareToolbar';
@@ -124,7 +125,9 @@ const renderHighlightedText = (text: string) => {
     const matchIndex = match.index;
     
     if (matchIndex > lastIndex) {
-      elements.push(text.substring(lastIndex, matchIndex));
+      const rawPiece = text.substring(lastIndex, matchIndex);
+      const cleanPiece = rawPiece.replace(/\[\/?(gold|coral|teal|indigo|red|green|blue|slate|purple)\]/gi, '');
+      if (cleanPiece) elements.push(cleanPiece);
     }
 
     if (match[1]) {
@@ -172,7 +175,9 @@ const renderHighlightedText = (text: string) => {
   }
   
   if (lastIndex < text.length) {
-    elements.push(text.substring(lastIndex));
+    const rawPiece = text.substring(lastIndex);
+    const cleanPiece = rawPiece.replace(/\[\/?(gold|coral|teal|indigo|red|green|blue|slate|purple)\]/gi, '');
+    if (cleanPiece) elements.push(cleanPiece);
   }
   
   return elements.length > 0 ? elements : text;
@@ -1638,50 +1643,54 @@ export const Article = () => {
           </div>
         </div>
 
-        <aside className="space-y-8">
-          {/* 📑 Sticky Desktop Table of Contents & EEAT Verification */}
-          <div className="hidden lg:block sticky top-20 space-y-6">
+        <aside className="space-y-6 lg:sticky lg:top-20 lg:max-h-[calc(100vh-5.5rem)] lg:overflow-y-auto lg:scrollbar-thin lg:pr-1">
+          {/* 📑 Desktop Table of Contents */}
+          <div className="hidden lg:block">
             <TableOfContents content={fact.full} />
-
-            {/* 🛡️ Google Page 1 Readiness & E-E-A-T Quality Card */}
-            <div className="bg-white rounded-2xl border border-black/10 p-5 shadow-sm space-y-3">
-              <div className="flex items-center justify-between">
-                <span className="text-xs font-mono font-bold text-gold uppercase tracking-wider flex items-center gap-1.5">
-                  <ShieldCheck size={14} className="text-emerald-600" /> E-E-A-T Verified
-                </span>
-                <span className="text-[10px] bg-emerald-50 text-emerald-700 font-bold px-2 py-0.5 rounded-full border border-emerald-200">
-                  Google Ready
-                </span>
-              </div>
-              <div className="text-xs text-ink2 space-y-2 pt-1 border-t border-black/5">
-                <div className="flex justify-between items-center">
-                  <span className="text-ink3">Target Keyword:</span>
-                  <span className="font-bold text-ink truncate max-w-[130px] font-mono text-[11px] bg-paper2 px-1.5 py-0.5 rounded">
-                    {primaryKeyword}
-                  </span>
-                </div>
-                <div className="flex justify-between items-center">
-                  <span className="text-ink3">Read Time:</span>
-                  <span className="font-bold text-ink">{readingTime} min (~{wordCount} words)</span>
-                </div>
-                <div className="flex justify-between items-center">
-                  <span className="text-ink3">Structured Data:</span>
-                  <span className="font-bold text-emerald-600 text-[11px]">Article • FAQ • Breadcrumbs</span>
-                </div>
-              </div>
-              {isAdmin && (
-                <button
-                  onClick={() => setShowSEOModal(true)}
-                  className="w-full mt-2 py-2 px-3 bg-paper2 hover:bg-gold hover:text-black border border-black/10 rounded-xl text-xs font-bold text-ink flex items-center justify-center gap-1.5 transition-colors shadow-xs"
-                >
-                  <Sparkles size={13} className="text-gold" />
-                  <span>Audit Google Rank Score</span>
-                </button>
-              )}
-            </div>
           </div>
 
-          <div className="space-y-6">
+          {/* ★ Interactive Fact of the Day with Close & Open Options */}
+          <FactOfTheDayCard />
+
+          {/* 🛡️ Google Page 1 Readiness & E-E-A-T Quality Card */}
+          <div className="bg-white rounded-2xl border border-black/10 p-5 shadow-sm space-y-3">
+            <div className="flex items-center justify-between">
+              <span className="text-xs font-mono font-bold text-gold uppercase tracking-wider flex items-center gap-1.5">
+                <ShieldCheck size={14} className="text-emerald-600" /> E-E-A-T Verified
+              </span>
+              <span className="text-[10px] bg-emerald-50 text-emerald-700 font-bold px-2 py-0.5 rounded-full border border-emerald-200">
+                Google Ready
+              </span>
+            </div>
+            <div className="text-xs text-ink2 space-y-2 pt-1 border-t border-black/5">
+              <div className="flex justify-between items-center">
+                <span className="text-ink3">Target Keyword:</span>
+                <span className="font-bold text-ink truncate max-w-[130px] font-mono text-[11px] bg-paper2 px-1.5 py-0.5 rounded">
+                  {primaryKeyword}
+                </span>
+              </div>
+              <div className="flex justify-between items-center">
+                <span className="text-ink3">Read Time:</span>
+                <span className="font-bold text-ink">{readingTime} min (~{wordCount} words)</span>
+              </div>
+              <div className="flex justify-between items-center">
+                <span className="text-ink3">Structured Data:</span>
+                <span className="font-bold text-emerald-600 text-[11px]">Article • FAQ • Breadcrumbs</span>
+              </div>
+            </div>
+            {isAdmin && (
+              <button
+                onClick={() => setShowSEOModal(true)}
+                className="w-full mt-2 py-2 px-3 bg-paper2 hover:bg-gold hover:text-black border border-black/10 rounded-xl text-xs font-bold text-ink flex items-center justify-center gap-1.5 transition-colors shadow-xs"
+              >
+                <Sparkles size={13} className="text-gold" />
+                <span>Audit Google Rank Score</span>
+              </button>
+            )}
+          </div>
+
+          {/* 🔗 More Facts in Category */}
+          <div className="space-y-6 pt-2">
             <h3 className="font-serif font-bold text-xl text-ink border-b border-black/10 pb-4">
               More {fact.cat.charAt(0).toUpperCase() + fact.cat.slice(1)} Facts
             </h3>
@@ -1701,17 +1710,6 @@ export const Article = () => {
                 </Link>
               ))}
             </div>
-          </div>
-
-          <div className="bg-ink rounded-2xl p-6 text-white overflow-hidden relative">
-            <div className="absolute top-0 right-0 text-6xl font-serif font-black text-white/5 pr-4 pt-2">★</div>
-            <div className="font-mono text-[0.6rem] text-gold-l uppercase tracking-widest mb-4">Fact of the Day</div>
-            <p className="text-sm italic leading-relaxed text-white/80 mb-6">
-              "Oxford University is older than the Aztec Empire. Teaching began at Oxford around 1096 AD; the Aztec Empire was founded in 1428 AD."
-            </p>
-            <button className="bg-gold text-ink font-bold text-xs px-4 py-2 rounded-full hover:bg-gold-l transition-all">
-              Next Fact →
-            </button>
           </div>
         </aside>
       </div>

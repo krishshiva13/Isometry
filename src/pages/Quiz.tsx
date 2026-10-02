@@ -8,6 +8,8 @@ import { Sparkles, RefreshCcw, ArrowLeft, LogIn, ShieldCheck, Calendar as Calend
 import { useAuth } from '../contexts/AuthContext';
 import { authService } from '../services/authService';
 import { INITIAL_QUIZ } from '../seed';
+import { recordQuizCompleted } from '../components/DailyGoalTracker';
+import { notebookService } from '../services/notebookService';
 
 const CATEGORIES = ['History', 'Science', 'Inventions', 'Discoveries', 'Birthdays', 'General'];
 
@@ -88,7 +90,16 @@ export const Quiz = () => {
   };
 
   const nextQuestion = () => {
-    setCurrentIdx(prev => prev + 1);
+    const nextIdx = currentIdx + 1;
+    if (nextIdx >= questions.length && questions.length > 0) {
+      try {
+        recordQuizCompleted();
+        notebookService.recordQuizAttempt(score, questions.length);
+      } catch (e) {
+        console.warn('Failed to record quiz progress', e);
+      }
+    }
+    setCurrentIdx(nextIdx);
     setAnsweredIdx(null);
   };
 

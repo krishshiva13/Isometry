@@ -106,7 +106,7 @@ export const RelatedFactsSection: React.FC<RelatedFactsSectionProps> = ({ curren
     return () => {
       isMounted = false;
     };
-  }, [currentFact.id, currentFact.cat, currentFact.searchKeywords, currentFact.title]);
+  }, [currentFact.id, currentFact.cat, (currentFact.searchKeywords || []).join(','), currentFact.title]);
 
   if (!loading && relatedFacts.length === 0) {
     return null;

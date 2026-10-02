@@ -247,10 +247,9 @@ async function safeGenerateContent(params: {
 }): Promise<{ text: string; rawResponse: any; usedSearch: boolean }> {
   const ai = getGeminiClient();
   const rawModelList = [
-    params.preferredModel,
-    "gemini-3.7-flash",
-    "gemini-flash-latest",
-    "gemini-3.1-flash-lite"
+    params.preferredModel || "gemini-2.5-flash",
+    "gemini-2.5-flash",
+    "gemini-2.5-flash-lite"
   ].filter((m): m is string => Boolean(m));
   
   // Deduplicate while preserving priority order
@@ -1706,13 +1705,139 @@ app.get("/api/utils/resolve-image", async (req, res) => {
 
 // 🚀 Google SEO Keyword Researcher & Page 1 Ranking Strategy Endpoint
 app.post("/api/seo/research-keyword", async (req, res) => {
-  const { seedKeyword, category, currentTitle, currentContent } = req.body;
-  if (!seedKeyword || typeof seedKeyword !== "string") {
-    return res.status(400).json({ error: "Seed keyword is required" });
+  const rawSeed = req.body.seedKeyword || req.body.topic || req.body.keyword || "";
+  if (!rawSeed || typeof rawSeed !== "string" || !rawSeed.trim()) {
+    return res.status(400).json({ error: "Seed keyword or topic is required" });
   }
 
-  const cleanSeed = seedKeyword.trim();
-  const cleanCat = category || "general";
+  const cleanSeed = rawSeed.trim();
+  const cleanCat = req.body.category || "general";
+  const currentTitle = req.body.currentTitle || "";
+  const currentContent = req.body.currentContent || "";
+  const capitalized = cleanSeed.split(" ").map(w => w.charAt(0).toUpperCase() + w.slice(1).toLowerCase()).join(" ");
+  const currentYear = new Date().getFullYear();
+
+  // Standardized fallback SEO research result matching SEOKeywordResearchResult
+  const fallbackResult = {
+    topic: cleanSeed,
+    focusKeyword: cleanSeed.toLowerCase(),
+    searchIntent: "Informational",
+    searchVolumeTier: cleanSeed.split(" ").length <= 2 ? "High (50k-100k)" : "Medium (10k-50k)",
+    competitionLevel: cleanSeed.split(" ").length >= 3 ? "Low" : "Medium",
+    difficultyScore: cleanSeed.split(" ").length >= 3 ? 34 : 52,
+    secondaryKeywords: [
+      `${cleanSeed} facts`,
+      `${cleanSeed} history`,
+      `${cleanSeed} summary`,
+      `${cleanSeed} explanation`,
+      `${cleanSeed} timeline`,
+      `importance of ${cleanSeed}`,
+      `${cleanSeed} for exams`,
+      `${cleanSeed} GK questions`
+    ],
+    longTailKeywords: [
+      `what is the true significance of ${cleanSeed}`,
+      `top verified facts about ${cleanSeed}`,
+      `historical timeline of ${cleanSeed}`,
+      `why is ${cleanSeed} important for students`
+    ],
+    peopleAlsoAsk: [
+      {
+        question: `What is the significance of ${cleanSeed}?`,
+        snippetAnswer: `${capitalized} represents a pivotal topic in ${cleanCat}, widely studied for its historical, scientific, and educational significance.`,
+        targetHeading: "H2"
+      },
+      {
+        question: `When was ${cleanSeed} first discovered or established?`,
+        snippetAnswer: `Key historical records date major breakthroughs and milestones related to ${cleanSeed} across centuries of research.`,
+        targetHeading: "H2"
+      },
+      {
+        question: `Why is ${cleanSeed} important for competitive exams?`,
+        snippetAnswer: `Questions on ${cleanSeed} frequently appear in General Knowledge, static history, and competitive exams.`,
+        targetHeading: "H3"
+      },
+      {
+        question: `What are the most fascinating facts about ${cleanSeed}?`,
+        snippetAnswer: `Verified research highlights transformative discoveries, cultural shifts, and groundbreaking innovations surrounding ${cleanSeed}.`,
+        targetHeading: "H3"
+      }
+    ],
+    titleTagIdeas: [
+      {
+        title: `${capitalized}: Complete Facts, History & Significance`,
+        characterCount: `${capitalized}: Complete Facts, History & Significance`.length,
+        clickHook: "Frontloaded focus keyword with comprehensive authority"
+      },
+      {
+        title: `What is ${capitalized}? Top Facts & Exam Breakdown`,
+        characterCount: `What is ${capitalized}? Top Facts & Exam Breakdown`.length,
+        clickHook: "Direct question format answering Google People Also Ask intent"
+      },
+      {
+        title: `${capitalized} Explained: 10 Verified Facts & Timeline`,
+        characterCount: `${capitalized} Explained: 10 Verified Facts & Timeline`.length,
+        clickHook: "Curiosity listicle hook optimized for high click-through rate"
+      }
+    ],
+    metaDescription: `Discover verified facts, key milestones, and historical context about ${cleanSeed}. Read our fact-checked editorial guide with exam-oriented GK and timeline.`,
+    suggestedTags: [
+      cleanSeed.toLowerCase(),
+      cleanCat.toLowerCase(),
+      "verified facts",
+      "history",
+      "general knowledge",
+      "education"
+    ],
+    faqSchema: [
+      {
+        question: `What is ${cleanSeed}?`,
+        answer: `${capitalized} is a prominent topic in ${cleanCat} recognized worldwide for its profound cultural, scientific, and educational value.`
+      },
+      {
+        question: `Why should students learn about ${cleanSeed}?`,
+        answer: `Understanding ${cleanSeed} helps students master crucial concepts for school curricula and competitive examinations.`
+      },
+      {
+        question: `How does FActHub verify information on ${cleanSeed}?`,
+        answer: `All facts published on FActHub are cross-referenced with encyclopedic archives, peer-reviewed journals, and historical records.`
+      }
+    ],
+    contentOutline: [
+      {
+        headingLevel: "H1",
+        text: `${capitalized}: Complete Educational Overview & Timeline`,
+        rationale: "Establishes clear topical authority with exact-match focus keyword."
+      },
+      {
+        headingLevel: "H2",
+        text: `Overview & Historical Origins of ${capitalized}`,
+        rationale: "Addresses broad informational intent and primary entity definitions."
+      },
+      {
+        headingLevel: "H2",
+        text: `Key Milestones & Chronological Timeline`,
+        rationale: "Structured chronological sequence encourages Google featured snippet indexing."
+      },
+      {
+        headingLevel: "H2",
+        text: `Core Significance & Modern Legacy`,
+        rationale: "Demonstrates comprehensive thematic depth satisfying E-E-A-T guidelines."
+      },
+      {
+        headingLevel: "H2",
+        text: `Frequently Asked Questions About ${capitalized}`,
+        rationale: "Directly qualifies for Google FAQ rich snippet accordion display."
+      }
+    ],
+    rankingTips: [
+      `Place "${cleanSeed}" in your H1 title and within the first 100 words of the text.`,
+      `Structure content using at least two H2 subheadings answering user search queries.`,
+      `Embed Schema.org FAQPage structured data to claim rich snippet real estate on Page 1.`,
+      `Maintain a keyword density between 1.0% and 2.5% to avoid over-optimization penalties.`,
+      `Include an HD image with descriptive Alt text containing your primary keyword.`
+    ]
+  };
 
   // Check if Gemini API key exists
   if (hasGeminiApiKey()) {
@@ -1724,187 +1849,142 @@ ${currentTitle ? `Current Article Title: "${currentTitle}"` : ''}
 ${currentContent ? `Current Article Snippet: "${currentContent.substring(0, 500)}"` : ''}
 
 Analyze how top-ranking Google Page 1 educational articles (like Britannica, Wikipedia, NatGeo, Khan Academy) are structured. Provide actionable ranking data:
-1. Search Intent (informational, navigational, commercial, transactional)
-2. Estimated ranking difficulty (Low, Medium, High)
-3. Estimated monthly search volume (e.g., '12,500/mo')
-4. 4 high-CTR, SEO-optimized title variants (50-60 characters, frontloading the focus keyword)
-5. 3 meta description variants (140-160 characters with keyword and compelling CTA)
-6. Recommended Heading Hierarchy:
-   - 1 definitive H1 title
-   - 4-6 topical H2 subheadings answering search queries
-   - 4-8 granular H3 subheadings for depth
-7. 8-12 LSI (Latent Semantic Indexing) and secondary search keywords
-8. 4-6 Google "People Also Ask" questions
-9. 3-5 verified Q&A FAQs with concise answers suitable for Schema.org FAQPage structured data
-10. A 5-step actionable checklist to rank on Google's first page for this keyword.
+1. Focus Keyword: exact term
+2. Search Intent: Informational, Educational, Commercial, or Exam Prep
+3. Search Volume Tier: 'Very High (100k+)', 'High (50k-100k)', 'Medium (10k-50k)', or 'Emerging Trend (<10k)'
+4. Competition Level: 'Low', 'Medium', or 'High'
+5. Difficulty Score: 0 to 100
+6. Secondary Keywords: 6-10 keywords
+7. Long Tail Keywords: 4-6 long tail queries
+8. People Also Ask: 3-5 questions with snippet answer and target heading ('H2' or 'H3')
+9. Title Tag Ideas: 3 high-CTR titles (under 60 chars) with characterCount and clickHook
+10. Meta Description: 1 compelling 140-160 char description
+11. Suggested Tags: 5-8 topical tags
+12. FAQ Schema: 3-4 Q&A pairs suitable for Schema.org FAQPage
+13. Content Outline: 4-6 headings with headingLevel ('H1', 'H2', or 'H3'), text, and rationale
+14. Ranking Tips: 4-6 actionable tips to rank #1 on Google
 
 Respond ONLY with a valid JSON object matching the requested schema.`;
 
-      const response = await safeGenerateContent({
-        preferredModel: "gemini-3.7-flash",
-        contents: prompt,
-        allowSearchFallback: true,
-        config: {
-          systemInstruction: "You are an elite Google SEO Specialist and Webmaster. You understand Google Helpful Content guidelines, E-E-A-T signals, search intent, and Page 1 ranking factors. Respond ONLY with valid JSON.",
-          responseMimeType: "application/json",
-          responseSchema: {
-            type: Type.OBJECT,
-            properties: {
-              focusKeyword: { type: Type.STRING },
-              searchIntent: { type: Type.STRING },
-              estimatedDifficulty: { type: Type.STRING },
-              monthlySearchVolumeEstimate: { type: Type.STRING },
-              suggestedTitles: { type: Type.ARRAY, items: { type: Type.STRING } },
-              suggestedMetaDescriptions: { type: Type.ARRAY, items: { type: Type.STRING } },
-              recommendedHeadings: {
-                type: Type.OBJECT,
-                properties: {
-                  h1: { type: Type.STRING },
-                  h2: { type: Type.ARRAY, items: { type: Type.STRING } },
-                  h3: { type: Type.ARRAY, items: { type: Type.STRING } }
+      const timeoutPromise = new Promise<never>((_, reject) =>
+        setTimeout(() => reject(new Error("AI generation timeout")), 7000)
+      );
+
+      const response = await Promise.race([
+        safeGenerateContent({
+          preferredModel: "gemini-2.5-flash",
+          contents: prompt,
+          allowSearchFallback: true,
+          config: {
+            systemInstruction: "You are an elite Google SEO Specialist and Webmaster. You understand Google Helpful Content guidelines, E-E-A-T signals, search intent, and Page 1 ranking factors. Respond ONLY with valid JSON.",
+            responseMimeType: "application/json",
+            responseSchema: {
+              type: Type.OBJECT,
+              properties: {
+                topic: { type: Type.STRING },
+                focusKeyword: { type: Type.STRING },
+                searchIntent: { type: Type.STRING },
+                searchVolumeTier: { type: Type.STRING },
+                competitionLevel: { type: Type.STRING },
+                difficultyScore: { type: Type.INTEGER },
+                secondaryKeywords: { type: Type.ARRAY, items: { type: Type.STRING } },
+                longTailKeywords: { type: Type.ARRAY, items: { type: Type.STRING } },
+                peopleAlsoAsk: {
+                  type: Type.ARRAY,
+                  items: {
+                    type: Type.OBJECT,
+                    properties: {
+                      question: { type: Type.STRING },
+                      snippetAnswer: { type: Type.STRING },
+                      targetHeading: { type: Type.STRING }
+                    },
+                    required: ["question", "snippetAnswer", "targetHeading"]
+                  }
                 },
-                required: ["h1", "h2", "h3"]
+                titleTagIdeas: {
+                  type: Type.ARRAY,
+                  items: {
+                    type: Type.OBJECT,
+                    properties: {
+                      title: { type: Type.STRING },
+                      characterCount: { type: Type.INTEGER },
+                      clickHook: { type: Type.STRING }
+                    },
+                    required: ["title", "characterCount", "clickHook"]
+                  }
+                },
+                metaDescription: { type: Type.STRING },
+                suggestedTags: { type: Type.ARRAY, items: { type: Type.STRING } },
+                faqSchema: {
+                  type: Type.ARRAY,
+                  items: {
+                    type: Type.OBJECT,
+                    properties: {
+                      question: { type: Type.STRING },
+                      answer: { type: Type.STRING }
+                    },
+                    required: ["question", "answer"]
+                  }
+                },
+                contentOutline: {
+                  type: Type.ARRAY,
+                  items: {
+                    type: Type.OBJECT,
+                    properties: {
+                      headingLevel: { type: Type.STRING },
+                      text: { type: Type.STRING },
+                      rationale: { type: Type.STRING }
+                    },
+                    required: ["headingLevel", "text", "rationale"]
+                  }
+                },
+                rankingTips: { type: Type.ARRAY, items: { type: Type.STRING } }
               },
-              lsiKeywords: { type: Type.ARRAY, items: { type: Type.STRING } },
-              peopleAlsoAsk: { type: Type.ARRAY, items: { type: Type.STRING } },
-              faqs: {
-                type: Type.ARRAY,
-                items: {
-                  type: Type.OBJECT,
-                  properties: {
-                    question: { type: Type.STRING },
-                    answer: { type: Type.STRING }
-                  },
-                  required: ["question", "answer"]
-                }
-              },
-              rankingChecklist: {
-                type: Type.ARRAY,
-                items: {
-                  type: Type.OBJECT,
-                  properties: {
-                    item: { type: Type.STRING },
-                    tip: { type: Type.STRING }
-                  },
-                  required: ["item", "tip"]
-                }
-              }
-            },
-            required: [
-              "focusKeyword",
-              "searchIntent",
-              "estimatedDifficulty",
-              "monthlySearchVolumeEstimate",
-              "suggestedTitles",
-              "suggestedMetaDescriptions",
-              "recommendedHeadings",
-              "lsiKeywords",
-              "peopleAlsoAsk",
-              "faqs",
-              "rankingChecklist"
-            ]
+              required: [
+                "focusKeyword",
+                "searchIntent",
+                "searchVolumeTier",
+                "competitionLevel",
+                "difficultyScore",
+                "secondaryKeywords",
+                "longTailKeywords",
+                "peopleAlsoAsk",
+                "titleTagIdeas",
+                "metaDescription",
+                "suggestedTags",
+                "faqSchema",
+                "contentOutline",
+                "rankingTips"
+              ]
+            }
           }
-        }
-      });
+        }),
+        timeoutPromise
+      ]);
 
       const parsed = JSON.parse(response.text || "{}");
-      return res.json(parsed);
+      const normalizedResult = {
+        ...fallbackResult,
+        ...parsed,
+        topic: cleanSeed,
+        focusKeyword: parsed.focusKeyword || cleanSeed.toLowerCase(),
+        titleTagIdeas: Array.isArray(parsed.titleTagIdeas) && parsed.titleTagIdeas.length > 0 ? parsed.titleTagIdeas : fallbackResult.titleTagIdeas,
+        peopleAlsoAsk: Array.isArray(parsed.peopleAlsoAsk) && parsed.peopleAlsoAsk.length > 0 ? parsed.peopleAlsoAsk : fallbackResult.peopleAlsoAsk,
+        faqSchema: Array.isArray(parsed.faqSchema) && parsed.faqSchema.length > 0 ? parsed.faqSchema : fallbackResult.faqSchema,
+        contentOutline: Array.isArray(parsed.contentOutline) && parsed.contentOutline.length > 0 ? parsed.contentOutline : fallbackResult.contentOutline,
+        secondaryKeywords: Array.isArray(parsed.secondaryKeywords) && parsed.secondaryKeywords.length > 0 ? parsed.secondaryKeywords : fallbackResult.secondaryKeywords,
+        longTailKeywords: Array.isArray(parsed.longTailKeywords) && parsed.longTailKeywords.length > 0 ? parsed.longTailKeywords : fallbackResult.longTailKeywords,
+        rankingTips: Array.isArray(parsed.rankingTips) && parsed.rankingTips.length > 0 ? parsed.rankingTips : fallbackResult.rankingTips,
+        suggestedTags: Array.isArray(parsed.suggestedTags) && parsed.suggestedTags.length > 0 ? parsed.suggestedTags : fallbackResult.suggestedTags,
+      };
+
+      return res.json({ result: normalizedResult, ...normalizedResult });
     } catch (aiErr) {
       console.warn("AI SEO research failed, falling back to algorithmic analyzer:", aiErr);
     }
   }
 
-  // Fallback heuristic keyword research generator
-  const capitalized = cleanSeed.split(" ").map(w => w.charAt(0).toUpperCase() + w.slice(1).toLowerCase()).join(" ");
-  const currentYear = new Date().getFullYear();
-
-  const fallbackResult = {
-    focusKeyword: cleanSeed.toLowerCase(),
-    searchIntent: "informational",
-    estimatedDifficulty: cleanSeed.split(" ").length >= 3 ? "Low" : "Medium",
-    monthlySearchVolumeEstimate: `${Math.floor(Math.random() * 8 + 2)},400/mo`,
-    suggestedTitles: [
-      `${capitalized}: Complete Facts, History & Significance (${currentYear})`,
-      `What is ${capitalized}? Top Facts & Exam Breakdown`,
-      `${capitalized} Explained: Everything You Need to Know | FActHub`,
-      `The Untold Story of ${capitalized}: Timeline & Key Milestones`
-    ],
-    suggestedMetaDescriptions: [
-      `Discover verified facts about ${cleanSeed}. Explore timeline, core discoveries, global significance, and practice questions for competitive exams.`,
-      `Everything you need to know about ${cleanSeed}. Complete breakdown with verified facts, key milestones, and historical context on FActHub.`,
-      `Looking for authentic facts on ${cleanSeed}? Read our editorial board fact-checked guide covering history, science, and exam-oriented GK.`
-    ],
-    recommendedHeadings: {
-      h1: `${capitalized}: Full Historical & Scientific Overview`,
-      h2: [
-        `Overview & What is ${capitalized}`,
-        `Historical Timeline & Major Discoveries`,
-        `Core Scientific & Cultural Impact`,
-        `Key Facts Every Student Should Know`,
-        `Frequently Asked Questions About ${capitalized}`
-      ],
-      h3: [
-        `Early Origins and Initial Findings`,
-        `Major Milestones and Chronology`,
-        `Global Significance in Modern Times`,
-        `Common Myths vs Verified Facts`
-      ]
-    },
-    lsiKeywords: [
-      `${cleanSeed} facts`,
-      `${cleanSeed} history`,
-      `${cleanSeed} summary`,
-      `${cleanSeed} explanation`,
-      `${cleanSeed} timeline`,
-      `importance of ${cleanSeed}`,
-      `${cleanSeed} GK questions`,
-      `${cleanSeed} for UPSC and exams`
-    ],
-    peopleAlsoAsk: [
-      `What is the true significance of ${cleanSeed}?`,
-      `When was ${cleanSeed} first discovered or established?`,
-      `Why is ${cleanSeed} important for students and researchers?`,
-      `What are 5 mind-blowing facts about ${cleanSeed}?`
-    ],
-    faqs: [
-      {
-        question: `What is ${cleanSeed}?`,
-        answer: `${capitalized} represents a pivotal topic in ${cleanCat}, widely studied for its historical, scientific, and educational importance.`
-      },
-      {
-        question: `Why is ${cleanSeed} important for exams?`,
-        answer: `Questions related to ${cleanSeed} frequently appear in General Knowledge (GK), static history, and science papers across competitive exams like UPSC, SSC, and State PSCs.`
-      },
-      {
-        question: `Where can I find verified facts about ${cleanSeed}?`,
-        answer: `All facts published on FActHub are cross-checked against official government archives, Encyclopaedia Britannica, and verified peer-reviewed publications.`
-      }
-    ],
-    rankingChecklist: [
-      {
-        item: "Place Focus Keyword in Title & H1",
-        tip: `Ensure "${cleanSeed}" appears near the very beginning of your title and within the first 100 words of the article.`
-      },
-      {
-        item: "Use Structured H2 & H3 Subheadings",
-        tip: "Google bots reward clear topical depth. Break down your story into chronological or thematic subheadings."
-      },
-      {
-        item: "Add Schema.org FAQ & Breadcrumb Markup",
-        tip: "FActHub automatically renders JSON-LD for rich snippet stars and accordion results on Google."
-      },
-      {
-        item: "Maintain 1.5% - 2.5% Keyword Density",
-        tip: "Avoid keyword stuffing while ensuring synonyms and LSI keywords naturally appear throughout paragraphs."
-      },
-      {
-        item: "Optimize Meta Description & Fast Load Time",
-        tip: "Write a high-CTR snippet (140-160 chars) that invites clicks from Google Search."
-      }
-    ]
-  };
-
-  return res.json(fallbackResult);
+  return res.json({ result: fallbackResult, ...fallbackResult });
 });
 
 // Explicit API 404 Catch-all to guarantee all /api requests return JSON, never HTML

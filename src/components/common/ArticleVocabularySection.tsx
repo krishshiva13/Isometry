@@ -28,9 +28,12 @@ interface ArticleVocabularySectionProps {
   articleId?: string;
 }
 
+const EMPTY_VOCABULARY: VocabularyWord[] = [];
+const EMPTY_BILINGUAL: BilingualTerm[] = [];
+
 export const ArticleVocabularySection: React.FC<ArticleVocabularySectionProps> = ({
-  vocabulary = [],
-  bilingualTerms = [],
+  vocabulary = EMPTY_VOCABULARY,
+  bilingualTerms = EMPTY_BILINGUAL,
   articleTitle,
   articleId
 }) => {
@@ -71,7 +74,15 @@ export const ArticleVocabularySection: React.FC<ArticleVocabularySectionProps> =
   const [savedBank, setSavedBank] = useState<SavedVocabularyItem[]>(() => vocabularyService.getSavedWordBank());
 
   useEffect(() => {
-    setWords(initialWords);
+    setWords((prev) => {
+      if (
+        prev.length === initialWords.length &&
+        prev.every((w, i) => w.word === initialWords[i]?.word && w.meaning === initialWords[i]?.meaning)
+      ) {
+        return prev;
+      }
+      return initialWords;
+    });
   }, [initialWords]);
 
   useEffect(() => {

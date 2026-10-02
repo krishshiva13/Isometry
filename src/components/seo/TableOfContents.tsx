@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import { ListCollapse, ChevronRight, Hash } from 'lucide-react';
 import { cn } from '../../lib/utils';
 
@@ -13,6 +13,37 @@ export interface HeadingItem {
   level: number;
 }
 
+/**
+ * Strips all color styling tags ([coral]...[/coral], [red], [gold], etc.),
+ * HTML tags, markdown links, vocabulary directives, and markup so only
+ * clean human-readable text is displayed in the Table of Contents.
+ */
+export function stripMarkupTags(text: string): string {
+  if (!text) return '';
+  return text
+    // Strip vocabulary directives: :::vocab[word]{...}::: -> word
+    .replace(/:::vocab\[(.*?)\](?:\{.*?\})?:::/gi, '$1')
+    // Strip related directives: :::related[...]::: -> ''
+    .replace(/:::related\[.*?\](?:\{.*?\})?:::/gi, '')
+    // Strip known color tags with content: [coral]text[/coral] -> text
+    .replace(/\[(gold|coral|teal|indigo|red|green|blue|slate|purple|yellow|amber|rose|emerald|cyan|sky|violet|fuchsia|pink)\](.*?)\[\/\1\]/gi, '$2')
+    // Strip any remaining opening/closing color tags: [coral], [/coral], [red], [/red], etc.
+    .replace(/\[\/?(gold|coral|teal|indigo|red|green|blue|slate|purple|yellow|amber|rose|emerald|cyan|sky|violet|fuchsia|pink)\]/gi, '')
+    // Strip any other generic BBCode bracket tags: [tag] or [/tag]
+    .replace(/\[\/?[a-zA-Z0-9_-]+\]/gi, '')
+    // Strip HTML tags like <span>, </span>, <font...>, etc.
+    .replace(/<[^>]*>/g, '')
+    // Strip markdown links: [Link Text](https://...) -> Link Text
+    .replace(/\[([^\]]+)\]\([^)]+\)/g, '$1')
+    // Strip markdown bold / italic formatting: **bold** or *italic*
+    .replace(/[*_]{1,3}([^*_]+)[*_]{1,3}/g, '$1')
+    // Strip inline code `code` -> code
+    .replace(/`([^`]+)`/g, '$1')
+    // Normalize extra whitespace
+    .replace(/\s+/g, ' ')
+    .trim();
+}
+
 export function extractHeadings(markdown: string): HeadingItem[] {
   if (!markdown) return [];
   const lines = markdown.split('\n');
@@ -21,13 +52,15 @@ export function extractHeadings(markdown: string): HeadingItem[] {
   for (const line of lines) {
     const trimmed = line.trim();
     if (trimmed.startsWith('## ') && !trimmed.startsWith('### ')) {
-      const text = trimmed.replace(/^##\s+/, '').trim();
-      const id = slugify(text);
-      if (text) headings.push({ id, text, level: 2 });
+      const rawText = trimmed.replace(/^##\s+/, '').trim();
+      const cleanText = stripMarkupTags(rawText);
+      const id = slugify(cleanText);
+      if (cleanText) headings.push({ id, text: cleanText, level: 2 });
     } else if (trimmed.startsWith('### ')) {
-      const text = trimmed.replace(/^###\s+/, '').trim();
-      const id = slugify(text);
-      if (text) headings.push({ id, text, level: 3 });
+      const rawText = trimmed.replace(/^###\s+/, '').trim();
+      const cleanText = stripMarkupTags(rawText);
+      const id = slugify(cleanText);
+      if (cleanText) headings.push({ id, text: cleanText, level: 3 });
     }
   }
 
@@ -35,7 +68,8 @@ export function extractHeadings(markdown: string): HeadingItem[] {
 }
 
 export function slugify(text: string): string {
-  return text
+  const clean = stripMarkupTags(text);
+  return clean
     .toLowerCase()
     .replace(/[^\w\s-]/g, '')
     .trim()
@@ -43,13 +77,9 @@ export function slugify(text: string): string {
 }
 
 export const TableOfContents: React.FC<TableOfContentsProps> = ({ content, className }) => {
-  const [headings, setHeadings] = useState<HeadingItem[]>([]);
+  const headings = useMemo(() => extractHeadings(content), [content]);
   const [activeId, setActiveId] = useState<string>('');
   const [isCollapsed, setIsCollapsed] = useState(false);
-
-  useEffect(() => {
-    setHeadings(extractHeadings(content));
-  }, [content]);
 
   useEffect(() => {
     if (headings.length === 0) return;
@@ -58,7 +88,7 @@ export const TableOfContents: React.FC<TableOfContentsProps> = ({ content, class
       (entries) => {
         entries.forEach((entry) => {
           if (entry.isIntersecting) {
-            setActiveId(entry.target.id);
+            setActiveId((prev) => (prev === entry.target.id ? prev : entry.target.id));
           }
         });
       },
@@ -110,7 +140,7 @@ export const TableOfContents: React.FC<TableOfContentsProps> = ({ content, class
       </div>
 
       {!isCollapsed && (
-        <ul className="space-y-1.5 pt-1 text-xs border-t border-black/5 dark:border-white/10">
+        <ul className="space-y-1.5 pt-1 text-xs border-t border-black/5 dark:border-white/10 max-h-[360px] overflow-y-auto scrollbar-thin pr-1">
           {headings.map(({ id, text, level }) => {
             const isActive = activeId === id;
             return (

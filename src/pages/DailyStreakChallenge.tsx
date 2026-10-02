@@ -6,6 +6,7 @@ import { motion, AnimatePresence } from 'motion/react';
 import { QuizMCQ, UserStreakData } from '../types';
 import { factService } from '../services/factService';
 import { notebookService } from '../services/notebookService';
+import { recordQuizCompleted } from '../components/DailyGoalTracker';
 import { INITIAL_FACTS } from '../seed';
 import { cn } from '../lib/utils';
 
@@ -134,6 +135,11 @@ export const DailyStreakChallenge: React.FC = () => {
       // Complete quiz and record streak
       const finalScore = selectedOption === questions[currentIndex].answer ? score + 1 : score;
       const updatedStreak = notebookService.recordQuizAttempt(finalScore, questions.length);
+      try {
+        recordQuizCompleted();
+      } catch (e) {
+        console.warn('Failed to record quiz in daily goal', e);
+      }
       setUserStreak(updatedStreak);
       setIsQuizCompleted(true);
     }

@@ -295,7 +295,7 @@ export const SEOToolkit: React.FC = () => {
                   <span>High-CTR Title Tag Ideas (&lt; 60 characters)</span>
                 </div>
                 <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
-                  {researchResult.titleTagIdeas.map((t, idx) => (
+                  {(researchResult.titleTagIdeas || []).map((t, idx) => (
                     <div
                       key={idx}
                       className="p-3 bg-white dark:bg-[#1f2128] rounded-xl border border-black/5 dark:border-white/5 flex flex-col justify-between gap-2 text-xs shadow-2xs"
@@ -326,7 +326,7 @@ export const SEOToolkit: React.FC = () => {
                   <span>Google "People Also Ask" (PAA) Queries for H2 Subheadings</span>
                 </div>
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
-                  {researchResult.peopleAlsoAsk.map((p, idx) => (
+                  {(researchResult.peopleAlsoAsk || []).map((p, idx) => (
                     <div
                       key={idx}
                       className="p-3 bg-white dark:bg-[#1f2128] rounded-xl border border-black/5 dark:border-white/5 space-y-1 text-xs shadow-2xs"

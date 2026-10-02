@@ -50,12 +50,12 @@ export const EmbeddedRelatedCard: React.FC<EmbeddedRelatedCardProps> = ({
       // Look up locally first
       const local = INITIAL_FACTS.find(f => f.id === targetId);
       if (local) {
-        if (isMounted) setLoadedFact(local);
+        if (isMounted) setLoadedFact((prev) => (prev?.id === local.id ? prev : local));
       } else {
         // Look up via factService
         factService.getFactById(targetId).then(data => {
           if (isMounted && data) {
-            setLoadedFact(data);
+            setLoadedFact((prev) => (prev?.id === data.id ? prev : data));
           }
         }).catch(() => {
           // ignore lookup errors
