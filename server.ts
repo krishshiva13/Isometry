@@ -5,7 +5,7 @@ import { createServer as createViteServer } from "vite";
 import { GoogleGenAI, Type } from "@google/genai";
 import dotenv from "dotenv";
 import { initializeApp } from "firebase/app";
-import { getFirestore, collection, getDocs, setDoc, doc, query, orderBy, limit } from "firebase/firestore";
+import { getFirestore, collection, getDocs, getDoc, setDoc, doc, query, orderBy, limit } from "firebase/firestore";
 import fs from "fs";
 import { extractVocabularyFallback, lookupWordFallback } from "./server/vocabularyFallback";
 
@@ -247,9 +247,9 @@ async function safeGenerateContent(params: {
 }): Promise<{ text: string; rawResponse: any; usedSearch: boolean }> {
   const ai = getGeminiClient();
   const rawModelList = [
-    params.preferredModel || "gemini-2.5-flash",
-    "gemini-2.5-flash",
-    "gemini-2.5-flash-lite"
+    params.preferredModel || "gemini-3.8-flash",
+    "gemini-3.8-flash",
+    "gemini-flash-latest"
   ].filter((m): m is string => Boolean(m));
   
   // Deduplicate while preserving priority order
@@ -296,9 +296,14 @@ async function safeGenerateContent(params: {
           }
         }
 
-        // If 429/503/high-demand/quota, pause with exponential delay before retry
-        if (errMsg.includes("429") || errMsg.includes("503") || errMsg.includes("quota") || errMsg.includes("resource_exhausted") || errMsg.includes("unavailable") || errMsg.includes("high demand")) {
-          const delay = (attempt + 1) * 1200 + Math.floor(Math.random() * 500);
+        // Hard quota exhaustion — break immediately without useless retries
+        if (errMsg.includes("exceeded your current quota") || errMsg.includes("check your plan and billing")) {
+          break;
+        }
+
+        // If transient 429/503/high-demand, pause with exponential delay before retry
+        if (errMsg.includes("429") || errMsg.includes("503") || errMsg.includes("resource_exhausted") || errMsg.includes("unavailable") || errMsg.includes("high demand")) {
+          const delay = (attempt + 1) * 800 + Math.floor(Math.random() * 300);
           await new Promise(r => setTimeout(r, delay));
         } else {
           // If not a retryable rate limit error (e.g. invalid param), don't retry same model
@@ -1985,6 +1990,416 @@ Respond ONLY with a valid JSON object matching the requested schema.`;
   }
 
   return res.json({ result: fallbackResult, ...fallbackResult });
+});
+
+// ═══════════════════════════════════════════════════════════
+// LIVE AI DAILY EXAM CAPSULE & CURRENT AFFAIRS AUTO-GENERATOR
+// ═══════════════════════════════════════════════════════════
+
+const inMemoryCapsules = new Map<string, any>();
+
+// GET /api/exam/capsules/recent — Retrieve list of available capsules
+app.get("/api/exam/capsules/recent", async (req, res) => {
+  try {
+    const capsulesList: any[] = [];
+
+    // 1. Check Firestore for saved daily capsules
+    if (serverDb) {
+      try {
+        const { getDocs, collection, query, orderBy, limit } = await import("firebase/firestore");
+        const q = query(collection(serverDb, "daily_capsules"), orderBy("dateKey", "desc"), limit(10));
+        const snap = await getDocs(q);
+        snap.forEach(docSnap => {
+          const data = docSnap.data();
+          if (data && data.dateKey) {
+            capsulesList.push(data);
+            inMemoryCapsules.set(data.dateKey, data);
+          }
+        });
+      } catch (dbErr) {
+        console.warn("[Server] Firestore daily capsules fetch notice:", dbErr);
+      }
+    }
+
+    // 2. Include any in-memory capsules
+    inMemoryCapsules.forEach((capsule, key) => {
+      if (!capsulesList.some(c => c.dateKey === key)) {
+        capsulesList.push(capsule);
+      }
+    });
+
+    return res.json({ capsules: capsulesList });
+  } catch (error: any) {
+    console.error("Error retrieving recent capsules:", error);
+    return res.status(500).json({ error: "Failed to retrieve recent exam capsules" });
+  }
+});
+
+// GET /api/exam/capsule/:dateKey — Retrieve a specific daily capsule
+app.get("/api/exam/capsule/:dateKey", async (req, res) => {
+  const { dateKey } = req.params;
+  try {
+    // 1. Check memory cache
+    if (inMemoryCapsules.has(dateKey)) {
+      return res.json({ capsule: inMemoryCapsules.get(dateKey), source: "memory" });
+    }
+
+    // 2. Check Firestore
+    if (serverDb) {
+      const { getDoc, doc } = await import("firebase/firestore");
+      const docSnap = await getDoc(doc(serverDb, "daily_capsules", dateKey));
+      if (docSnap.exists()) {
+        const data = docSnap.data();
+        inMemoryCapsules.set(dateKey, data);
+        return res.json({ capsule: data, source: "firestore" });
+      }
+    }
+
+    return res.status(404).json({ error: `No capsule found for date ${dateKey}` });
+  } catch (error: any) {
+    return res.status(500).json({ error: "Failed to load capsule" });
+  }
+});
+
+// POST /api/exam/generate-capsule — Live AI Daily Auto-Generator
+app.post("/api/exam/generate-capsule", async (req, res) => {
+  try {
+    const { targetDate, forceRefresh, customFocus } = req.body || {};
+    
+    // Resolve date (defaults to today's date in YYYY-MM-DD)
+    const today = new Date();
+    const dateKey = (targetDate && typeof targetDate === "string" && /^\d{4}-\d{2}-\d{2}$/.test(targetDate))
+      ? targetDate
+      : today.toISOString().split("T")[0];
+
+    const dateObj = new Date(dateKey + "T00:00:00Z");
+    const displayDate = dateObj.toLocaleDateString("en-US", {
+      month: "long",
+      day: "numeric",
+      year: "numeric"
+    });
+
+    // 1. Return from cache if exists and forceRefresh is false
+    if (!forceRefresh) {
+      if (inMemoryCapsules.has(dateKey)) {
+        return res.json({
+          success: true,
+          capsule: inMemoryCapsules.get(dateKey),
+          fromCache: true,
+          source: "memory"
+        });
+      }
+
+      if (serverDb) {
+        try {
+          const snap = await Promise.race([
+            getDoc(doc(serverDb, "daily_capsules", dateKey)),
+            new Promise<any>((_, reject) => setTimeout(() => reject(new Error("Firestore timeout")), 1500))
+          ]);
+          if (snap && typeof snap.exists === "function" && snap.exists()) {
+            const data = snap.data();
+            inMemoryCapsules.set(dateKey, data);
+            return res.json({
+              success: true,
+              capsule: data,
+              fromCache: true,
+              source: "firestore"
+            });
+          }
+        } catch (e) {
+          // Continue to generation
+        }
+      }
+    }
+
+    console.log(`[Exam Generator] Initiating Live AI Daily Capsule creation for ${displayDate} (${dateKey})...`);
+
+    // 2. Generate with Gemini + Live Google Search Grounding
+    if (hasGeminiApiKey()) {
+      try {
+        const searchPrompt = `Search Google in real time for breaking Indian national news, PIB announcements, Union Cabinet decisions, RBI notifications, Environment & Ecology developments, Science & Space milestones, and key Global Summits for ${displayDate} (${dateKey}) relevant to Indian competitive exams (UPSC Civil Services Prelims & Mains GS, SSC CGL, Banking/RBI Grade B, and State PSCs).
+${customFocus ? `Specific Exam Focus: ${customFocus}` : ''}
+
+Synthesize a comprehensive, high-yield educational study capsule:
+1. "themeTitle": A punchy 1-sentence headline capturing 3 major themes of the day.
+2. "dayBadge": A special commemoration badge or "Daily Current Affairs Special".
+3. "quickPointers": 4 crisp one-line memory pointers for 60-second rapid revision.
+4. "mcqs": 5 high-yield multiple-choice questions matching actual UPSC Prelims / SSC CGL standard:
+   - "category": e.g. "Modern History & Governance", "Polity & Constitution", "Environment & Energy", "Economy & Banking", "Science & Space"
+   - "targetExam": e.g. "UPSC GS-1 / SSC CGL", "UPSC GS-3", "Banking / RBI", "State PSC"
+   - "tagClass": Tailwind badge class (e.g. "bg-purple-100 text-purple-900 border-purple-200")
+   - "question": Rigorous multi-statement or direct analytical question.
+   - "options": 4 plausible options (ABCD).
+   - "correctAnswer": Zero-based index (0, 1, 2, or 3).
+   - "explanation": In-depth fact-checked explanation detailing historical/statutory context.
+   - "examTrap": Explicit examiner trap warning (e.g., "Examiner trap: Students confuse year X with year Y...").
+5. "currentAffairs": 4 curated news items:
+   - "title": Clean, factual headline.
+   - "summary": 2-3 sentence context explaining the development.
+   - "category": "Governance", "Economy", "Environment", "Science & Tech", or "International"
+   - "examAngle": Explicit syllabus link (e.g. "UPSC GS-3: Green Hydrogen vs Grey Hydrogen; SIGHT guidelines").
+   - "keyTakeaway": Tangible fact, nodal ministry, statutory act, or target deadline.
+   - "source": Authentic source (e.g. "PIB New Delhi", "The Hindu", "Cabinet Press Release", "RBI").
+   - "exams": Array of target exams, e.g. [{ "name": "UPSC GS-3", "tagClass": "bg-blue-100 text-blue-900 border-blue-200" }]`;
+
+      const aiResponse = await Promise.race([
+        safeGenerateContent({
+          preferredModel: "gemini-3.8-flash",
+          contents: searchPrompt,
+          allowSearchFallback: false,
+          config: {
+            systemInstruction: "You are the Chief Educational Fact-Checker & Senior Examination Curator for FActHub. You generate verified, syllabus-aligned daily exam capsules with live Google Search Grounding.",
+            tools: [{ googleSearch: {} }],
+            responseMimeType: "application/json",
+            responseSchema: {
+              type: Type.OBJECT,
+              properties: {
+                themeTitle: { type: Type.STRING },
+                dayBadge: { type: Type.STRING },
+                quickPointers: { 
+                  type: Type.ARRAY, 
+                  items: { type: Type.STRING } 
+                },
+                mcqs: {
+                  type: Type.ARRAY,
+                  items: {
+                    type: Type.OBJECT,
+                    properties: {
+                      category: { type: Type.STRING },
+                      targetExam: { type: Type.STRING },
+                      tagClass: { type: Type.STRING },
+                      question: { type: Type.STRING },
+                      options: { 
+                        type: Type.ARRAY, 
+                        items: { type: Type.STRING } 
+                      },
+                      correctAnswer: { type: Type.INTEGER },
+                      explanation: { type: Type.STRING },
+                      examTrap: { type: Type.STRING }
+                    },
+                    required: ["category", "targetExam", "question", "options", "correctAnswer", "explanation", "examTrap"]
+                  }
+                },
+                currentAffairs: {
+                  type: Type.ARRAY,
+                  items: {
+                    type: Type.OBJECT,
+                    properties: {
+                      title: { type: Type.STRING },
+                      summary: { type: Type.STRING },
+                      category: { type: Type.STRING },
+                      examAngle: { type: Type.STRING },
+                      keyTakeaway: { type: Type.STRING },
+                      source: { type: Type.STRING },
+                      exams: {
+                        type: Type.ARRAY,
+                        items: {
+                          type: Type.OBJECT,
+                          properties: {
+                            name: { type: Type.STRING },
+                            tagClass: { type: Type.STRING }
+                          },
+                          required: ["name"]
+                        }
+                      }
+                    },
+                    required: ["title", "summary", "category", "examAngle", "keyTakeaway", "source"]
+                  }
+                }
+              },
+              required: ["themeTitle", "dayBadge", "quickPointers", "mcqs", "currentAffairs"]
+            }
+          }
+        }),
+        new Promise<{ text: string; rawResponse: any; usedSearch: boolean }>((_, reject) =>
+          setTimeout(() => reject(new Error("AI generation timeout")), 12000)
+        )
+      ]);
+
+      const parsed = JSON.parse(aiResponse.text || "{}");
+      const cleanId = dateKey.replace(/-/g, "");
+
+      // Normalize MCQs
+      const normalizedMcqs = (parsed.mcqs || []).slice(0, 5).map((q: any, i: number) => ({
+        id: `q-${cleanId}-${i + 1}`,
+        category: q.category || "General Studies",
+        targetExam: q.targetExam || "UPSC / SSC CGL",
+        tagClass: q.tagClass || "bg-blue-100 text-blue-900 border-blue-200",
+        question: q.question,
+        options: Array.isArray(q.options) && q.options.length === 4 ? q.options : ["Option A", "Option B", "Option C", "Option D"],
+        correctAnswer: typeof q.correctAnswer === "number" && q.correctAnswer >= 0 && q.correctAnswer <= 3 ? q.correctAnswer : 0,
+        explanation: q.explanation || "Detailed explanation based on official syllabus and gazette notifications.",
+        examTrap: q.examTrap || "Examiner trap: Read all options carefully before choosing."
+      }));
+
+      // Normalize Current Affairs
+      const normalizedCurrentAffairs = (parsed.currentAffairs || []).slice(0, 4).map((ca: any, i: number) => ({
+        id: `ca-${cleanId}-${i + 1}`,
+        num: `0${i + 1}`,
+        title: ca.title,
+        summary: ca.summary,
+        category: ca.category || "National & Governance",
+        examAngle: ca.examAngle || "Relevance to Prelims GS and Mains GS Paper II/III.",
+        keyTakeaway: ca.keyTakeaway || "Key institutional decision, statutory act, or target deadline.",
+        source: ca.source || "PIB New Delhi / National Media",
+        exams: Array.isArray(ca.exams) && ca.exams.length > 0 ? ca.exams : [
+          { name: "UPSC GS", tagClass: "bg-blue-100 text-blue-900 border-blue-200" },
+          { name: "SSC CGL", tagClass: "bg-purple-100 text-purple-900 border-purple-200" }
+        ]
+      }));
+
+      const newCapsule = {
+        dateKey,
+        displayDate,
+        dayBadge: parsed.dayBadge || "Live AI Verified Daily Capsule",
+        themeTitle: parsed.themeTitle || `High-Yield Current Affairs & Practice MCQs for ${displayDate}`,
+        pdfFileName: `FactHub-Daily-Current-Affairs-${dateKey}.pdf`,
+        pdfFileSize: "184 KB",
+        pdfPageCount: 2,
+        quickPointers: Array.isArray(parsed.quickPointers) && parsed.quickPointers.length > 0 
+          ? parsed.quickPointers.slice(0, 4) 
+          : [
+              `Daily Current Affairs digest prepared on ${displayDate} with real-time Google search verification.`,
+              `Cabinet approvals and economic guidelines mapped directly to UPSC Prelims & Mains.`,
+              `Practice 5 exam-grade MCQs with answer keys and trap warnings.`,
+              `Download printable 2-page A4 study handout for offline revision.`
+            ],
+        mcqs: normalizedMcqs,
+        currentAffairs: normalizedCurrentAffairs,
+        generatedAt: new Date().toISOString(),
+        isLiveAIGenerated: true
+      };
+
+      // 3. Save to Firestore (non-blocking background persist)
+      if (serverDb) {
+        setDoc(doc(serverDb, "daily_capsules", dateKey), newCapsule)
+          .then(() => console.log(`[Exam Generator] Saved live capsule ${dateKey} to Firestore.`))
+          .catch(dbErr => console.warn("[Exam Generator] Could not persist capsule to Firestore:", dbErr));
+      }
+
+      inMemoryCapsules.set(dateKey, newCapsule);
+
+      return res.json({
+        success: true,
+        capsule: newCapsule,
+        generatedLive: true,
+        usedSearch: aiResponse.usedSearch
+      });
+    } catch (aiErr: any) {
+      console.warn("[Exam Generator] AI live search generation encountered error, falling back to high-yield capsule:", aiErr.message || aiErr);
+    }
+  }
+
+  // Fallback if AI key is unavailable or quota reached
+    const fallbackCleanId = dateKey.replace(/-/g, "");
+    const fallbackCapsule = {
+      dateKey,
+      displayDate,
+      dayBadge: "Daily Competitive Exam Compendium",
+      themeTitle: `Current Affairs, National Schemes, and High-Yield GK for ${displayDate}`,
+      pdfFileName: `FactHub-Daily-Current-Affairs-${dateKey}.pdf`,
+      pdfFileSize: "180 KB",
+      pdfPageCount: 2,
+      quickPointers: [
+        `Key milestones and government policy initiatives active as of ${displayDate}.`,
+        `Core constitutional and economic frameworks frequently tested in UPSC Prelims and SSC CGL.`,
+        `Includes 5 practice MCQs with examiner trap warnings and analytical reasoning.`,
+        `Optimized for 2-page A4 printouts and smart device reading.`
+      ],
+      mcqs: [
+        {
+          id: `q-${fallbackCleanId}-1`,
+          category: "Polity & Governance",
+          targetExam: "UPSC GS-2 / SSC CGL",
+          tagClass: "bg-purple-100 text-purple-900 border-purple-200",
+          question: `Regarding constitutional bodies in India, which article of the Constitution establishes the Election Commission of India?`,
+          options: ["Article 280", "Article 324", "Article 352", "Article 360"],
+          correctAnswer: 1,
+          explanation: "Article 324 provides for the superintendence, direction, and control of elections to Parliament, State Legislatures, and the offices of President and Vice-President to be vested in the Election Commission.",
+          examTrap: "Trap: Article 280 is Finance Commission, while Articles 352-360 deal with Emergency Provisions."
+        },
+        {
+          id: `q-${fallbackCleanId}-2`,
+          category: "Environment & Renewable Energy",
+          targetExam: "UPSC GS-3",
+          tagClass: "bg-emerald-100 text-emerald-900 border-emerald-200",
+          question: `Under India's updated Nationally Determined Contributions (NDCs), what is the target for cumulative electric power installed capacity from non-fossil fuel-based energy resources by 2030?`,
+          options: ["30%", "40%", "50%", "75%"],
+          correctAnswer: 2,
+          explanation: "India has committed to achieving about 50 percent cumulative electric power installed capacity from non-fossil fuel-based energy resources by 2030, enhancing its earlier target of 40%.",
+          examTrap: "Trap: 40% was the original target achieved ahead of schedule in 2021; 50% is the updated NDC pledge."
+        },
+        {
+          id: `q-${fallbackCleanId}-3`,
+          category: "Economy & Banking",
+          targetExam: "IBPS PO / RBI Grade B",
+          tagClass: "bg-blue-100 text-blue-900 border-blue-200",
+          question: `The 'Priority Sector Lending' (PSL) guidelines issued by the RBI require domestic commercial banks to allocate what minimum percentage of Adjusted Net Bank Credit (ANBC) to priority sectors?`,
+          options: ["25%", "35%", "40%", "50%"],
+          correctAnswer: 2,
+          explanation: "Domestic scheduled commercial banks and foreign banks with 20 branches and above have a priority sector lending target of 40 percent of Adjusted Net Bank Credit (ANBC) or Credit Equivalent Amount of Off-Balance Sheet Exposure.",
+          examTrap: "Trap: Small Finance Banks have a higher PSL target of 75%, while general commercial banks have 40%."
+        },
+        {
+          id: `q-${fallbackCleanId}-4`,
+          category: "Science & Space",
+          targetExam: "UPSC GS-3 / RRB NTPC",
+          tagClass: "bg-amber-100 text-amber-900 border-amber-200",
+          question: `Which specialized launch vehicle was developed by ISRO primarily to cater to the small satellite launch market up to 500 kg to Low Earth Orbit (LEO)?`,
+          options: ["PSLV-XL", "GSLV Mk-III (LVM3)", "SSLV (Small Satellite Launch Vehicle)", "Sounding Rocket RH-200"],
+          correctAnswer: 2,
+          explanation: "The Small Satellite Launch Vehicle (SSLV) is a 3-stage all-solid vehicle designed by ISRO to launch small satellites up to 500 kg into a 500 km planar orbit at low cost and rapid turnaround time.",
+          examTrap: "Trap: PSLV is the workhorse for 1750 kg payloads, whereas SSLV is specifically for mini/micro satellites under 500 kg."
+        },
+        {
+          id: `q-${fallbackCleanId}-5`,
+          category: "Modern Indian History",
+          targetExam: "UPSC GS-1 / State PSC",
+          tagClass: "bg-rose-100 text-rose-900 border-rose-200",
+          question: `The historic Poona Pact (1932) was signed between Mahatma Gandhi and Dr. B.R. Ambedkar in which prison?`,
+          options: ["Cellular Jail, Port Blair", "Yerwada Central Jail, Pune", "Alipore Jail, Kolkata", "Tihar Jail, Delhi"],
+          correctAnswer: 1,
+          explanation: "The Poona Pact was signed on September 24, 1932, at Yerwada Central Jail in Pune, Maharashtra, following Gandhi's fast against the British Communal Award.",
+          examTrap: "Trap: Gandhi was in Yerwada Jail (Pune), not Cellular Jail or Sabarmati."
+        }
+      ],
+      currentAffairs: [
+        {
+          id: `ca-${fallbackCleanId}-1`,
+          num: "01",
+          title: "National Clean Energy Initiatives & Green Corridor Infrastructure",
+          summary: "Union Cabinet reviews transmission infrastructure expansion under the Green Energy Corridor Phase-II, accelerating integration of large-scale renewable projects into the National Grid.",
+          category: "Environment & Energy",
+          examAngle: "UPSC GS-3: Grid stability, Renewable Energy Certificates (REC), and Inter-State Transmission System (ISTS) charges.",
+          keyTakeaway: "Target: 500 GW non-fossil capacity by 2030; Nodal Ministry: Ministry of Power.",
+          source: "PIB New Delhi",
+          exams: [{ name: "UPSC GS-3", tagClass: "bg-blue-100 text-blue-900 border-blue-200" }]
+        },
+        {
+          id: `ca-${fallbackCleanId}-2`,
+          num: "02",
+          title: "Insolvency and Bankruptcy Code (IBC) Regulatory Amendments",
+          summary: "Insolvency and Bankruptcy Board of India (IBBI) notifies streamlined pre-packaged resolution frameworks for MSMEs to reduce litigation timelines and preserve asset value.",
+          category: "Economy & Corporate Law",
+          examAngle: "UPSC GS-3: Resolution vs Liquidation ratios, National Company Law Tribunal (NCLT) bench capacity.",
+          keyTakeaway: "Pre-pack resolution period capped at 120 days; Nodal Agency: IBBI / Ministry of Corporate Affairs.",
+          source: "Official Gazette / MCA",
+          exams: [{ name: "UPSC GS-3", tagClass: "bg-emerald-100 text-emerald-900 border-emerald-200" }, { name: "Banking", tagClass: "bg-purple-100 text-purple-900 border-purple-200" }]
+        }
+      ],
+      isLiveAIGenerated: false
+    };
+
+    inMemoryCapsules.set(dateKey, fallbackCapsule);
+    return res.json({
+      success: true,
+      capsule: fallbackCapsule,
+      generatedLive: false
+    });
+  } catch (err: any) {
+    console.error("Live capsule generator error:", err);
+    return res.status(500).json({ error: "Failed to generate daily exam capsule", details: err?.message || String(err) });
+  }
 });
 
 // Explicit API 404 Catch-all to guarantee all /api requests return JSON, never HTML

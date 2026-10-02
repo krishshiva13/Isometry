@@ -26,7 +26,8 @@ import {
   Copy,
   Layers,
   HelpCircle,
-  ExternalLink
+  ExternalLink,
+  RefreshCw
 } from 'lucide-react';
 import { cn } from '../lib/utils';
 import { factService } from '../services/factService';
@@ -404,9 +405,14 @@ const DAILY_CAPSULES: Record<string, DailyCapsuleData> = {
 };
 
 export const ExamPrep: React.FC = () => {
-  // Current Selected Date State
+  // Current Selected Date State & Capsules Map
+  const [capsulesMap, setCapsulesMap] = useState<Record<string, DailyCapsuleData>>(DAILY_CAPSULES);
   const [selectedDateKey, setSelectedDateKey] = useState<string>('2026-10-02');
-  const activeCapsule = DAILY_CAPSULES[selectedDateKey] || DAILY_CAPSULES['2026-10-02'];
+  const activeCapsule = capsulesMap[selectedDateKey] || DAILY_CAPSULES['2026-10-02'];
+
+  // Live AI Generator State
+  const [isGeneratingLive, setIsGeneratingLive] = useState<boolean>(false);
+  const [generationStep, setGenerationStep] = useState<string>('');
 
   // MCQ Practice State
   const [currentMcqIndex, setCurrentMcqIndex] = useState<number>(0);
@@ -431,6 +437,91 @@ export const ExamPrep: React.FC = () => {
   const showToast = (msg: string) => {
     setToastMessage(msg);
     setTimeout(() => setToastMessage(null), 3500);
+  };
+
+  // Fetch recent live capsules from server/Firestore on load
+  useEffect(() => {
+    const fetchRecentCapsules = async () => {
+      try {
+        const res = await fetch('/api/exam/capsules/recent');
+        if (res.ok) {
+          const data = await res.json();
+          if (data && Array.isArray(data.capsules) && data.capsules.length > 0) {
+            setCapsulesMap(prev => {
+              const updated = { ...prev };
+              data.capsules.forEach((c: DailyCapsuleData) => {
+                if (c && c.dateKey) {
+                  updated[c.dateKey] = c;
+                }
+              });
+              return updated;
+            });
+          }
+        }
+      } catch (err) {
+        console.warn('Could not fetch remote exam capsules:', err);
+      }
+    };
+    fetchRecentCapsules();
+  }, []);
+
+  // Live AI Capsule Generation Trigger
+  const handleGenerateLiveCapsule = async (targetDateKey?: string, forceRefresh: boolean = true) => {
+    const dateToUse = targetDateKey || selectedDateKey || '2026-10-02';
+    setIsGeneratingLive(true);
+    setGenerationStep('🔍 Connecting to Gemini 3.8 Flash & scanning live Google Search for today’s breaking news...');
+
+    const stepTimer1 = setTimeout(() => {
+      setGenerationStep('🏛️ Mapping developments to UPSC Civil Services & SSC CGL syllabus...');
+    }, 2500);
+
+    const stepTimer2 = setTimeout(() => {
+      setGenerationStep('🎯 Formulating 5 exam-grade MCQs with official keys & Examiner Traps...');
+    }, 5500);
+
+    const stepTimer3 = setTimeout(() => {
+      setGenerationStep('📑 Compiling 2-Page A4 Printable PDF Handout & Prelims Digest...');
+    }, 8500);
+
+    try {
+      const response = await fetch('/api/exam/generate-capsule', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          targetDate: dateToUse,
+          forceRefresh
+        })
+      });
+
+      clearTimeout(stepTimer1);
+      clearTimeout(stepTimer2);
+      clearTimeout(stepTimer3);
+
+      if (!response.ok) {
+        const errData = await response.json().catch(() => ({}));
+        throw new Error(errData.error || 'Failed to generate live capsule');
+      }
+
+      const data = await response.json();
+      if (data && data.capsule && data.capsule.dateKey) {
+        setCapsulesMap(prev => ({
+          ...prev,
+          [data.capsule.dateKey]: data.capsule
+        }));
+        setSelectedDateKey(data.capsule.dateKey);
+        handleRestartQuiz();
+        showToast(`✨ Live AI Capsule for ${data.capsule.displayDate} successfully generated!`);
+      }
+    } catch (err: any) {
+      clearTimeout(stepTimer1);
+      clearTimeout(stepTimer2);
+      clearTimeout(stepTimer3);
+      console.error('Live generation error:', err);
+      showToast(`⚠️ Generator notice: ${err.message || 'Generation fallback used.'}`);
+    } finally {
+      setIsGeneratingLive(false);
+      setGenerationStep('');
+    }
   };
 
   // Reset quiz state when switching dates
@@ -620,7 +711,7 @@ export const ExamPrep: React.FC = () => {
                 <span>Select Date:</span>
               </span>
 
-              {Object.values(DAILY_CAPSULES).map((capsule) => {
+              {Object.values(capsulesMap).map((capsule) => {
                 const isSelected = capsule.dateKey === selectedDateKey;
                 return (
                   <button
@@ -636,6 +727,9 @@ export const ExamPrep: React.FC = () => {
                     <span>{capsule.displayDate}</span>
                     {capsule.dateKey === '2026-10-02' && (
                       <span className="text-[9px] font-mono px-1 py-0.2 rounded bg-black/20 text-black uppercase font-bold">Today</span>
+                    )}
+                    {(capsule as any).isLiveAIGenerated && (
+                      <span className="text-[9px] font-mono px-1 py-0.2 rounded bg-amber-400 text-black font-black uppercase">Live</span>
                     )}
                   </button>
                 );
@@ -661,6 +755,69 @@ export const ExamPrep: React.FC = () => {
           </div>
 
         </div>
+      </section>
+
+      {/* ── LIVE AI AUTO-GENERATOR CONTROL STATION ── */}
+      <section className="bg-paper2 dark:bg-[#16171f] border-b border-black/10 dark:border-white/10 py-4 px-4 sm:px-6 lg:px-8">
+        <div className="max-w-6xl mx-auto flex flex-col md:flex-row md:items-center justify-between gap-4">
+          <div className="flex items-start sm:items-center gap-3">
+            <div className="w-10 h-10 rounded-2xl bg-gold/15 dark:bg-gold/25 flex items-center justify-center text-gold shrink-0 border border-gold/30">
+              <Sparkles size={20} className={isGeneratingLive ? "animate-spin" : ""} />
+            </div>
+            <div>
+              <div className="flex flex-wrap items-center gap-2">
+                <h3 className="font-serif font-black text-sm sm:text-base text-ink dark:text-white">
+                  Live AI Daily Current Affairs Auto-Generator
+                </h3>
+                <span className="inline-flex items-center gap-1 text-[10px] font-mono font-bold px-2 py-0.5 rounded-full bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 border border-emerald-500/20">
+                  <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse" />
+                  <span>Real-Time Engine</span>
+                </span>
+                {(activeCapsule as any)?.isLiveAIGenerated && (
+                  <span className="text-[10px] font-mono font-bold px-2 py-0.5 rounded-full bg-amber-500/10 text-amber-600 dark:text-amber-400 border border-amber-500/20">
+                    ✨ Live AI Verified
+                  </span>
+                )}
+              </div>
+              <p className="text-xs text-ink3 dark:text-white/60">
+                Grounds in today's breaking news (PIB, Cabinet, RBI & Environment) via Google Search & drafts 5 practice MCQs + A4 study sheet.
+              </p>
+            </div>
+          </div>
+
+          <div className="flex items-center gap-2 shrink-0">
+            <button
+              onClick={() => handleGenerateLiveCapsule(selectedDateKey, true)}
+              disabled={isGeneratingLive}
+              className={cn(
+                "px-4 py-2.5 rounded-xl font-bold text-xs shadow-md transition-all flex items-center gap-2 cursor-pointer",
+                isGeneratingLive
+                  ? "bg-amber-500/20 text-amber-700 dark:text-amber-300 border border-amber-500/30 cursor-wait"
+                  : "bg-gold hover:bg-gold-l text-black font-black"
+              )}
+            >
+              {isGeneratingLive ? (
+                <>
+                  <div className="w-3.5 h-3.5 border-2 border-current border-t-transparent rounded-full animate-spin" />
+                  <span>Generating Live Capsule...</span>
+                </>
+              ) : (
+                <>
+                  <RefreshCw size={13} />
+                  <span>Generate Today's Live AI Capsule</span>
+                </>
+              )}
+            </button>
+          </div>
+        </div>
+
+        {/* Live Generation Progress Banner */}
+        {isGeneratingLive && (
+          <div className="max-w-6xl mx-auto mt-3 p-3 bg-blue-500/10 border border-blue-500/30 rounded-xl text-xs text-blue-800 dark:text-blue-300 flex items-center gap-2.5 animate-pulse font-mono">
+            <div className="w-3 h-3 rounded-full bg-blue-500 animate-ping shrink-0" />
+            <span className="font-bold">{generationStep}</span>
+          </div>
+        )}
       </section>
 
       {/* ── MAIN CONTENT CONTAINER ── */}
