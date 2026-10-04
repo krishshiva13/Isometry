@@ -112,6 +112,16 @@ service cloud.firestore {
         && data.sentAt == request.time;
     }
 
+    function isValidDailyCapsule(data) {
+      let requiredFields = ['dateKey', 'displayDate', 'themeTitle', 'mcqs', 'currentAffairs'];
+      return data.keys().hasAll(requiredFields)
+        && data.dateKey is string && data.dateKey.size() <= 64
+        && data.displayDate is string && data.displayDate.size() <= 100
+        && data.themeTitle is string && data.themeTitle.size() <= 500
+        && data.mcqs is list
+        && data.currentAffairs is list;
+    }
+
     function isValidUserProfile(data) {
       return (!('uid' in data) || data.uid == request.auth.uid)
         && (!('name' in data) || data.name is string)
@@ -164,6 +174,13 @@ service cloud.firestore {
     match /contact_messages/{msgId} {
       allow list, get: if isAdmin();
       allow create: if isValidContactMessage(incoming());
+    }
+
+    match /daily_capsules/{capsuleId} {
+      allow read: if true;
+      allow create: if isValidDailyCapsule(incoming());
+      allow update: if isAdmin();
+      allow delete: if isAdmin();
     }
 
     match /users/{uid} {

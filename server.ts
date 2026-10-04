@@ -5,7 +5,7 @@ import { createServer as createViteServer } from "vite";
 import { GoogleGenAI, Type } from "@google/genai";
 import dotenv from "dotenv";
 import { initializeApp } from "firebase/app";
-import { getFirestore, collection, getDocs, getDoc, setDoc, doc, query, orderBy, limit } from "firebase/firestore";
+import { getFirestore, collection, getDocs, getDoc, setDoc, doc, query, orderBy, limit, setLogLevel } from "firebase/firestore";
 import fs from "fs";
 import { extractVocabularyFallback, lookupWordFallback } from "./server/vocabularyFallback";
 
@@ -132,6 +132,9 @@ try {
     const firebaseConfig = JSON.parse(fs.readFileSync(configPath, "utf-8"));
     const firebaseApp = initializeApp(firebaseConfig, "server-app");
     serverDb = getFirestore(firebaseApp, firebaseConfig.firestoreDatabaseId || "(default)");
+    try {
+      setLogLevel("error");
+    } catch {}
   }
 } catch (e) {
   console.error("Failed to initialize server-side firestore", e);
@@ -2006,18 +2009,22 @@ app.get("/api/exam/capsules/recent", async (req, res) => {
     // 1. Check Firestore for saved daily capsules
     if (serverDb) {
       try {
-        const { getDocs, collection, query, orderBy, limit } = await import("firebase/firestore");
         const q = query(collection(serverDb, "daily_capsules"), orderBy("dateKey", "desc"), limit(10));
-        const snap = await getDocs(q);
-        snap.forEach(docSnap => {
-          const data = docSnap.data();
-          if (data && data.dateKey) {
-            capsulesList.push(data);
-            inMemoryCapsules.set(data.dateKey, data);
-          }
-        });
-      } catch (dbErr) {
-        console.warn("[Server] Firestore daily capsules fetch notice:", dbErr);
+        const snap = await Promise.race([
+          getDocs(q),
+          new Promise<any>((_, reject) => setTimeout(() => reject(new Error("Firestore query timeout")), 2000))
+        ]);
+        if (snap && typeof snap.forEach === "function") {
+          snap.forEach((docSnap: any) => {
+            const data = docSnap.data();
+            if (data && data.dateKey) {
+              capsulesList.push(data);
+              inMemoryCapsules.set(data.dateKey, data);
+            }
+          });
+        }
+      } catch (dbErr: any) {
+        // Continue with memory cache smoothly
       }
     }
 
@@ -2046,12 +2053,18 @@ app.get("/api/exam/capsule/:dateKey", async (req, res) => {
 
     // 2. Check Firestore
     if (serverDb) {
-      const { getDoc, doc } = await import("firebase/firestore");
-      const docSnap = await getDoc(doc(serverDb, "daily_capsules", dateKey));
-      if (docSnap.exists()) {
-        const data = docSnap.data();
-        inMemoryCapsules.set(dateKey, data);
-        return res.json({ capsule: data, source: "firestore" });
+      try {
+        const docSnap = await Promise.race([
+          getDoc(doc(serverDb, "daily_capsules", dateKey)),
+          new Promise<any>((_, reject) => setTimeout(() => reject(new Error("Firestore timeout")), 1500))
+        ]);
+        if (docSnap && typeof docSnap.exists === "function" && docSnap.exists()) {
+          const data = docSnap.data();
+          inMemoryCapsules.set(dateKey, data);
+          return res.json({ capsule: data, source: "firestore" });
+        }
+      } catch (dbErr) {
+        // Fallback to inMemoryCapsules or 404
       }
     }
 

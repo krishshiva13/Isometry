@@ -137,9 +137,33 @@
         "bookmarkedAt": { "type": "string", "format": "date-time" }
       },
       "required": ["userId", "factId", "factTitle"]
+    },
+    "DailyCapsule": {
+      "title": "DailyCapsule",
+      "description": "Daily exam compendium and current affairs study capsule.",
+      "type": "object",
+      "properties": {
+        "dateKey": { "type": "string" },
+        "displayDate": { "type": "string" },
+        "dayBadge": { "type": "string" },
+        "themeTitle": { "type": "string" },
+        "pdfFileName": { "type": "string" },
+        "pdfFileSize": { "type": "string" },
+        "pdfPageCount": { "type": "number" },
+        "quickPointers": { "type": "array", "items": { "type": "string" } },
+        "mcqs": { "type": "array", "items": { "type": "object" } },
+        "currentAffairs": { "type": "array", "items": { "type": "object" } },
+        "generatedAt": { "type": "string", "format": "date-time" },
+        "isLiveAIGenerated": { "type": "boolean" }
+      },
+      "required": ["dateKey", "displayDate", "themeTitle", "mcqs", "currentAffairs"]
     }
   },
   "firestore": {
+    "/daily_capsules/{capsuleId}": {
+      "schema": "DailyCapsule",
+      "description": "Daily exam prep capsules and syllabus-mapped compendiums."
+    },
     "/users/{uid}/bookmarks/{bookmarkId}": {
       "schema": "UserBookmark",
       "description": "Bookmarked facts for user."
