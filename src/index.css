@@ -52,9 +52,9 @@ html.dark {
   color-scheme: dark;
 }
 
-/* Ensure any element using bg-ink remains a deep dark, high-contrast canvas in dark mode */
-html.dark .bg-ink,
-.dark .bg-ink {
+/* Ensure any element using bg-ink remains a deep dark, high-contrast canvas in dark mode (unless explicitly overridden with dark:bg-*) */
+html.dark .bg-ink:not([class*="dark:bg-"]),
+.dark .bg-ink:not([class*="dark:bg-"]) {
   background-color: #0c0c0b !important;
 }
 

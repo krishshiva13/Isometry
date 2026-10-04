@@ -1239,14 +1239,14 @@ export const ExamPrep: React.FC = () => {
                     onClick={() => setCurrentMcqIndex(qIdx)}
                     className={cn(
                       "w-8 h-8 rounded-xl font-mono text-xs font-bold transition-all flex items-center justify-center border cursor-pointer",
-                      isCurrent && "ring-2 ring-gold border-gold scale-105",
+                      isCurrent && "ring-2 ring-gold border-gold scale-105 shadow-sm",
                       isAnswered
                         ? isCorrect
-                          ? "bg-emerald-500 text-white border-emerald-600"
-                          : "bg-rose-500 text-white border-rose-600"
+                          ? "bg-emerald-600 text-white border-emerald-700 font-bold"
+                          : "bg-rose-600 text-white border-rose-700 font-bold"
                         : isCurrent
-                        ? "bg-ink text-white dark:bg-white dark:text-black border-transparent"
-                        : "bg-paper2 dark:bg-white/5 text-ink3 dark:text-white/60 border-black/5 dark:border-white/5 hover:border-black/20"
+                        ? "bg-gold text-black font-black border-gold shadow-md"
+                        : "bg-paper2 dark:bg-white/10 text-ink dark:text-white font-bold border-black/10 dark:border-white/15 hover:border-gold dark:hover:border-gold hover:bg-black/5 dark:hover:bg-white/20"
                     )}
                     title={`Question ${qIdx + 1} (${q.category})`}
                   >
@@ -1256,7 +1256,7 @@ export const ExamPrep: React.FC = () => {
               })}
             </div>
 
-            <div className="text-xs font-mono text-ink3 dark:text-white/50">
+            <div className="text-xs font-mono text-ink3 dark:text-white/60 font-semibold">
               Question {currentMcqIndex + 1} of {activeCapsule.mcqs.length}
             </div>
           </div>
@@ -1377,21 +1377,28 @@ export const ExamPrep: React.FC = () => {
                   <button
                     disabled={currentMcqIndex === 0}
                     onClick={() => setCurrentMcqIndex(prev => Math.max(0, prev - 1))}
-                    className="inline-flex items-center gap-1 px-3 py-1.5 text-xs font-bold text-ink3 hover:text-ink dark:text-white/50 dark:hover:text-white disabled:opacity-30 cursor-pointer"
+                    className="inline-flex items-center gap-1.5 px-3.5 py-2 text-xs font-bold rounded-xl text-ink3 hover:text-ink dark:text-white/60 dark:hover:text-white disabled:opacity-30 disabled:pointer-events-none hover:bg-black/5 dark:hover:bg-white/10 transition-colors cursor-pointer border border-transparent hover:border-black/10 dark:hover:border-white/10"
                   >
-                    <ChevronLeft size={14} />
+                    <ChevronLeft size={15} />
                     <span>Previous</span>
                   </button>
 
-                  {isAnswered && (
-                    <button
-                      onClick={handleNextQuestion}
-                      className="inline-flex items-center gap-1.5 px-5 py-2.5 bg-ink text-white dark:bg-white dark:text-black font-bold text-xs rounded-xl hover:bg-gold dark:hover:bg-gold hover:text-black transition-all shadow-md cursor-pointer"
-                    >
-                      <span>{currentMcqIndex === activeCapsule.mcqs.length - 1 ? 'Finish & View Summary' : 'Next Question'}</span>
-                      <ChevronRight size={14} />
-                    </button>
-                  )}
+                  <button
+                    onClick={handleNextQuestion}
+                    className={cn(
+                      "inline-flex items-center gap-1.5 px-5 py-2.5 font-bold text-xs rounded-xl transition-all shadow-sm cursor-pointer",
+                      isAnswered
+                        ? "bg-gold hover:bg-gold-l text-black font-black shadow-md scale-[1.02]"
+                        : "bg-paper2 hover:bg-paper3 dark:bg-white/10 dark:hover:bg-white/20 text-ink dark:text-white border border-black/10 dark:border-white/15"
+                    )}
+                  >
+                    <span>
+                      {currentMcqIndex === activeCapsule.mcqs.length - 1
+                        ? isAnswered ? 'Finish & View Summary' : 'Finish Test'
+                        : 'Next Question'}
+                    </span>
+                    <ChevronRight size={15} />
+                  </button>
                 </div>
 
               </div>
@@ -1509,7 +1516,7 @@ export const ExamPrep: React.FC = () => {
                   className={cn(
                     "px-3 py-1 rounded-lg text-xs font-bold transition-all border shrink-0 cursor-pointer",
                     selectedExamFilter === f.id
-                      ? "bg-ink text-white dark:bg-white dark:text-black border-transparent shadow-xs"
+                      ? "bg-gold text-black font-black border-gold shadow-xs"
                       : "bg-white dark:bg-white/5 text-ink2 dark:text-white/70 border-black/10 dark:border-white/10 hover:border-black/30"
                   )}
                 >
@@ -1957,7 +1964,7 @@ export const ExamPrep: React.FC = () => {
               </button>
               <button
                 onClick={() => setShowPdfPreviewModal(false)}
-                className="px-5 py-2 bg-ink text-white dark:bg-white dark:text-black font-bold text-xs rounded-xl cursor-pointer"
+                className="px-5 py-2 bg-paper2 dark:bg-white/15 text-ink dark:text-white font-bold text-xs rounded-xl hover:bg-gold dark:hover:bg-gold hover:text-black transition-colors cursor-pointer"
               >
                 Close Preview
               </button>
