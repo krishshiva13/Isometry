@@ -75,13 +75,37 @@ export interface DailyCapsuleData {
   mcqs: ExamMCQ[];
   currentAffairs: DailyNewsItem[];
   quickPointers: string[];
+  isLiveAIGenerated?: boolean;
 }
 
 // ═══════════════════════════════════════════════════════════
-// SAMPLE DAILY CAPSULES (Today, Yesterday, Previous Day)
+// DYNAMIC LIVE DATE HELPERS (Synchronized with Home Page & System Clock)
 // ═══════════════════════════════════════════════════════════
 
-const DAILY_CAPSULES: Record<string, DailyCapsuleData> = {
+export const getRelativeDateKey = (offsetDays: number = 0): string => {
+  const d = new Date();
+  d.setDate(d.getDate() - offsetDays);
+  const y = d.getFullYear();
+  const m = String(d.getMonth() + 1).padStart(2, '0');
+  const day = String(d.getDate()).padStart(2, '0');
+  return `${y}-${m}-${day}`;
+};
+
+export const getRelativeDisplayDate = (offsetDays: number = 0): string => {
+  const d = new Date();
+  d.setDate(d.getDate() - offsetDays);
+  return d.toLocaleDateString('en-US', {
+    month: 'long',
+    day: 'numeric',
+    year: 'numeric'
+  });
+};
+
+// ═══════════════════════════════════════════════════════════
+// BASE HISTORICAL CAPSULES & DYNAMIC BUILDER
+// ═══════════════════════════════════════════════════════════
+
+const BASE_ARCHIVE_CAPSULES: Record<string, DailyCapsuleData> = {
   '2026-10-02': {
     dateKey: '2026-10-02',
     displayDate: 'October 2, 2026',
@@ -404,11 +428,312 @@ const DAILY_CAPSULES: Record<string, DailyCapsuleData> = {
   }
 };
 
+export function getDefaultDailyCapsules(): Record<string, DailyCapsuleData> {
+  const todayKey = getRelativeDateKey(0);
+  const yesterdayKey = getRelativeDateKey(1);
+  const dayBeforeKey = getRelativeDateKey(2);
+
+  const todayDisplay = getRelativeDisplayDate(0);
+  const yesterdayDisplay = getRelativeDisplayDate(1);
+  const dayBeforeDisplay = getRelativeDisplayDate(2);
+
+  const capsules: Record<string, DailyCapsuleData> = {};
+
+  // 1. TODAY'S LIVE CAPSULE (Offset 0)
+  capsules[todayKey] = {
+    dateKey: todayKey,
+    displayDate: todayDisplay,
+    dayBadge: "Today's High-Yield Exam Edition",
+    themeTitle: 'Unified Payments Interface (UPI) Global Footprint, Deep Tech Quantum Mission, and Biodiversity Conservation Goals',
+    pdfFileName: `FactHub-Daily-Current-Affairs-${todayKey}.pdf`,
+    pdfFileSize: '186 KB',
+    pdfPageCount: 2,
+    quickPointers: [
+      `Today (${todayDisplay}): RBI & NPCI International expand UPI cross-border acceptance across 10+ partner central banks.`,
+      `National Quantum Mission (NQM) clears ₹6,003 crore funding for 4 Thematic Hubs (T-Hubs) in Quantum Computing & Cryptography.`,
+      `Supreme Court bench reiterates Right to Privacy and Right against adverse Climate Change under Article 21.`,
+      `Cabinet notifies updated Biological Diversity framework for Access and Benefit Sharing (ABS) compliance.`
+    ],
+    mcqs: [
+      {
+        id: `q-${todayKey.replace(/-/g, '')}-1`,
+        category: 'Digital Public Infrastructure & Economy',
+        targetExam: 'UPSC GS-3 / Banking',
+        tagClass: 'bg-blue-100 text-blue-900 border-blue-200',
+        question: 'Under the cross-border linkage of India’s Unified Payments Interface (UPI) with international fast payment systems (such as Singapore’s PayNow and UAE’s AANI), which apex organization operates and oversees UPI infrastructure?',
+        options: [
+          'National Payments Corporation of India (NPCI)',
+          'Securities and Exchange Board of India (SEBI)',
+          'Indian Banks\' Association (IBA)',
+          'NITI Aayog Digital Cell'
+        ],
+        correctAnswer: 0,
+        explanation: 'The National Payments Corporation of India (NPCI), an initiative of the Reserve Bank of India (RBI) and Indian Banks’ Association (IBA) under the provisions of the Payment and Settlement Systems Act, 2007, is the umbrella organization for operating retail payments and settlement systems in India.',
+        examTrap: 'Entity trap: NPCI is the operating umbrella body, while RBI is the statutory regulator. Do not confuse the operator (NPCI) with the regulator (RBI).'
+      },
+      {
+        id: `q-${todayKey.replace(/-/g, '')}-2`,
+        category: 'Indian Polity & Constitution',
+        targetExam: 'UPSC GS-2 / SSC CGL',
+        tagClass: 'bg-purple-100 text-purple-900 border-purple-200',
+        question: 'In landmark constitutional jurisprudence (including M.K. Ranjitsinh v. Union of India), the Supreme Court of India recognized the "Right against the adverse effects of climate change" as an integral part of which Fundamental Right?',
+        options: [
+          'Article 14 (Right to Equality)',
+          'Article 19 (Right to Freedom of Speech)',
+          'Article 21 (Protection of Life and Personal Liberty)',
+          'Article 32 (Right to Constitutional Remedies)'
+        ],
+        correctAnswer: 2,
+        explanation: 'The Supreme Court ruled that the right to life under Article 21 encompasses the right to a clean, safe, and sustainable environment, explicitly recognizing the right to be free from the adverse effects of climate change as an essential facet of human existence.',
+        examTrap: 'Article trap: While Article 48A and 51A(g) contain environmental duties in DPSPs and Fundamental Duties, judicial expansion of enforceable rights is anchored in Article 21.'
+      },
+      {
+        id: `q-${todayKey.replace(/-/g, '')}-3`,
+        category: 'Science & Deep Tech',
+        targetExam: 'UPSC GS-3 / RRB',
+        tagClass: 'bg-emerald-100 text-emerald-900 border-emerald-200',
+        question: 'Under India\'s National Quantum Mission (NQM) implemented by the Department of Science & Technology (DST), what is the targeted timeline and qubit scale for developing intermediate-scale quantum computers with 50-1000 physical qubits?',
+        options: [
+          '2023–2031 (8 years)',
+          '2020–2025 (5 years)',
+          '2026–2030 (4 years)',
+          '2025–2035 (10 years)'
+        ],
+        correctAnswer: 0,
+        explanation: 'The National Quantum Mission (NQM) was approved with an outlay of ₹6,003 crore spanning 2023–24 to 2030–31 (8 years), aiming to develop intermediate-scale quantum computers with 50-1000 physical qubits using superconducting and photonic platforms.',
+        examTrap: 'Timeline trap: The mission spans 2023 to 2031 (8 years total). Watch for questions testing the nodal department (Department of Science and Technology, DST).'
+      },
+      {
+        id: `q-${todayKey.replace(/-/g, '')}-4`,
+        category: 'Environment & Biodiversity',
+        targetExam: 'UPSC GS-3 / State PSC',
+        tagClass: 'bg-amber-100 text-amber-900 border-amber-200',
+        question: 'Under the Biological Diversity Act, 2002 (and its 2023 amendment), which institutional body is established at the local Panchayat and Municipal level to document local bio-resources and prepare People’s Biodiversity Registers (PBRs)?',
+        options: [
+          'National Biodiversity Authority (NBA)',
+          'State Biodiversity Board (SBB)',
+          'Biodiversity Management Committee (BMC)',
+          'Central Pollution Control Board (CPCB)'
+        ],
+        correctAnswer: 2,
+        explanation: 'Biodiversity Management Committees (BMCs) are statutory local-level bodies constituted by local bodies (Panchayats and Urban Local Bodies) under Section 41 of the Biological Diversity Act to promote conservation, sustainable use, and documentation of biological diversity in People’s Biodiversity Registers (PBRs).',
+        examTrap: 'Hierarchy trap: NBA is national level (Chennai), SBB is state level, and BMC is local Panchayat/Municipal level.'
+      },
+      {
+        id: `q-${todayKey.replace(/-/g, '')}-5`,
+        category: 'Banking & Financial Awareness',
+        targetExam: 'IBPS PO / SBI / RBI Grade B',
+        tagClass: 'bg-rose-100 text-rose-900 border-rose-200',
+        question: 'Under RBI Priority Sector Lending (PSL) norms, what is the mandatory sub-target mandated for domestic commercial banks for lending to Small and Marginal Farmers (SMFs)?',
+        options: ['5% of ANBC', '10% of ANBC', '12% of ANBC', '18% of ANBC'],
+        correctAnswer: 1,
+        explanation: 'Within the total 18% agriculture target under PSL for domestic commercial banks, the sub-target for Small and Marginal Farmers (SMFs) is 10% of Adjusted Net Bank Credit (ANBC).',
+        examTrap: 'Sub-target trap: Total agriculture target is 18%, but the specific SMF sub-target is 10%. Micro-enterprises target is 7.5%, and Weaker Sections target is 12%.'
+      }
+    ],
+    currentAffairs: [
+      {
+        id: `ca-${todayKey.replace(/-/g, '')}-1`,
+        num: '01',
+        title: 'NPCI International accelerates global UPI QR code interoperability and real-time remittances',
+        summary: 'India’s Unified Payments Interface expanded its cross-border retail merchant and bilateral remittance network, enabling Indian tourists and diaspora to execute instant zero-markup settlements directly from Indian bank accounts.',
+        exams: [
+          { name: 'UPSC GS-3', tagClass: 'bg-purple-100 text-purple-900 border-purple-200', examCode: 'upsc' },
+          { name: 'Banking', tagClass: 'bg-blue-100 text-blue-900 border-blue-200', examCode: 'bank' }
+        ],
+        examAngle: 'UPSC GS-3 Focus: Digital Public Infrastructure (DPI), India Stack architecture, reduction in international remittance transfer costs (SDG 10.c target under 3%).',
+        keyTakeaway: 'Nodal Organization: NPCI International Payments Limited (NIPL), a wholly-owned subsidiary of NPCI.',
+        source: 'PIB New Delhi / RBI Gazette',
+        category: 'Economy & Digital Tech'
+      },
+      {
+        id: `ca-${todayKey.replace(/-/g, '')}-2`,
+        num: '02',
+        title: 'Department of Science and Technology operationalizes four Thematic Hubs under National Quantum Mission',
+        summary: 'DST notified the establishment of four T-Hubs in Quantum Computing, Quantum Communication, Quantum Sensing & Metrology, and Quantum Materials & Devices across premier Indian research institutes.',
+        exams: [
+          { name: 'UPSC GS-3', tagClass: 'bg-purple-100 text-purple-900 border-purple-200', examCode: 'upsc' },
+          { name: 'SSC CGL', tagClass: 'bg-emerald-100 text-emerald-900 border-emerald-200', examCode: 'ssc' }
+        ],
+        examAngle: 'Mains GS-3: Indigenous technology development, Quantum Key Distribution (QKD) over satellite and terrestrial fiber, national cybersecurity resilience.',
+        keyTakeaway: 'Total Mission Outlay: ₹6,003.65 crore over 2023–2031. Nodal Ministry: Ministry of Science and Technology.',
+        source: 'DST Press Release',
+        category: 'Science & Deep Tech'
+      },
+      {
+        id: `ca-${todayKey.replace(/-/g, '')}-3`,
+        num: '03',
+        title: 'Supreme Court affirms Right against adverse Climate Change impacts under Article 21',
+        summary: 'In an expansive constitutional interpretation balancing high-voltage transmission lines with Great Indian Bustard (GIB) conservation, the apex court ruled that the right to life cannot be dissociated from a stable climate system.',
+        exams: [
+          { name: 'UPSC GS-2', tagClass: 'bg-purple-100 text-purple-900 border-purple-200', examCode: 'upsc' },
+          { name: 'Judiciary', tagClass: 'bg-amber-100 text-amber-900 border-amber-200', examCode: 'law' }
+        ],
+        examAngle: 'Polity & Constitution: Article 21 judicial activism, interconnection with Articles 48A and 51A(g), intergenerational equity principles.',
+        keyTakeaway: 'Landmark Precedent: M.K. Ranjitsinh & Ors. v. Union of India, reinforcing climate rights as non-derogable human rights.',
+        source: 'Supreme Court Reports (SCR)',
+        category: 'Polity & Judiciary'
+      },
+      {
+        id: `ca-${todayKey.replace(/-/g, '')}-4`,
+        num: '04',
+        title: 'Ministry of Environment, Forest and Climate Change notifies updated Access & Benefit Sharing regulations',
+        summary: 'New guidelines clarify simplified exemptions for AYUSH practitioners while tightening fair commercial benefit-sharing mandates on foreign pharmaceutical entities utilizing Indian bio-resources.',
+        exams: [
+          { name: 'UPSC GS-3', tagClass: 'bg-purple-100 text-purple-900 border-purple-200', examCode: 'upsc' },
+          { name: 'State PSC', tagClass: 'bg-emerald-100 text-emerald-900 border-emerald-200', examCode: 'psc' }
+        ],
+        examAngle: 'Environment & Treaties: Nagoya Protocol on Access and Benefit Sharing (ABS), Convention on Biological Diversity (CBD 1992), role of State Biodiversity Boards.',
+        keyTakeaway: 'Statutory Act: Biological Diversity (Amendment) Act. Nodal Body: National Biodiversity Authority (NBA, Chennai).',
+        source: 'MoEFCC Gazette Notification',
+        category: 'Environment & Law'
+      }
+    ]
+  };
+
+  // 2. YESTERDAY'S CAPSULE (Offset 1)
+  capsules[yesterdayKey] = {
+    dateKey: yesterdayKey,
+    displayDate: yesterdayDisplay,
+    dayBadge: "National Infrastructure & Energy Compendium",
+    themeTitle: "Strategic Petroleum Reserves (SPR) Expansion, PM GatiShakti Multimodal Master Plan, and Semiconductor Fab Milestones",
+    pdfFileName: `FactHub-Daily-Current-Affairs-${yesterdayKey}.pdf`,
+    pdfFileSize: '182 KB',
+    pdfPageCount: 2,
+    quickPointers: [
+      `Ministry of Petroleum approves Phase-II commercial crude storage at Chandikhol (Odisha) and Padur (Karnataka).`,
+      `PM GatiShakti National Master Plan completes GIS mapping of 1,400+ inter-state multimodal logistics projects.`,
+      `India Semiconductor Mission (ISM) clears incentives for second commercial compound semiconductor OSAT facility.`,
+      `Central Water Commission (CWC) and IMD release updated FloodWatch India 2.0 app with real-time basin telemetry.`
+    ],
+    mcqs: [
+      {
+        id: `q-${yesterdayKey.replace(/-/g, '')}-1`,
+        category: 'Energy Security & Infrastructure',
+        targetExam: 'UPSC GS-3 / SSC CGL',
+        tagClass: 'bg-amber-100 text-amber-900 border-amber-200',
+        question: 'Under Phase-I of India\'s Strategic Petroleum Reserves (SPR) program managed by ISPRL, in which three subterranean rock cavern locations were storage facilities constructed?',
+        options: [
+          'Visakhapatnam, Mangaluru, and Padur',
+          'Jamnagar, Kochi, and Paradip',
+          'Barmer, Ankleshwar, and Digboi',
+          'Haldia, Mumbai, and Chennai'
+        ],
+        correctAnswer: 0,
+        explanation: 'Phase-I Strategic Petroleum Reserves (SPR) with 5.33 MMT total capacity were established in underground rock caverns at Visakhapatnam (Andhra Pradesh), Mangaluru (Karnataka), and Padur (Karnataka).',
+        examTrap: 'Location trap: Jamnagar and Paradip are major commercial oil refineries, not strategic underground rock cavern reserves.'
+      },
+      {
+        id: `q-${yesterdayKey.replace(/-/g, '')}-2`,
+        category: 'National Schemes & Planning',
+        targetExam: 'SSC CGL / UPSC GS-3',
+        tagClass: 'bg-emerald-100 text-emerald-900 border-emerald-200',
+        question: 'The PM GatiShakti National Master Plan for multi-modal connectivity was launched based on how many core economic pillars?',
+        options: ['4 Pillars', '6 Pillars', '7 Pillars (Engines)', '10 Pillars'],
+        correctAnswer: 2,
+        explanation: 'PM GatiShakti is driven by 7 engines of economic transformation: Roads, Railways, Airports, Ports, Mass Transport, Waterways, and Logistics Infrastructure.',
+        examTrap: 'Number trap: The 7 engines are frequently tested in Staff Selection Commission (SSC) and State PSC general studies papers.'
+      },
+      {
+        id: `q-${yesterdayKey.replace(/-/g, '')}-3`,
+        category: 'Industrial Policy & Electronics',
+        targetExam: 'UPSC GS-3 / RRB',
+        tagClass: 'bg-blue-100 text-blue-900 border-blue-200',
+        question: 'Under the India Semiconductor Mission (ISM), what percentage of financial fiscal support on a pari-passu basis is provided by the Central Government for establishing semiconductor fabs?',
+        options: ['25% of Project Cost', '35% of Project Cost', '50% of Project Cost', '75% of Project Cost'],
+        correctAnswer: 2,
+        explanation: 'The Government of India provides a uniform 50% fiscal support on a pari-passu basis of the capital expenditure for all technology nodes in Silicon semiconductor fabs, Display fabs, Compound fabs, and OSAT facilities.',
+        examTrap: 'Subsidy rate trap: The incentive was revised to a flat 50% across all node sizes to make India globally competitive.'
+      },
+      {
+        id: `q-${yesterdayKey.replace(/-/g, '')}-4`,
+        category: 'Disaster Management & Water',
+        targetExam: 'UPSC GS-3 / State PSC',
+        tagClass: 'bg-purple-100 text-purple-900 border-purple-200',
+        question: 'Which apex technical organization under the Ministry of Jal Shakti is responsible for national flood forecasting and monitoring river basin reservoirs in India?',
+        options: [
+          'Central Water Commission (CWC)',
+          'National Disaster Management Authority (NDMA)',
+          'Central Ground Water Board (CGWB)',
+          'Inland Waterways Authority of India (IWAI)'
+        ],
+        correctAnswer: 0,
+        explanation: 'The Central Water Commission (CWC) is the premier technical organization in the field of water resources and flood forecasting, operating hundreds of flood forecasting stations across the country.',
+        examTrap: 'Nodal body trap: NDMA issues broad disaster policies, but technical hydrology and river gauge telemetry is handled by CWC.'
+      },
+      {
+        id: `q-${yesterdayKey.replace(/-/g, '')}-5`,
+        category: 'Banking & Macroeconomics',
+        targetExam: 'Banking / RBI Grade B',
+        tagClass: 'bg-rose-100 text-rose-900 border-rose-200',
+        question: 'The difference between total government expenditure and total receipts excluding borrowings is defined as which budgetary metric?',
+        options: ['Revenue Deficit', 'Fiscal Deficit', 'Primary Deficit', 'Effective Revenue Deficit'],
+        correctAnswer: 1,
+        explanation: 'Fiscal Deficit = Total Budgetary Expenditure - (Total Receipts excluding borrowings). It represents the total borrowing requirements of the government from all sources.',
+        examTrap: 'Formula trap: Primary Deficit is Fiscal Deficit minus Interest Payments. Revenue Deficit is Revenue Expenditure minus Revenue Receipts.'
+      }
+    ],
+    currentAffairs: [
+      {
+        id: `ca-${yesterdayKey.replace(/-/g, '')}-1`,
+        num: '01',
+        title: 'Cabinet Committee on Economic Affairs approves commercial crude cavern expansion at Padur and Chandikhol',
+        summary: 'Phase-II expansion under public-private partnership (PPP) will add 6.5 MMT to India\'s strategic petroleum reserve capacity, boosting national crude emergency cover to over 85 days.',
+        exams: [
+          { name: 'UPSC GS-3', tagClass: 'bg-purple-100 text-purple-900 border-purple-200', examCode: 'upsc' },
+          { name: 'Banking', tagClass: 'bg-blue-100 text-blue-900 border-blue-200', examCode: 'bank' }
+        ],
+        examAngle: 'UPSC GS-3: IEA 90-day emergency oil stock holding mandate, vulnerability to Strait of Hormuz chokepoints.',
+        keyTakeaway: 'Nodal Agency: Indian Strategic Petroleum Reserves Limited (ISPRL), Special Purpose Vehicle under MoPNG.',
+        source: 'PIB New Delhi / MoPNG',
+        category: 'Energy & Strategy'
+      },
+      {
+        id: `ca-${yesterdayKey.replace(/-/g, '')}-2`,
+        num: '02',
+        title: 'PM GatiShakti Network Planning Group clears 18 critical highway and port connectivity corridors',
+        summary: 'The infrastructure push integrates last-mile railway sidings with dry ports and major maritime gateways, targeting a reduction in logistics costs from 13% of GDP to under 9%.',
+        exams: [
+          { name: 'UPSC GS-3', tagClass: 'bg-purple-100 text-purple-900 border-purple-200', examCode: 'upsc' },
+          { name: 'SSC CGL', tagClass: 'bg-emerald-100 text-emerald-900 border-emerald-200', examCode: 'ssc' }
+        ],
+        examAngle: 'Economy GS-3: National Logistics Policy (NLP), Bharatmala & Sagarmala synergy, Unified Logistics Interface Platform (ULIP).',
+        keyTakeaway: 'Nodal Body: Logistics Division, DPIIT, Ministry of Commerce and Industry.',
+        source: 'DPIIT Press Release',
+        category: 'Infrastructure & Trade'
+      }
+    ]
+  };
+
+  // 3. DAY BEFORE YESTERDAY (Offset 2)
+  capsules[dayBeforeKey] = {
+    ...BASE_ARCHIVE_CAPSULES['2026-10-02'],
+    dateKey: dayBeforeKey,
+    displayDate: dayBeforeDisplay,
+    dayBadge: dayBeforeKey === '2026-10-02' ? "Gandhi Jayanti & Shastri Jayanti Special" : "Day Before Yesterday Compendium",
+    pdfFileName: `FactHub-Daily-Current-Affairs-${dayBeforeKey}.pdf`
+  };
+
+  // 4. INCLUDE BASE ARCHIVES ALWAYS
+  Object.entries(BASE_ARCHIVE_CAPSULES).forEach(([k, v]) => {
+    if (!capsules[k]) {
+      capsules[k] = v;
+    }
+  });
+
+  return capsules;
+}
+
 export const ExamPrep: React.FC = () => {
-  // Current Selected Date State & Capsules Map
-  const [capsulesMap, setCapsulesMap] = useState<Record<string, DailyCapsuleData>>(DAILY_CAPSULES);
-  const [selectedDateKey, setSelectedDateKey] = useState<string>('2026-10-02');
-  const activeCapsule = capsulesMap[selectedDateKey] || DAILY_CAPSULES['2026-10-02'];
+  const todayKey = getRelativeDateKey(0);
+  const yesterdayKey = getRelativeDateKey(1);
+  const dayBeforeKey = getRelativeDateKey(2);
+
+  // Current Selected Date State & Capsules Map (Starts dynamically on Today)
+  const [capsulesMap, setCapsulesMap] = useState<Record<string, DailyCapsuleData>>(() => getDefaultDailyCapsules());
+  const [selectedDateKey, setSelectedDateKey] = useState<string>(todayKey);
+  const [customCalendarDate, setCustomCalendarDate] = useState<string>(todayKey);
+  const activeCapsule = capsulesMap[selectedDateKey] || capsulesMap[todayKey] || Object.values(capsulesMap)[0];
 
   // Live AI Generator State
   const [isGeneratingLive, setIsGeneratingLive] = useState<boolean>(false);
@@ -467,7 +792,7 @@ export const ExamPrep: React.FC = () => {
 
   // Live AI Capsule Generation Trigger
   const handleGenerateLiveCapsule = async (targetDateKey?: string, forceRefresh: boolean = true) => {
-    const dateToUse = targetDateKey || selectedDateKey || '2026-10-02';
+    const dateToUse = targetDateKey || selectedDateKey || todayKey;
     setIsGeneratingLive(true);
     setGenerationStep('🔍 Connecting to Gemini 3.8 Flash & scanning live Google Search for today’s breaking news...');
 
@@ -509,6 +834,7 @@ export const ExamPrep: React.FC = () => {
           [data.capsule.dateKey]: data.capsule
         }));
         setSelectedDateKey(data.capsule.dateKey);
+        setCustomCalendarDate(data.capsule.dateKey);
         handleRestartQuiz();
         showToast(`✨ Live AI Capsule for ${data.capsule.displayDate} successfully generated!`);
       }
@@ -527,12 +853,23 @@ export const ExamPrep: React.FC = () => {
   // Reset quiz state when switching dates
   const handleSelectDate = (dateKey: string) => {
     setSelectedDateKey(dateKey);
+    setCustomCalendarDate(dateKey);
     setCurrentMcqIndex(0);
     setSelectedAnswers({});
     setShowExplanation({});
     setScore(0);
     setIsQuizCompleted(false);
     setPdfPreviewPage(1);
+  };
+
+  const handleSelectDateAndScroll = (dateKey: string) => {
+    handleSelectDate(dateKey);
+    const targetElement = document.getElementById('step-1-mcq-section');
+    if (targetElement) {
+      targetElement.scrollIntoView({ behavior: 'smooth' });
+    } else {
+      window.scrollTo({ top: 0, behavior: 'smooth' });
+    }
   };
 
   const handleSelectOption = (qIdx: number, optionIdx: number) => {
@@ -711,29 +1048,59 @@ export const ExamPrep: React.FC = () => {
                 <span>Select Date:</span>
               </span>
 
-              {Object.values(capsulesMap).map((capsule) => {
-                const isSelected = capsule.dateKey === selectedDateKey;
-                return (
-                  <button
-                    key={capsule.dateKey}
-                    onClick={() => handleSelectDate(capsule.dateKey)}
-                    className={cn(
-                      "px-3.5 py-1.5 rounded-xl text-xs font-bold transition-all flex items-center gap-1.5 shrink-0 cursor-pointer border",
-                      isSelected
-                        ? "bg-gold text-black border-gold shadow-md font-black scale-105"
-                        : "bg-white/10 text-white/80 hover:bg-white/20 border-white/10"
-                    )}
-                  >
-                    <span>{capsule.displayDate}</span>
-                    {capsule.dateKey === '2026-10-02' && (
-                      <span className="text-[9px] font-mono px-1 py-0.2 rounded bg-black/20 text-black uppercase font-bold">Today</span>
-                    )}
-                    {(capsule as any).isLiveAIGenerated && (
-                      <span className="text-[9px] font-mono px-1 py-0.2 rounded bg-amber-400 text-black font-black uppercase">Live</span>
-                    )}
-                  </button>
-                );
-              })}
+              {Object.values(capsulesMap)
+                .sort((a, b) => b.dateKey.localeCompare(a.dateKey))
+                .slice(0, 5)
+                .map((capsule) => {
+                  const isSelected = capsule.dateKey === selectedDateKey;
+                  const isToday = capsule.dateKey === todayKey;
+                  const isYesterday = capsule.dateKey === yesterdayKey;
+                  const isDayBefore = capsule.dateKey === dayBeforeKey;
+
+                  return (
+                    <button
+                      key={capsule.dateKey}
+                      onClick={() => handleSelectDate(capsule.dateKey)}
+                      className={cn(
+                        "px-3.5 py-1.5 rounded-xl text-xs font-bold transition-all flex items-center gap-1.5 shrink-0 cursor-pointer border",
+                        isSelected
+                          ? "bg-gold text-black border-gold shadow-md font-black scale-105"
+                          : "bg-white/10 text-white/80 hover:bg-white/20 border-white/10"
+                      )}
+                    >
+                      <span>{capsule.displayDate}</span>
+                      {isToday && (
+                        <span className="text-[9px] font-mono px-1.5 py-0.5 rounded bg-black/20 text-black uppercase font-black">Today</span>
+                      )}
+                      {isYesterday && (
+                        <span className="text-[9px] font-mono px-1.5 py-0.5 rounded bg-white/20 text-white uppercase font-bold">Yesterday</span>
+                      )}
+                      {isDayBefore && (
+                        <span className="text-[9px] font-mono px-1.5 py-0.5 rounded bg-white/20 text-white uppercase font-bold">Day Before</span>
+                      )}
+                      {(capsule as any).isLiveAIGenerated && (
+                        <span className="text-[9px] font-mono px-1.5 py-0.5 rounded bg-amber-400 text-black font-black uppercase">Live</span>
+                      )}
+                    </button>
+                  );
+                })}
+
+              {/* Quick Calendar Date Input */}
+              <div className="flex items-center gap-1.5 bg-white/10 border border-white/15 px-2.5 py-1 rounded-xl text-xs text-white/80 shrink-0">
+                <Calendar size={13} className="text-gold shrink-0" />
+                <input
+                  type="date"
+                  value={selectedDateKey}
+                  max={todayKey}
+                  onChange={(e) => {
+                    if (e.target.value) {
+                      handleSelectDate(e.target.value);
+                    }
+                  }}
+                  className="bg-transparent text-white text-xs font-mono outline-none cursor-pointer"
+                  title="Pick any past date from calendar"
+                />
+              </div>
             </div>
 
             {/* Font sizing toggle */}
@@ -804,7 +1171,7 @@ export const ExamPrep: React.FC = () => {
               ) : (
                 <>
                   <RefreshCw size={13} />
-                  <span>Generate Today's Live AI Capsule</span>
+                  <span>{selectedDateKey === todayKey ? "Generate Today's Live AI Capsule" : `Generate AI Capsule (${activeCapsule.displayDate})`}</span>
                 </>
               )}
             </button>
@@ -827,7 +1194,7 @@ export const ExamPrep: React.FC = () => {
             SECTION 1: TOP — 5 MCQs WITH EXPLANATIONS
             (Explicitly Placed ABOVE Daily Current Affairs)
            ═══════════════════════════════════════════════════════════ */}
-        <section className="bg-white dark:bg-[#1a1b22] rounded-3xl border border-black/10 dark:border-white/10 p-6 sm:p-8 shadow-sm space-y-6">
+        <section id="step-1-mcq-section" className="bg-white dark:bg-[#1a1b22] rounded-3xl border border-black/10 dark:border-white/10 p-6 sm:p-8 shadow-sm space-y-6">
           
           {/* Section Header */}
           <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 border-b border-black/10 dark:border-white/10 pb-4">
@@ -1255,159 +1622,236 @@ export const ExamPrep: React.FC = () => {
 
 
         {/* ═══════════════════════════════════════════════════════════
-            SECTION 3: BOTTOM — DOWNLOADABLE & PRINTABLE PDF CAPSULE
-            (Explicitly Placed BELOW Daily Current Affairs)
+            STEP 4: DATE-WISE CURRENT AFFAIRS ARCHIVE & REVISION CENTER
+            (Today, Yesterday, Day Before Yesterday & Custom Date Selector)
            ═══════════════════════════════════════════════════════════ */}
-        <section id="download-pdf-section" className="bg-[#09142A] text-white rounded-3xl p-6 sm:p-10 border border-white/10 shadow-xl space-y-8 relative overflow-hidden">
+        <section id="date-archive-section" className="bg-[#09142A] text-white rounded-3xl p-6 sm:p-10 border border-white/10 shadow-xl space-y-8 relative overflow-hidden">
           <div className="absolute top-0 right-0 w-80 h-80 bg-blue-600/10 rounded-full blur-3xl pointer-events-none" />
 
           {/* Section Header */}
           <div className="flex flex-col md:flex-row md:items-center justify-between gap-6 relative z-10 border-b border-white/10 pb-6">
             <div className="space-y-2">
               <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-gold/20 text-gold font-mono text-[11px] font-bold uppercase tracking-wider border border-gold/30">
-                <FileText size={14} />
-                <span>Step 4: Offline Revision & Download Center</span>
+                <Calendar size={14} />
+                <span>Step 4: Date-Wise Current Affairs Archive & Revision Center</span>
               </div>
               <h2 className="text-2xl sm:text-3xl font-serif font-black text-white leading-tight">
-                Download Daily Current Affairs PDF ({activeCapsule.displayDate})
+                Date-Wise Exam Compendiums (Today, Yesterday & Past Dates)
               </h2>
-              <p className="text-xs sm:text-sm text-white/70 max-w-xl leading-relaxed">
-                Print-friendly 2-page A4 study capsule containing the 5 questions with detailed explanations on Page 1, and today's curated news with exam angles on Page 2.
+              <p className="text-xs sm:text-sm text-white/70 max-w-2xl leading-relaxed">
+                Revisit past days or practice today’s edition. Seamlessly switch between Today, Yesterday, Day Before Yesterday, or select any calendar date to practice MCQs and download print-ready 2-page A4 PDF capsules.
               </p>
             </div>
 
-            {/* Action Buttons */}
-            <div className="flex flex-wrap items-center gap-3">
+            {/* Quick Actions */}
+            <div className="flex flex-wrap items-center gap-2">
               <button
-                onClick={() => setShowPdfPreviewModal(true)}
-                className="inline-flex items-center gap-2 px-4 py-2.5 rounded-xl bg-white/10 hover:bg-white/20 text-white font-bold text-xs border border-white/15 transition-all cursor-pointer shadow-sm"
+                onClick={() => handleSelectDateAndScroll(todayKey)}
+                className={cn(
+                  "px-4 py-2 rounded-xl text-xs font-bold transition-all border cursor-pointer",
+                  selectedDateKey === todayKey
+                    ? "bg-gold text-black border-gold shadow-md font-black"
+                    : "bg-white/10 hover:bg-white/20 text-white border-white/15"
+                )}
               >
-                <Eye size={14} />
-                <span>Preview Capsule</span>
+                Today ({getRelativeDisplayDate(0)})
               </button>
-
               <button
-                onClick={handlePrintCapsule}
-                className="inline-flex items-center gap-2 px-4 py-2.5 rounded-xl bg-white/15 hover:bg-white/25 text-white font-bold text-xs border border-white/20 transition-all cursor-pointer shadow-sm"
-                title="Print 2-page clean A4 handout without website clutter"
+                onClick={() => handleSelectDateAndScroll(yesterdayKey)}
+                className={cn(
+                  "px-4 py-2 rounded-xl text-xs font-bold transition-all border cursor-pointer",
+                  selectedDateKey === yesterdayKey
+                    ? "bg-gold text-black border-gold shadow-md font-black"
+                    : "bg-white/10 hover:bg-white/20 text-white border-white/15"
+                )}
               >
-                <Printer size={14} />
-                <span>Print Handout</span>
+                Yesterday ({getRelativeDisplayDate(1)})
               </button>
-
               <button
-                onClick={handleDownloadPdf}
-                className="inline-flex items-center gap-2 px-6 py-2.5 rounded-xl bg-gold hover:bg-gold-l text-black font-bold text-xs shadow-lg transition-all cursor-pointer"
+                onClick={() => handleSelectDateAndScroll(dayBeforeKey)}
+                className={cn(
+                  "px-4 py-2 rounded-xl text-xs font-bold transition-all border cursor-pointer",
+                  selectedDateKey === dayBeforeKey
+                    ? "bg-gold text-black border-gold shadow-md font-black"
+                    : "bg-white/10 hover:bg-white/20 text-white border-white/15"
+                )}
               >
-                <Download size={14} />
-                <span>Download PDF ({activeCapsule.pdfFileSize})</span>
+                Day Before ({getRelativeDisplayDate(2)})
               </button>
             </div>
           </div>
 
-          {/* Interactive 2-Page Visual Handout Preview */}
-          <div className="relative z-10 space-y-4">
-            <div className="flex items-center justify-between text-xs text-white/60 font-mono">
-              <div className="flex items-center gap-2">
-                <span>Capsule Layout Preview:</span>
-                <span className="bg-white/10 text-white px-2 py-0.5 rounded text-[10px]">
-                  {pdfPreviewPage === 1 ? 'Page 1: 5 MCQs & Answers' : 'Page 2: Current Affairs Digest'}
-                </span>
-              </div>
-              <div className="flex items-center gap-2">
-                <button
-                  onClick={() => setPdfPreviewPage(1)}
-                  className={cn("px-2.5 py-1 rounded text-xs font-bold transition-all cursor-pointer", pdfPreviewPage === 1 ? "bg-gold text-black" : "bg-white/10 text-white hover:bg-white/20")}
+          {/* 3 Main Date Highlight Cards: Today, Yesterday, Day Before */}
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-5 relative z-10">
+            {[
+              {
+                dateKey: todayKey,
+                label: 'TODAY',
+                badgeText: "🟢 Today's Live Edition",
+                badgeClass: 'bg-emerald-500/20 text-emerald-300 border-emerald-500/30'
+              },
+              {
+                dateKey: yesterdayKey,
+                label: 'YESTERDAY',
+                badgeText: "⏪ Yesterday's Edition",
+                badgeClass: 'bg-blue-500/20 text-blue-300 border-blue-500/30'
+              },
+              {
+                dateKey: dayBeforeKey,
+                label: 'DAY BEFORE',
+                badgeText: dayBeforeKey === '2026-10-02' ? '🏛️ Gandhi & Shastri Special' : '⏮️ Day Before Yesterday',
+                badgeClass: 'bg-purple-500/20 text-purple-300 border-purple-500/30'
+              }
+            ].map((item) => {
+              const cap = capsulesMap[item.dateKey] || capsulesMap[todayKey];
+              const isSelected = selectedDateKey === item.dateKey;
+
+              return (
+                <div
+                  key={item.dateKey}
+                  className={cn(
+                    "rounded-2xl p-5 border transition-all flex flex-col justify-between space-y-4",
+                    isSelected
+                      ? "bg-gradient-to-b from-white/15 to-white/5 border-gold shadow-xl ring-2 ring-gold/40 scale-[1.02]"
+                      : "bg-white/5 border-white/10 hover:border-white/20 hover:bg-white/10"
+                  )}
                 >
-                  Page 1
+                  <div className="space-y-3">
+                    <div className="flex items-center justify-between">
+                      <span className={cn("text-[10px] font-mono px-2 py-0.5 rounded-full font-bold border", item.badgeClass)}>
+                        {item.badgeText}
+                      </span>
+                      {isSelected && (
+                        <span className="text-[10px] font-mono font-bold text-gold flex items-center gap-1">
+                          <CheckCircle2 size={12} />
+                          <span>Currently Active</span>
+                        </span>
+                      )}
+                    </div>
+
+                    <div>
+                      <div className="text-lg font-serif font-black text-white">
+                        {cap?.displayDate || item.dateKey}
+                      </div>
+                      <div className="text-xs text-gold/90 font-medium line-clamp-2 mt-1">
+                        {cap?.themeTitle || 'Daily Current Affairs & Practice MCQs'}
+                      </div>
+                    </div>
+
+                    <div className="space-y-1.5 pt-2 border-t border-white/10 text-[11px] text-white/70">
+                      <div className="flex items-center gap-2">
+                        <CheckCircle2 size={12} className="text-emerald-400 shrink-0" />
+                        <span>5 Practice MCQs with Examiner Traps</span>
+                      </div>
+                      <div className="flex items-center gap-2">
+                        <CheckCircle2 size={12} className="text-blue-400 shrink-0" />
+                        <span>4 Curated PIB & Gazette News Briefs</span>
+                      </div>
+                      <div className="flex items-center gap-2">
+                        <CheckCircle2 size={12} className="text-purple-400 shrink-0" />
+                        <span>2-Page A4 PDF Handout Ready ({cap?.pdfFileSize || '184 KB'})</span>
+                      </div>
+                    </div>
+                  </div>
+
+                  <div className="pt-3 border-t border-white/10 flex flex-col gap-2">
+                    <button
+                      onClick={() => handleSelectDateAndScroll(item.dateKey)}
+                      className={cn(
+                        "w-full py-2.5 rounded-xl font-bold text-xs transition-all flex items-center justify-center gap-1.5 cursor-pointer shadow-sm",
+                        isSelected
+                          ? "bg-gold text-black font-black"
+                          : "bg-white/10 hover:bg-white/20 text-white"
+                      )}
+                    >
+                      <BookOpen size={13} />
+                      <span>{isSelected ? 'Currently Loaded (Go to MCQs)' : `Load & Practice (${item.label})`}</span>
+                    </button>
+
+                    <button
+                      onClick={() => {
+                        try {
+                          downloadCurrentAffairsPdf(cap);
+                          showToast(`📥 PDF Capsule downloaded: "${cap.pdfFileName}"`);
+                        } catch {
+                          showToast(`📥 PDF ready for ${cap.displayDate}`);
+                        }
+                      }}
+                      className="w-full py-2 rounded-xl bg-white/5 hover:bg-white/15 text-white/90 font-semibold text-xs transition-all flex items-center justify-center gap-1.5 border border-white/10 cursor-pointer"
+                    >
+                      <Download size={13} />
+                      <span>Download PDF ({cap?.pdfFileSize || '184 KB'})</span>
+                    </button>
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+
+          {/* Interactive Date Picker & Custom Archive Explorer */}
+          <div className="relative z-10 bg-white/5 border border-white/10 rounded-2xl p-5 sm:p-6 backdrop-blur-sm space-y-4">
+            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 border-b border-white/10 pb-4">
+              <div>
+                <h3 className="font-serif font-bold text-base text-white flex items-center gap-2">
+                  <Calendar size={16} className="text-gold" />
+                  <span>Explore Past Current Affairs Archive or Generate Any Date</span>
+                </h3>
+                <p className="text-xs text-white/70">
+                  Pick any custom date to practice questions or generate an on-demand AI compendium.
+                </p>
+              </div>
+
+              {/* Date Input Box */}
+              <div className="flex items-center gap-2">
+                <input
+                  type="date"
+                  value={customCalendarDate}
+                  max={todayKey}
+                  onChange={(e) => setCustomCalendarDate(e.target.value)}
+                  className="bg-white/10 border border-white/20 text-white text-xs px-3 py-2 rounded-xl font-mono outline-none focus:border-gold cursor-pointer"
+                />
+                <button
+                  onClick={() => handleSelectDateAndScroll(customCalendarDate)}
+                  className="px-4 py-2 rounded-xl bg-gold hover:bg-gold-l text-black font-bold text-xs shadow-md transition-all cursor-pointer"
+                >
+                  Load Date
                 </button>
                 <button
-                  onClick={() => setPdfPreviewPage(2)}
-                  className={cn("px-2.5 py-1 rounded text-xs font-bold transition-all cursor-pointer", pdfPreviewPage === 2 ? "bg-gold text-black" : "bg-white/10 text-white hover:bg-white/20")}
+                  onClick={() => handleGenerateLiveCapsule(customCalendarDate, true)}
+                  disabled={isGeneratingLive}
+                  className="px-3.5 py-2 rounded-xl bg-white/15 hover:bg-white/25 text-white font-bold text-xs border border-white/20 transition-all flex items-center gap-1.5 cursor-pointer"
+                  title="Generate live capsule for this date using Gemini"
                 >
-                  Page 2
+                  <Sparkles size={13} className="text-gold" />
+                  <span>Generate Live AI</span>
                 </button>
               </div>
             </div>
 
-            {/* Embedded Clean Sheet Mockup */}
-            <div className="bg-[#FAF8F5] text-ink p-6 sm:p-8 rounded-2xl shadow-2xl border-4 border-white/20 font-serif space-y-6">
-              
-              {/* Sheet Header */}
-              <div className="flex items-center justify-between border-b-2 border-[#09142A] pb-3 text-xs">
-                <div>
-                  <div className="text-xl font-serif font-black tracking-tight text-[#09142A]">
-                    F<span className="text-gold">A</span>ctHub Exam Prep Capsule
-                  </div>
-                  <div className="text-[10px] font-mono text-ink3 font-bold uppercase tracking-wider">
-                    Official Daily Study Compendium • {activeCapsule.displayDate}
-                  </div>
-                </div>
-                <div className="text-right font-mono text-[10px] text-ink3">
-                  <div>Page {pdfPreviewPage} of 2</div>
-                  <div className="text-emerald-700 font-bold">Print-Optimized A4</div>
-                </div>
-              </div>
-
-              {/* Page 1 Preview: Questions + Answers */}
-              {pdfPreviewPage === 1 && (
-                <div className="space-y-4">
-                  <div className="text-xs font-mono font-bold uppercase tracking-wider text-[#1A56DB] border-b border-black/10 pb-1">
-                    Part I: 5 Daily Practice MCQs & Question Setter Traps
-                  </div>
-                  <div className="grid grid-cols-1 gap-3">
-                    {activeCapsule.mcqs.slice(0, 3).map((q, idx) => (
-                      <div key={q.id} className="text-xs p-3 bg-white rounded-xl border border-black/10 space-y-1.5">
-                        <div className="font-bold text-ink">
-                          Q{idx + 1}. [{q.targetExam}] {q.question}
-                        </div>
-                        <div className="grid grid-cols-2 gap-2 text-[11px] text-ink2">
-                          {q.options.map((opt, oI) => (
-                            <div key={oI} className={cn("p-1 rounded", oI === q.correctAnswer && "bg-emerald-100 text-emerald-900 font-bold")}>
-                              {String.fromCharCode(65 + oI)}. {opt} {oI === q.correctAnswer && "✓"}
-                            </div>
-                          ))}
-                        </div>
-                        <div className="text-[11px] text-ink3 italic bg-amber-50 p-2 rounded border border-amber-200">
-                          <strong>💡 Fact:</strong> {q.explanation}
-                        </div>
-                      </div>
-                    ))}
-                    <div className="text-center text-xs font-mono text-ink3 py-1">
-                      + 2 more questions included on Page 1 of the downloadable PDF capsule...
-                    </div>
-                  </div>
-                </div>
-              )}
-
-              {/* Page 2 Preview: News Digest */}
-              {pdfPreviewPage === 2 && (
-                <div className="space-y-4">
-                  <div className="text-xs font-mono font-bold uppercase tracking-wider text-[#1A56DB] border-b border-black/10 pb-1">
-                    Part II: Daily Current Affairs Digest & Exam Pointers
-                  </div>
-                  <div className="space-y-3">
-                    {activeCapsule.currentAffairs.map((ca, idx) => (
-                      <div key={ca.id} className="text-xs p-3 bg-white rounded-xl border border-black/10 space-y-1">
-                        <div className="font-bold text-ink text-sm">
-                          0{idx + 1}. {ca.title}
-                        </div>
-                        <p className="text-ink2 text-xs">{ca.summary}</p>
-                        <div className="text-[11px] text-blue-900 bg-blue-50 p-2 rounded border border-blue-200 font-sans">
-                          <strong>🎯 Prelims Focus:</strong> {ca.examAngle}
-                        </div>
-                      </div>
-                    ))}
-                  </div>
-                </div>
-              )}
-
-              {/* Sheet Watermark & Footer */}
-              <div className="border-t border-black/10 pt-3 flex items-center justify-between text-[10px] font-mono text-ink3">
-                <span>Free Student Handout • FactHub Educational Initiative</span>
-                <span>Download daily at facthub.com/exam-prep</span>
-              </div>
-
+            {/* Quick Historical Presets Strip */}
+            <div className="flex flex-wrap items-center gap-2 text-xs">
+              <span className="text-white/50 font-mono text-[11px] uppercase">Quick Past Presets:</span>
+              {Object.keys(capsulesMap)
+                .sort((a, b) => b.localeCompare(a))
+                .slice(0, 7)
+                .map((key) => {
+                  const cap = capsulesMap[key];
+                  const isCurrent = key === selectedDateKey;
+                  return (
+                    <button
+                      key={key}
+                      onClick={() => handleSelectDateAndScroll(key)}
+                      className={cn(
+                        "px-3 py-1 rounded-lg text-xs font-semibold transition-all border cursor-pointer",
+                        isCurrent
+                          ? "bg-gold text-black border-gold font-bold shadow-sm"
+                          : "bg-white/10 text-white/80 hover:bg-white/20 border-white/10"
+                      )}
+                    >
+                      {cap?.displayDate || key}
+                    </button>
+                  );
+                })}
             </div>
           </div>
 
