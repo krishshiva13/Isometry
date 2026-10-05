@@ -1,0 +1,26 @@
+{
+  "id": "/",
+  "name": "FactHub - Today in History & Daily Quizzes",
+  "short_name": "FactHub",
+  "description": "Daily historical facts, competitive exam compendiums, and interactive trivia quizzes.",
+  "start_url": "/",
+  "scope": "/",
+  "display": "standalone",
+  "orientation": "portrait-primary",
+  "theme_color": "#c8960c",
+  "background_color": "#faf8f3",
+  "icons": [
+    {
+      "src": "/favicon.jpg",
+      "sizes": "192x192",
+      "type": "image/jpeg",
+      "purpose": "any"
+    },
+    {
+      "src": "/favicon.jpg",
+      "sizes": "512x512",
+      "type": "image/jpeg",
+      "purpose": "any"
+    }
+  ]
+}

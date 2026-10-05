@@ -122,6 +122,22 @@ service cloud.firestore {
         && data.currentAffairs is list;
     }
 
+    function isValidLeaderboardEntry(data) {
+      let requiredFields = ['userName', 'score', 'totalQuestions', 'accuracy', 'quizDate'];
+      return data.keys().hasAll(requiredFields)
+        && data.userName is string && data.userName.size() <= 80
+        && data.score is number && data.score >= 0
+        && data.totalQuestions is number && data.totalQuestions > 0
+        && data.accuracy is number && data.accuracy >= 0 && data.accuracy <= 100
+        && data.quizDate is string && data.quizDate.size() <= 32
+        && (!('userId' in data) || data.userId is string)
+        && (!('userPhoto' in data) || data.userPhoto is string)
+        && (!('timeTakenSeconds' in data) || data.timeTakenSeconds is number)
+        && (!('category' in data) || data.category is string)
+        && (!('badge' in data) || data.badge is string)
+        && (!('createdAt' in data) || data.createdAt is string || data.createdAt == request.time);
+    }
+
     function isValidUserProfile(data) {
       return (!('uid' in data) || data.uid == request.auth.uid)
         && (!('name' in data) || data.name is string)
@@ -183,6 +199,12 @@ service cloud.firestore {
       allow delete: if isAdmin();
     }
 
+    match /quiz_leaderboard/{entryId} {
+      allow read: if true;
+      allow create: if isValidLeaderboardEntry(incoming());
+      allow update, delete: if isAdmin();
+    }
+
     match /users/{uid} {
       allow get: if isSignedIn() && (request.auth.uid == uid || isAdmin());
       allow list: if isAdmin();
@@ -190,6 +212,10 @@ service cloud.firestore {
       allow update: if isSignedIn() && request.auth.uid == uid && isValidUserProfile(incoming());
 
       match /bookmarks/{bookmarkId} {
+        allow read, write: if isSignedIn() && request.auth.uid == uid;
+      }
+
+      match /read_later/{articleId} {
         allow read, write: if isSignedIn() && request.auth.uid == uid;
       }
     }

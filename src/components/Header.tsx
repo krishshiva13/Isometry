@@ -10,6 +10,7 @@ import { AIContentCreatorModal } from './admin/AIContentCreatorModal';
 import { ThemeSwitcher } from './common/ThemeSwitcher';
 import { NotificationReminderModal } from './common/NotificationReminderModal';
 import { UserProfileProgressModal } from './UserProfileProgressModal';
+import { HeaderSearchModal } from './search/HeaderSearchModal';
 
 export const Header = () => {
   const [isMenuOpen, setIsMenuOpen] = useState(false);
@@ -20,10 +21,23 @@ export const Header = () => {
   const [isAICreatorOpen, setIsAICreatorOpen] = useState(false);
   const [isReminderModalOpen, setIsReminderModalOpen] = useState(false);
   const [isProgressModalOpen, setIsProgressModalOpen] = useState(false);
+  const [profileDefaultTab, setProfileDefaultTab] = useState<'overview' | 'quizzes' | 'saved' | 'read_later'>('overview');
   const [isProfileOpen, setIsProfileOpen] = useState(false);
   const profileMenuRef = React.useRef<HTMLDivElement>(null);
   const { user, isAdmin } = useAuth();
   const navigate = useNavigate();
+
+  // Global Cmd+K / Ctrl+K keyboard shortcut to open search
+  React.useEffect(() => {
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if ((e.metaKey || e.ctrlKey) && e.key.toLowerCase() === 'k') {
+        e.preventDefault();
+        setIsSearchOpen(prev => !prev);
+      }
+    };
+    window.addEventListener('keydown', handleKeyDown);
+    return () => window.removeEventListener('keydown', handleKeyDown);
+  }, []);
 
   React.useEffect(() => {
     const handleClickOutside = (event: MouseEvent) => {
@@ -50,6 +64,7 @@ export const Header = () => {
   ];
 
   const studyTools = [
+    { name: 'Read Later List', path: '/read-later', emoji: '📖', desc: 'Your saved personal reading queue' },
     { name: 'Bookmarks', path: '/bookmarks', emoji: '🔖', desc: 'Your saved favorite facts' },
     { name: 'Student Notebook', path: '/notebook', emoji: '📓', desc: 'Saved facts & custom notes' },
     { name: 'Flashcards', path: '/flashcards', emoji: '🧠', desc: 'Active recall & memory practice' },
@@ -138,11 +153,14 @@ export const Header = () => {
             {/* Search Button */}
             <button 
               onClick={() => setIsSearchOpen(true)}
-              className="flex items-center gap-1.5 bg-paper2 hover:bg-paper3 border border-black/10 dark:border-white/10 rounded-full px-2.5 sm:px-3 py-1.5 text-xs text-ink3 hover:text-ink transition-all shrink-0"
-              title="Search facts, people, events…"
+              className="flex items-center gap-1.5 bg-paper2 hover:bg-paper3 border border-black/10 dark:border-white/10 rounded-full px-2.5 sm:px-3 py-1.5 text-xs text-ink3 hover:text-ink transition-all shrink-0 cursor-pointer group"
+              title="Search articles, historical figures, quiz topics (⌘K)"
             >
-              <Search size={14} />
+              <Search size={14} className="group-hover:text-gold transition-colors" />
               <span className="hidden xl:inline">Search…</span>
+              <kbd className="hidden sm:inline-block text-[9px] font-mono font-bold px-1.5 py-0.5 rounded bg-black/5 dark:bg-white/10 text-ink3 dark:text-white/60">
+                ⌘K
+              </kbd>
             </button>
 
             {/* 🌓 Theme Switcher (Paper vs Dark) */}
@@ -251,6 +269,24 @@ export const Header = () => {
                       <button
                         onClick={() => {
                           setIsProfileOpen(false);
+                          setProfileDefaultTab('read_later');
+                          setIsProgressModalOpen(true);
+                        }}
+                        className="w-full flex items-center justify-between px-3 py-2 text-xs font-bold text-ink hover:bg-paper2 rounded-xl transition-colors text-left cursor-pointer"
+                      >
+                        <span className="flex items-center gap-2.5">
+                          <Clock size={15} className="text-amber-500" />
+                          <span>Read Later List</span>
+                        </span>
+                        <span className="text-[10px] font-mono px-1.5 py-0.5 rounded bg-amber-500/15 text-amber-800 dark:text-amber-300 font-bold">
+                          PROFILE
+                        </span>
+                      </button>
+
+                      <button
+                        onClick={() => {
+                          setIsProfileOpen(false);
+                          setProfileDefaultTab('overview');
                           setIsProgressModalOpen(true);
                         }}
                         className="w-full flex items-center gap-2.5 px-3 py-2 text-xs font-bold text-ink hover:bg-paper2 rounded-xl transition-colors text-left"
@@ -423,6 +459,7 @@ export const Header = () => {
       <UserProfileProgressModal
         isOpen={isProgressModalOpen}
         onClose={() => setIsProgressModalOpen(false)}
+        defaultTab={profileDefaultTab}
       />
 
       {/* Mobile Nav */}
@@ -606,28 +643,11 @@ export const Header = () => {
         </div>
       )}
 
-      {/* Search Overlay Placeholder */}
-      {isSearchOpen && (
-        <div className="fixed inset-0 z-[300] bg-ink/70 backdrop-blur-sm flex justify-center pt-24 px-4 overflow-hidden" onClick={() => setIsSearchOpen(false)}>
-          <div className="bg-white w-full max-w-2xl rounded-2xl shadow-2xl overflow-hidden h-fit animate-in zoom-in-95 duration-200" onClick={e => e.stopPropagation()}>
-            <div className="flex items-center gap-3 p-4 border-b border-black/10">
-              <Search className="text-ink3" />
-              <input 
-                autoFocus
-                type="text" 
-                placeholder="Search facts, people, events…" 
-                className="flex-1 border-none outline-none text-lg font-sans text-ink"
-              />
-              <button onClick={() => setIsSearchOpen(false)} className="text-ink3 hover:text-ink">
-                <X size={24} />
-              </button>
-            </div>
-            <div className="p-4 text-center text-ink3 text-sm">
-              Start typing to search...
-            </div>
-          </div>
-        </div>
-      )}
+      {/* Search Modal */}
+      <HeaderSearchModal 
+        isOpen={isSearchOpen} 
+        onClose={() => setIsSearchOpen(false)} 
+      />
     </>
   );
 };

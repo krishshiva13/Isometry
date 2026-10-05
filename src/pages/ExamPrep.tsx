@@ -35,6 +35,7 @@ import { notebookService } from '../services/notebookService';
 import { recordQuizCompleted } from '../components/DailyGoalTracker';
 import { PDFDocumentViewer } from '../components/exam/PDFDocumentViewer';
 import { downloadCurrentAffairsPdf } from '../lib/currentAffairsPdfExport';
+import { ExamQuizSummaryModal } from '../components/exam/ExamQuizSummaryModal';
 
 // ═══════════════════════════════════════════════════════════
 // TYPES & DATA STRUCTURES
@@ -745,6 +746,7 @@ export const ExamPrep: React.FC = () => {
   const [showExplanation, setShowExplanation] = useState<Record<number, boolean>>({});
   const [score, setScore] = useState<number>(0);
   const [isQuizCompleted, setIsQuizCompleted] = useState<boolean>(false);
+  const [showQuizSummaryModal, setShowQuizSummaryModal] = useState<boolean>(false);
   const [savedQuestions, setSavedQuestions] = useState<Record<string, boolean>>({});
 
   // Filter & Search
@@ -902,6 +904,7 @@ export const ExamPrep: React.FC = () => {
       setCurrentMcqIndex(prev => prev + 1);
     } else {
       setIsQuizCompleted(true);
+      setShowQuizSummaryModal(true);
     }
   };
 
@@ -1422,13 +1425,22 @@ export const ExamPrep: React.FC = () => {
                 </div>
               </div>
 
-              <a
-                href="#pdf-viewer-section"
-                className="inline-flex items-center gap-1.5 px-4 py-2 bg-emerald-600 hover:bg-emerald-500 text-white rounded-xl text-xs font-bold shadow-sm transition-all whitespace-nowrap cursor-pointer"
-              >
-                <span>Read in PDF Viewer</span>
-                <ChevronRight size={14} />
-              </a>
+              <div className="flex items-center gap-2 flex-wrap self-end sm:self-center">
+                <button
+                  onClick={() => setShowQuizSummaryModal(true)}
+                  className="inline-flex items-center gap-1.5 px-4 py-2 bg-gold hover:bg-gold-l text-black rounded-xl text-xs font-black shadow-sm transition-all whitespace-nowrap cursor-pointer"
+                >
+                  <Award size={14} />
+                  <span>View Test Summary</span>
+                </button>
+                <a
+                  href="#pdf-viewer-section"
+                  className="inline-flex items-center gap-1.5 px-4 py-2 bg-emerald-600 hover:bg-emerald-500 text-white rounded-xl text-xs font-bold shadow-sm transition-all whitespace-nowrap cursor-pointer"
+                >
+                  <span>Read in PDF Viewer</span>
+                  <ChevronRight size={14} />
+                </a>
+              </div>
             </div>
           )}
 
@@ -1973,6 +1985,20 @@ export const ExamPrep: React.FC = () => {
           </div>
         </div>
       )}
+
+      {/* Daily Practice Test Performance & Trap Summary Modal */}
+      <ExamQuizSummaryModal
+        isOpen={showQuizSummaryModal}
+        onClose={() => setShowQuizSummaryModal(false)}
+        mcqs={activeCapsule.mcqs}
+        selectedAnswers={selectedAnswers}
+        score={score}
+        onRetake={handleRestartQuiz}
+        onOpenPdfViewer={() => {
+          const el = document.getElementById('pdf-viewer-section');
+          if (el) el.scrollIntoView({ behavior: 'smooth' });
+        }}
+      />
 
     </div>
   );

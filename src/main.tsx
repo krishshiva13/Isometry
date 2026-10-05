@@ -40,3 +40,12 @@ createRoot(document.getElementById('root')!).render(
   </StrictMode>,
 );
 
+// Register Progressive Web App Service Worker for offline quiz caching & assets
+if ('serviceWorker' in navigator) {
+  window.addEventListener('load', () => {
+    navigator.serviceWorker.register('/sw.js').catch((err) => {
+      console.warn('[SW] Service worker registration skipped:', err);
+    });
+  });
+}
+

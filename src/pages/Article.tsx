@@ -2,7 +2,7 @@ import React, { useEffect, useState, useRef } from 'react';
 import { useParams, Link, useNavigate } from 'react-router-dom';
 import ReactMarkdown from 'react-markdown';
 import { motion } from 'motion/react';
-import { ArrowLeft, Calendar, BookOpen, Share2, Copy, Send, Twitter, Facebook, Edit2, Save, X as CloseIcon, Trash2, ShoppingBag, ExternalLink, ShieldCheck, Plus, BookCheck, Bookmark, Sparkles, Image, Volume2, Award, Target, HelpCircle, CheckCircle2, ChevronDown, ChevronUp, GraduationCap } from 'lucide-react';
+import { ArrowLeft, Calendar, BookOpen, Share2, Copy, Send, Twitter, Facebook, Edit2, Save, X as CloseIcon, Trash2, ShoppingBag, ExternalLink, ShieldCheck, Plus, BookCheck, Bookmark, Sparkles, Image, Volume2, Award, Target, HelpCircle, CheckCircle2, ChevronDown, ChevronUp, GraduationCap, Clock } from 'lucide-react';
 import { Helmet } from 'react-helmet-async';
 import { factService } from '../services/factService';
 import { Fact, AffiliateProduct, QuizMCQ } from '../types';
@@ -13,6 +13,7 @@ import { AudioNarrationPlayer } from '../components/AudioNarrationPlayer';
 import { ShareCardModal } from '../components/ShareCardModal';
 import { SaveToNotebookModal } from '../components/SaveToNotebookModal';
 import { notebookService } from '../services/notebookService';
+import { readLaterService } from '../services/readLaterService';
 import { ArticleHeroImage } from '../components/common/ArticleHeroImage';
 import { ImageUploadField } from '../components/common/ImageUploadField';
 import { MarkdownToolbar } from '../components/common/MarkdownToolbar';
@@ -30,6 +31,7 @@ import { ReadingProgressBar } from '../components/article/ReadingProgressBar';
 import { SocialShareToolbar } from '../components/article/SocialShareToolbar';
 import { RelatedFactsSection } from '../components/article/RelatedFactsSection';
 import { bookmarkService } from '../services/bookmarkService';
+import { userInteractionService } from '../services/userInteractionService';
 
 const DEFAULT_CATEGORY_BOOKS: Record<string, AffiliateProduct[]> = {
   history: [
@@ -387,6 +389,8 @@ export const Article = () => {
   });
   const [isBookmarked, setIsBookmarked] = useState(false);
   const [isTogglingBookmark, setIsTogglingBookmark] = useState(false);
+  const [isReadLater, setIsReadLater] = useState(false);
+  const [isTogglingReadLater, setIsTogglingReadLater] = useState(false);
   const [bookmarkToast, setBookmarkToast] = useState<string | null>(null);
   const navigate = useNavigate();
   const textareaRef = useRef<HTMLTextAreaElement>(null);
@@ -394,8 +398,30 @@ export const Article = () => {
   useEffect(() => {
     if (fact?.id) {
       bookmarkService.isBookmarked(fact.id, user?.uid).then(setIsBookmarked);
+      setIsReadLater(readLaterService.isReadLater(fact.id));
     }
   }, [fact?.id, user?.uid]);
+
+  const handleToggleReadLater = async () => {
+    if (!fact) return;
+    setIsTogglingReadLater(true);
+    try {
+      if (isReadLater) {
+        await readLaterService.removeFromReadLater(fact.id);
+        setIsReadLater(false);
+        setBookmarkToast('Removed from Read Later list');
+      } else {
+        await readLaterService.addToReadLater(fact);
+        setIsReadLater(true);
+        setBookmarkToast('📖 Added to your Read Later list!');
+      }
+      setTimeout(() => setBookmarkToast(null), 2500);
+    } catch (e) {
+      console.warn('Read later toggle error:', e);
+    } finally {
+      setIsTogglingReadLater(false);
+    }
+  };
 
   const handleToggleBookmark = async () => {
     if (!fact) return;
@@ -451,6 +477,7 @@ export const Article = () => {
           } else {
             setFact(data);
             recordFactRead();
+            userInteractionService.recordArticleView(data);
             const allFromCat = await factService.getFacts(data.cat, false, 20, isAdmin);
             setRelated(allFromCat?.filter(f => f.id !== id).slice(0, 4) || []);
           }
@@ -459,6 +486,8 @@ export const Article = () => {
           const localFact = INITIAL_FACTS.find(f => f.id === id);
           if (localFact) {
             setFact(localFact);
+            recordFactRead();
+            userInteractionService.recordArticleView(localFact);
             setRelated(INITIAL_FACTS.filter(f => f.cat === localFact.cat && f.id !== id).slice(0, 4));
           } else {
             setError("Fact not found in our universe.");
@@ -470,6 +499,8 @@ export const Article = () => {
         const localFact = INITIAL_FACTS.find(f => f.id === id);
         if (localFact) {
           setFact(localFact);
+          recordFactRead();
+          userInteractionService.recordArticleView(localFact);
           setRelated(INITIAL_FACTS.filter(f => f.cat === localFact.cat && f.id !== id).slice(0, 4));
         } else {
           setError("Network connection issue. Please check your internet or Firebase configuration.");
@@ -1053,6 +1084,22 @@ export const Article = () => {
               >
                 <Bookmark size={14} className={cn("text-gold transition-transform", isBookmarked && "fill-gold scale-110")} />
                 <span>{isBookmarked ? 'Bookmarked' : 'Bookmark Fact'}</span>
+              </button>
+
+              <button
+                type="button"
+                onClick={handleToggleReadLater}
+                disabled={isTogglingReadLater}
+                className={cn(
+                  "flex items-center gap-1.5 px-3.5 py-2 rounded-2xl font-bold text-xs border transition-all shadow-xs cursor-pointer",
+                  isReadLater
+                    ? "bg-amber-500/20 text-amber-900 dark:text-amber-300 border-amber-500/40 hover:bg-amber-500/30"
+                    : "bg-paper2 hover:bg-amber-500/15 text-ink dark:text-white border-black/10 dark:border-white/10"
+                )}
+                title={isReadLater ? "Click to remove from your Read Later reading list" : "Save this article to your Read Later list"}
+              >
+                <Clock size={14} className={cn("text-amber-500 transition-transform", isReadLater && "scale-110")} />
+                <span>{isReadLater ? 'In Read Later' : 'Read Later'}</span>
               </button>
 
               <button

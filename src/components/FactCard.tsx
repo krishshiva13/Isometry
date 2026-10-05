@@ -1,11 +1,12 @@
 import React, { memo, useState } from 'react';
 import { Link } from 'react-router-dom';
 import { motion } from 'motion/react';
-import { Share2, Bookmark, CheckCircle2, ArrowRight } from 'lucide-react';
+import { Share2, Bookmark, CheckCircle2, ArrowRight, Clock } from 'lucide-react';
 import { cn } from '../lib/utils';
 import { Fact } from '../types';
 import { ShareCardModal } from './ShareCardModal';
 import { recordFactRead } from './DailyGoalTracker';
+import { readLaterService } from '../services/readLaterService';
 
 interface FactCardProps {
   fact: Fact;
@@ -15,6 +16,7 @@ interface FactCardProps {
 
 export const FactCard = memo(({ fact, index, onRead }: FactCardProps) => {
   const [isShareOpen, setIsShareOpen] = useState(false);
+  const [isSavedReadLater, setIsSavedReadLater] = useState(() => readLaterService.isReadLater(fact.id));
 
   const catColors: Record<string, string> = {
     history: 'coral',
@@ -29,6 +31,18 @@ export const FactCard = memo(({ fact, index, onRead }: FactCardProps) => {
   const handleCardClick = () => {
     recordFactRead();
     if (onRead) onRead(fact);
+  };
+
+  const handleToggleReadLater = async (e: React.MouseEvent) => {
+    e.preventDefault();
+    e.stopPropagation();
+    if (isSavedReadLater) {
+      await readLaterService.removeFromReadLater(fact.id);
+      setIsSavedReadLater(false);
+    } else {
+      await readLaterService.addToReadLater(fact);
+      setIsSavedReadLater(true);
+    }
   };
 
   return (
@@ -67,20 +81,38 @@ export const FactCard = memo(({ fact, index, onRead }: FactCardProps) => {
               {fact.cat}
             </div>
 
-            {/* Quick Share Card Trigger Button */}
-            <button
-              type="button"
-              onClick={(e) => {
-                e.preventDefault();
-                e.stopPropagation();
-                setIsShareOpen(true);
-              }}
-              className="p-1.5 rounded-lg text-ink3 hover:text-gold hover:bg-gold/10 transition-colors flex items-center gap-1 text-[11px] font-bold"
-              title="Generate shareable image card"
-            >
-              <Share2 size={13} />
-              <span className="hidden sm:inline">Share</span>
-            </button>
+            <div className="flex items-center gap-1">
+              {/* Quick Read Later Button */}
+              <button
+                type="button"
+                onClick={handleToggleReadLater}
+                className={cn(
+                  "p-1.5 rounded-lg transition-colors flex items-center gap-1 text-[11px] font-bold cursor-pointer",
+                  isSavedReadLater
+                    ? "text-amber-600 bg-amber-500/10 hover:bg-amber-500/20"
+                    : "text-ink3 hover:text-amber-600 hover:bg-amber-500/10"
+                )}
+                title={isSavedReadLater ? "In your Read Later list" : "Save to Read Later"}
+              >
+                <Clock size={13} className={isSavedReadLater ? "fill-amber-500/30" : ""} />
+                <span className="hidden sm:inline">{isSavedReadLater ? 'Saved' : 'Later'}</span>
+              </button>
+
+              {/* Quick Share Card Trigger Button */}
+              <button
+                type="button"
+                onClick={(e) => {
+                  e.preventDefault();
+                  e.stopPropagation();
+                  setIsShareOpen(true);
+                }}
+                className="p-1.5 rounded-lg text-ink3 hover:text-gold hover:bg-gold/10 transition-colors flex items-center gap-1 text-[11px] font-bold cursor-pointer"
+                title="Generate shareable image card"
+              >
+                <Share2 size={13} />
+                <span className="hidden sm:inline">Share</span>
+              </button>
+            </div>
           </div>
           
           <Link

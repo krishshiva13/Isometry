@@ -138,6 +138,7 @@ const AdminAIPanel = lazyWithRetry(() => import('./pages/AdminAIPanel'), 'AdminA
 const DailyStreakChallenge = lazyWithRetry(() => import('./pages/DailyStreakChallenge'), 'DailyStreakChallenge');
 const StudentNotebook = lazyWithRetry(() => import('./pages/StudentNotebook'), 'StudentNotebook');
 const Bookmarks = lazyWithRetry(() => import('./pages/Bookmarks'), 'Bookmarks');
+const ReadLater = lazyWithRetry(() => import('./pages/ReadLater').then(m => m.ReadLater), 'ReadLater');
 const Flashcards = lazyWithRetry(() => import('./pages/Flashcards'), 'Flashcards');
 const CalendarExplorer = lazyWithRetry(() => import('./pages/CalendarExplorer'), 'CalendarExplorer');
 const InteractiveTimeline = lazyWithRetry(() => import('./pages/InteractiveTimeline'), 'InteractiveTimeline');
@@ -202,6 +203,7 @@ export default function App() {
                     <Route path="/daily-streak" element={<DailyStreakChallenge />} />
                     <Route path="/notebook" element={<StudentNotebook />} />
                     <Route path="/bookmarks" element={<Bookmarks />} />
+                    <Route path="/read-later" element={<ReadLater />} />
                     <Route path="/flashcards" element={<Flashcards />} />
                     <Route path="/calendar" element={<CalendarExplorer />} />
                     <Route path="/timeline" element={<InteractiveTimeline />} />

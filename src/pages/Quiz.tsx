@@ -4,12 +4,14 @@ import { motion, AnimatePresence } from 'motion/react';
 import { factService } from '../services/factService';
 import { QuizQuestion } from '../types';
 import { cn } from '../lib/utils';
-import { Sparkles, RefreshCcw, ArrowLeft, LogIn, ShieldCheck, Calendar as CalendarIcon, Plus, Edit2, Trash2, CheckCircle2, HelpCircle, FileText, Check } from 'lucide-react';
+import { Sparkles, RefreshCcw, ArrowLeft, LogIn, ShieldCheck, Calendar as CalendarIcon, Plus, Edit2, Trash2, CheckCircle2, HelpCircle, FileText, Check, Wifi, WifiOff, Clock, Trophy } from 'lucide-react';
 import { useAuth } from '../contexts/AuthContext';
 import { authService } from '../services/authService';
 import { INITIAL_QUIZ } from '../seed';
 import { recordQuizCompleted } from '../components/DailyGoalTracker';
 import { notebookService } from '../services/notebookService';
+import { QuizLeaderboard } from '../components/quiz/QuizLeaderboard';
+import { quizOfflineService } from '../services/quizOfflineService';
 
 const CATEGORIES = ['History', 'Science', 'Inventions', 'Discoveries', 'Birthdays', 'General'];
 
@@ -19,12 +21,34 @@ export const Quiz = () => {
   const [questions, setQuestions] = useState<QuizQuestion[]>([]);
   const [loading, setLoading] = useState(true);
 
-  // Playback state
+  // Playback state & timer
   const [currentIdx, setCurrentIdx] = useState(0);
   const [score, setScore] = useState(0);
   const [answeredIdx, setAnsweredIdx] = useState<number | null>(null);
+  const [quizStartTime, setQuizStartTime] = useState<number>(Date.now());
+  const [elapsedSeconds, setElapsedSeconds] = useState<number>(0);
+
+  // Offline caching & Leaderboard submission state
+  const [isOfflineActive, setIsOfflineActive] = useState<boolean>(!quizOfflineService.isOnline());
+  const [availableOfflineDates, setAvailableOfflineDates] = useState<Array<{ dateKey: string; count: number; categories: string[] }>>([]);
+  const [userLatestScore, setUserLatestScore] = useState<{
+    score: number;
+    total: number;
+    timeTakenSeconds: number;
+    category?: string;
+    quizDate: string;
+  } | null>(null);
 
   const { user, isAdmin } = useAuth();
+
+  // Track network connectivity & cached quizzes
+  useEffect(() => {
+    const unsub = quizOfflineService.subscribeNetworkState((online) => {
+      setIsOfflineActive(!online);
+    });
+    setAvailableOfflineDates(quizOfflineService.getAvailableOfflineQuizzes());
+    return unsub;
+  }, []);
 
   // Admin Mode state
   const [adminTab, setAdminTab] = useState<'manual' | 'ai'>('manual');
@@ -45,26 +69,55 @@ export const Quiz = () => {
   const [aiStatus, setAiStatus] = useState("");
   const [isAiLoading, setIsAiLoading] = useState(false);
 
-  // Load quiz for selected date
+  // Load quiz for selected date with offline fallback
   const loadQuizForDate = async (dateStr: string) => {
     setLoading(true);
     try {
-      const data = await factService.getQuizQuestions(dateStr);
+      let data: QuizQuestion[] | null = null;
+      
+      // 1. Try online fetch if connected
+      if (quizOfflineService.isOnline()) {
+        try {
+          data = await factService.getQuizQuestions(dateStr);
+        } catch (fetchErr) {
+          console.warn('[Quiz] Online fetch failed, checking offline cache:', fetchErr);
+        }
+      }
+
       if (data && data.length > 0) {
         setQuestions(data);
-      } else if (dateStr === 'all') {
-        const allData = await factService.getQuizQuestions('all');
-        setQuestions(allData || INITIAL_QUIZ);
+        quizOfflineService.saveQuizForOffline(dateStr, data);
+        setIsOfflineActive(false);
+      } else if (dateStr === 'all' && data && data.length > 0) {
+        setQuestions(data);
+        quizOfflineService.saveQuizForOffline('all', data);
+        setIsOfflineActive(false);
       } else {
-        // Fallback to initial quiz if none found for that date
-        setQuestions([]);
+        // 2. Check offline local storage cache
+        const cached = quizOfflineService.getCachedQuiz(dateStr);
+        if (cached && cached.length > 0) {
+          setQuestions(cached);
+          setIsOfflineActive(!quizOfflineService.isOnline());
+        } else if (dateStr === 'all') {
+          setQuestions(INITIAL_QUIZ);
+          quizOfflineService.saveQuizForOffline('all', INITIAL_QUIZ);
+        } else {
+          setQuestions([]);
+        }
       }
     } catch (err) {
-      console.error(err);
-      setQuestions([]);
+      console.error('[Quiz] Error loading quiz:', err);
+      const cached = quizOfflineService.getCachedQuiz(dateStr);
+      if (cached && cached.length > 0) {
+        setQuestions(cached);
+        setIsOfflineActive(true);
+      } else {
+        setQuestions([]);
+      }
     } finally {
       setLoading(false);
       restartQuiz();
+      setAvailableOfflineDates(quizOfflineService.getAvailableOfflineQuizzes());
     }
   };
 
@@ -92,6 +145,15 @@ export const Quiz = () => {
   const nextQuestion = () => {
     const nextIdx = currentIdx + 1;
     if (nextIdx >= questions.length && questions.length > 0) {
+      const timeTaken = Math.max(1, Math.round((Date.now() - quizStartTime) / 1000));
+      setElapsedSeconds(timeTaken);
+      setUserLatestScore({
+        score,
+        total: questions.length,
+        timeTakenSeconds: timeTaken,
+        category: questions[0]?.cat || 'General',
+        quizDate: selectedDate
+      });
       try {
         recordQuizCompleted();
         notebookService.recordQuizAttempt(score, questions.length);
@@ -107,6 +169,7 @@ export const Quiz = () => {
     setCurrentIdx(0);
     setScore(0);
     setAnsweredIdx(null);
+    setQuizStartTime(Date.now());
   };
 
   // Save manual question
@@ -263,6 +326,35 @@ export const Quiz = () => {
           </h1>
           <p className="text-ink3 text-sm">Challenge your knowledge with daily facts and trivia</p>
         </div>
+
+        {/* Offline Mode Banner */}
+        {isOfflineActive && (
+          <div className="bg-amber-500/10 border border-amber-500/30 rounded-2xl p-4 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 text-amber-900 dark:text-amber-200">
+            <div className="flex items-center gap-2.5 text-xs font-bold font-mono">
+              <span className="p-1.5 bg-amber-500/20 text-amber-600 dark:text-amber-400 rounded-lg">
+                <WifiOff size={16} />
+              </span>
+              <div>
+                <strong className="block font-bold">⚡ Offline Quiz Mode Active</strong>
+                <span className="opacity-80 text-[11px]">Practicing with cached local storage & service worker. Your scores will queue and sync when reconnected.</span>
+              </div>
+            </div>
+            {availableOfflineDates.length > 0 && (
+              <div className="flex items-center gap-1.5 flex-wrap text-xs font-mono shrink-0">
+                <span className="text-[11px] opacity-70">Cached Quizzes:</span>
+                {availableOfflineDates.slice(0, 3).map((d) => (
+                  <button
+                    key={d.dateKey}
+                    onClick={() => setSelectedDate(d.dateKey)}
+                    className="px-2.5 py-1 rounded-lg bg-amber-500/20 hover:bg-amber-500/30 text-amber-950 dark:text-amber-100 font-bold text-[11px] transition-colors cursor-pointer"
+                  >
+                    {d.dateKey} ({d.count}Q)
+                  </button>
+                ))}
+              </div>
+            )}
+          </div>
+        )}
 
         {/* Date / Calendar Selector Bar */}
         <div className="bg-white border border-black/10 rounded-2xl p-5 shadow-sm space-y-4">
@@ -461,21 +553,45 @@ export const Quiz = () => {
               <div className="text-7xl">🏆</div>
               <div>
                 <h2 className="text-3xl font-serif font-bold mb-2">Quiz Complete!</h2>
-                <p className="text-white/70">Great job completing the daily knowledge check.</p>
+                <p className="text-white/70">Great job completing today's knowledge check.</p>
               </div>
               <div className="text-6xl font-serif font-black text-gold-l">
                 {score} / {questions.length}
               </div>
-              <div className="flex justify-center gap-4">
-                 <button onClick={restartQuiz} className="bg-gold text-ink px-8 py-3 rounded-full font-bold hover:bg-gold-l transition-all">
+
+              <div className="flex flex-wrap items-center justify-center gap-3 text-xs font-mono text-white/90">
+                <span className="px-3 py-1.5 rounded-xl bg-white/10 border border-white/15">
+                  Accuracy: <strong className="text-gold-l">{Math.round((score / Math.max(1, questions.length)) * 100)}%</strong>
+                </span>
+                <span className="px-3 py-1.5 rounded-xl bg-white/10 border border-white/15">
+                  Time: <strong className="text-gold-l">{elapsedSeconds}s</strong>
+                </span>
+                <span className="px-3 py-1.5 rounded-xl bg-white/10 border border-white/15">
+                  Standing: <strong className="text-gold-l">{score === questions.length ? '👑 Top Contender' : score >= 3 ? '⭐ Leaderboard Qualifier' : '📚 Good Effort'}</strong>
+                </span>
+              </div>
+
+              <div className="flex flex-wrap justify-center gap-4 pt-2">
+                 <button onClick={restartQuiz} className="bg-gold text-ink px-8 py-3 rounded-full font-bold hover:bg-gold-l transition-all cursor-pointer">
                     ↺ Try Again
                  </button>
-                 <button onClick={() => location.href='/' } className="bg-white/10 border border-white/20 text-white px-8 py-3 rounded-full font-bold hover:bg-white/20 transition-all">
-                    🏠 Home
+                 <button onClick={() => {
+                   const el = document.getElementById('quiz-leaderboard-section');
+                   if (el) el.scrollIntoView({ behavior: 'smooth' });
+                 }} className="bg-white/15 border border-white/25 text-white px-8 py-3 rounded-full font-bold hover:bg-white/25 transition-all cursor-pointer flex items-center gap-2">
+                    <Trophy size={16} className="text-gold-l" /> View Leaderboard
                  </button>
               </div>
             </div>
           )}
+        </div>
+
+        {/* QUIZ LEADERBOARD COMPONENT */}
+        <div id="quiz-leaderboard-section" className="scroll-mt-8">
+          <QuizLeaderboard
+            currentDate={selectedDate}
+            userLatestScore={userLatestScore}
+          />
         </div>
 
         {/* ADMIN QUIZ EDITOR PANEL - Only visible to verified administrators */}

@@ -12,7 +12,11 @@ import {
   BarChart3,
   PieChart as PieIcon,
   ShieldCheck,
-  Zap
+  Zap,
+  Clock,
+  Circle,
+  ArrowRight,
+  Trash2
 } from 'lucide-react';
 import { 
   ResponsiveContainer, 
@@ -31,10 +35,14 @@ import {
 import { notebookService } from '../services/notebookService';
 import { getDailyGoalData } from './DailyGoalTracker';
 import { useAuth } from '../contexts/AuthContext';
+import { readLaterService, ReadLaterItem } from '../services/readLaterService';
+import { Link } from 'react-router-dom';
+import { cn } from '../lib/utils';
 
 interface UserProfileProgressModalProps {
   isOpen: boolean;
   onClose: () => void;
+  defaultTab?: 'overview' | 'quizzes' | 'saved' | 'read_later';
 }
 
 const CATEGORY_COLORS: Record<string, string> = {
@@ -49,9 +57,38 @@ const CATEGORY_COLORS: Record<string, string> = {
 export const UserProfileProgressModal: React.FC<UserProfileProgressModalProps> = ({
   isOpen,
   onClose,
+  defaultTab = 'overview',
 }) => {
   const { user } = useAuth();
-  const [activeTab, setActiveTab] = useState<'overview' | 'quizzes' | 'saved'>('overview');
+  const [activeTab, setActiveTab] = useState<'overview' | 'quizzes' | 'saved' | 'read_later'>(defaultTab);
+  const [readLaterItems, setReadLaterItems] = useState<ReadLaterItem[]>([]);
+  const [readLaterFilter, setReadLaterFilter] = useState<'all' | 'unread' | 'read'>('all');
+
+  // Sync default tab if changed when opening
+  React.useEffect(() => {
+    if (isOpen && defaultTab) {
+      setActiveTab(defaultTab);
+    }
+  }, [isOpen, defaultTab]);
+
+  // Load read later items
+  React.useEffect(() => {
+    if (isOpen) {
+      readLaterService.getReadLaterList().then(setReadLaterItems);
+      const unsub = readLaterService.subscribe(() => {
+        readLaterService.getReadLaterList().then(setReadLaterItems);
+      });
+      return unsub;
+    }
+  }, [isOpen]);
+
+  const handleToggleReadStatus = async (articleId: string) => {
+    await readLaterService.toggleReadStatus(articleId);
+  };
+
+  const handleRemoveReadLater = async (articleId: string) => {
+    await readLaterService.removeFromReadLater(articleId);
+  };
 
   // Fetch streak, quiz & saved data
   const streakData = useMemo(() => notebookService.getUserStreak(), [isOpen]);
@@ -208,7 +245,7 @@ export const UserProfileProgressModal: React.FC<UserProfileProgressModalProps> =
 
           <button
             onClick={() => setActiveTab('saved')}
-            className={`flex items-center gap-1.5 px-3 py-1.5 rounded-xl transition-all ${
+            className={`flex items-center gap-1.5 px-3 py-1.5 rounded-xl transition-all cursor-pointer ${
               activeTab === 'saved'
                 ? 'bg-ink text-white dark:bg-white dark:text-black shadow-xs'
                 : 'text-ink2 dark:text-neutral-400 hover:text-ink'
@@ -216,6 +253,18 @@ export const UserProfileProgressModal: React.FC<UserProfileProgressModalProps> =
           >
             <BookOpen size={14} className={activeTab === 'saved' ? 'text-coral' : ''} />
             <span>Saved Notebook ({savedNotes.length})</span>
+          </button>
+
+          <button
+            onClick={() => setActiveTab('read_later')}
+            className={`flex items-center gap-1.5 px-3 py-1.5 rounded-xl transition-all cursor-pointer ${
+              activeTab === 'read_later'
+                ? 'bg-ink text-white dark:bg-white dark:text-black shadow-xs'
+                : 'text-ink2 dark:text-neutral-400 hover:text-ink'
+            }`}
+          >
+            <Clock size={14} className={activeTab === 'read_later' ? 'text-amber-500' : ''} />
+            <span>Read Later ({readLaterItems.length})</span>
           </button>
         </div>
 
@@ -433,6 +482,159 @@ export const UserProfileProgressModal: React.FC<UserProfileProgressModalProps> =
                     </PieChart>
                   </ResponsiveContainer>
                 </div>
+              </div>
+            </div>
+          )}
+
+          {/* TAB 4: Dedicated Read Later Reading List */}
+          {activeTab === 'read_later' && (
+            <div className="space-y-4">
+              <div className="bg-white dark:bg-[#202020] p-4 sm:p-5 rounded-2xl border border-black/5 dark:border-white/5 shadow-2xs space-y-4">
+                {/* Header & Filter Controls */}
+                <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 pb-3 border-b border-black/5 dark:border-white/10">
+                  <div>
+                    <h3 className="text-sm font-bold text-ink dark:text-white flex items-center gap-2">
+                      <Clock size={16} className="text-amber-500" />
+                      <span>My Dedicated Reading List</span>
+                    </h3>
+                    <p className="text-[11px] text-ink3 dark:text-neutral-400">
+                      Saved articles to read at your own pace across all devices
+                    </p>
+                  </div>
+
+                  <div className="flex items-center gap-1.5 bg-paper2 dark:bg-neutral-800/80 p-1 rounded-xl text-xs font-mono font-bold">
+                    <button
+                      onClick={() => setReadLaterFilter('all')}
+                      className={cn(
+                        "px-2.5 py-1 rounded-lg transition-colors cursor-pointer",
+                        readLaterFilter === 'all' ? "bg-gold text-black shadow-2xs" : "text-ink3 hover:text-ink dark:text-neutral-400"
+                      )}
+                    >
+                      All ({readLaterItems.length})
+                    </button>
+                    <button
+                      onClick={() => setReadLaterFilter('unread')}
+                      className={cn(
+                        "px-2.5 py-1 rounded-lg transition-colors cursor-pointer",
+                        readLaterFilter === 'unread' ? "bg-gold text-black shadow-2xs" : "text-ink3 hover:text-ink dark:text-neutral-400"
+                      )}
+                    >
+                      Unread ({readLaterItems.filter(i => i.readStatus === 'unread').length})
+                    </button>
+                    <button
+                      onClick={() => setReadLaterFilter('read')}
+                      className={cn(
+                        "px-2.5 py-1 rounded-lg transition-colors cursor-pointer",
+                        readLaterFilter === 'read' ? "bg-gold text-black shadow-2xs" : "text-ink3 hover:text-ink dark:text-neutral-400"
+                      )}
+                    >
+                      Done ({readLaterItems.filter(i => i.readStatus === 'read').length})
+                    </button>
+                  </div>
+                </div>
+
+                {/* Items List */}
+                {readLaterItems.length === 0 ? (
+                  <div className="py-10 text-center space-y-3">
+                    <div className="text-4xl">📖</div>
+                    <div className="space-y-1">
+                      <h4 className="font-serif font-bold text-sm text-ink dark:text-white">
+                        Your Read Later list is empty
+                      </h4>
+                      <p className="text-xs text-ink3 dark:text-neutral-400 max-w-xs mx-auto">
+                        Save articles while browsing to read them anytime from your profile!
+                      </p>
+                    </div>
+                  </div>
+                ) : (
+                  <div className="space-y-2.5 max-h-[420px] overflow-y-auto pr-1">
+                    {readLaterItems
+                      .filter(item => readLaterFilter === 'all' || item.readStatus === readLaterFilter)
+                      .map(item => {
+                        const isDone = item.readStatus === 'read';
+                        const yearDisplay = item.year !== undefined ? (item.year < 0 ? `${Math.abs(item.year)} BC` : item.year) : null;
+
+                        return (
+                          <div
+                            key={item.id}
+                            className={cn(
+                              "p-3 sm:p-3.5 rounded-2xl border transition-all flex items-start sm:items-center justify-between gap-3 group",
+                              isDone
+                                ? "bg-paper/40 dark:bg-white/[0.02] border-black/5 dark:border-white/5 opacity-75"
+                                : "bg-paper dark:bg-neutral-800/40 border-black/10 dark:border-white/10 hover:border-gold"
+                            )}
+                          >
+                            <div className="flex items-start gap-3 min-w-0 flex-1">
+                              <span className="text-xl p-2 rounded-xl bg-paper2 dark:bg-neutral-800 shrink-0 mt-0.5 sm:mt-0">
+                                {item.emoji || '📖'}
+                              </span>
+
+                              <div className="min-w-0 space-y-0.5">
+                                <div className="flex items-center gap-2 text-[10px] font-mono">
+                                  <span className="font-bold uppercase text-gold">
+                                    {item.category}
+                                  </span>
+                                  {yearDisplay && (
+                                    <span className="text-ink3 dark:text-neutral-400">• {yearDisplay}</span>
+                                  )}
+                                  <span className="text-ink3 dark:text-neutral-500 hidden sm:inline">
+                                    • {new Date(item.savedAt).toLocaleDateString()}
+                                  </span>
+                                </div>
+
+                                <Link
+                                  to={`/article/${item.articleId}`}
+                                  onClick={onClose}
+                                  className={cn(
+                                    "font-serif font-bold text-xs sm:text-sm text-ink dark:text-white group-hover:text-gold transition-colors line-clamp-1 block",
+                                    isDone && "line-through opacity-70"
+                                  )}
+                                >
+                                  {item.title}
+                                </Link>
+
+                                <p className="text-[11px] text-ink3 dark:text-neutral-400 line-clamp-1">
+                                  {item.excerpt}
+                                </p>
+                              </div>
+                            </div>
+
+                            <div className="flex items-center gap-2 shrink-0 self-end sm:self-center">
+                              <button
+                                onClick={() => handleToggleReadStatus(item.articleId)}
+                                className={cn(
+                                  "p-1.5 rounded-xl border text-xs font-bold transition-colors cursor-pointer",
+                                  isDone
+                                    ? "bg-emerald-500/15 border-emerald-500/30 text-emerald-800 dark:text-emerald-300"
+                                    : "bg-paper2 dark:bg-neutral-800 border-black/10 dark:border-white/10 text-ink3 hover:text-ink"
+                                )}
+                                title={isDone ? "Mark as unread" : "Mark as read"}
+                              >
+                                {isDone ? <CheckCircle2 size={14} className="text-emerald-500" /> : <Circle size={14} />}
+                              </button>
+
+                              <Link
+                                to={`/article/${item.articleId}`}
+                                onClick={onClose}
+                                className="px-3 py-1.5 rounded-xl bg-gold hover:bg-gold-l text-black font-bold text-xs shadow-2xs transition-all flex items-center gap-1"
+                              >
+                                <span>Read</span>
+                                <ArrowRight size={12} />
+                              </Link>
+
+                              <button
+                                onClick={() => handleRemoveReadLater(item.articleId)}
+                                className="p-1.5 rounded-xl text-ink3 hover:text-coral hover:bg-coral/10 transition-colors cursor-pointer"
+                                title="Remove from list"
+                              >
+                                <Trash2 size={14} />
+                              </button>
+                            </div>
+                          </div>
+                        );
+                      })}
+                  </div>
+                )}
               </div>
             </div>
           )}

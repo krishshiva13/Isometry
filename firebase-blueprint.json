@@ -157,9 +157,50 @@
         "isLiveAIGenerated": { "type": "boolean" }
       },
       "required": ["dateKey", "displayDate", "themeTitle", "mcqs", "currentAffairs"]
+    },
+    "QuizLeaderboardEntry": {
+      "title": "QuizLeaderboardEntry",
+      "description": "Leaderboard rank record for quiz participants.",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "userId": { "type": "string" },
+        "userName": { "type": "string" },
+        "userPhoto": { "type": "string" },
+        "score": { "type": "number" },
+        "totalQuestions": { "type": "number" },
+        "accuracy": { "type": "number" },
+        "timeTakenSeconds": { "type": "number" },
+        "quizDate": { "type": "string" },
+        "category": { "type": "string" },
+        "badge": { "type": "string" },
+        "createdAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["userName", "score", "totalQuestions", "accuracy", "quizDate"]
+    },
+    "ReadLaterItem": {
+      "title": "ReadLaterItem",
+      "description": "Article saved to user's personal Read Later reading list.",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "articleId": { "type": "string" },
+        "title": { "type": "string" },
+        "excerpt": { "type": "string" },
+        "category": { "type": "string" },
+        "year": { "type": "number" },
+        "emoji": { "type": "string" },
+        "readStatus": { "type": "string", "enum": ["unread", "read"] },
+        "savedAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["articleId", "title", "category"]
     }
   },
   "firestore": {
+    "/quiz_leaderboard/{entryId}": {
+      "schema": "QuizLeaderboardEntry",
+      "description": "Daily and all-time quiz top performers and scores."
+    },
     "/daily_capsules/{capsuleId}": {
       "schema": "DailyCapsule",
       "description": "Daily exam prep capsules and syllabus-mapped compendiums."
@@ -167,6 +208,10 @@
     "/users/{uid}/bookmarks/{bookmarkId}": {
       "schema": "UserBookmark",
       "description": "Bookmarked facts for user."
+    },
+    "/users/{uid}/read_later/{articleId}": {
+      "schema": "ReadLaterItem",
+      "description": "User's dedicated Read Later reading list."
     },
     "/ai_drafts/{draftId}": {
       "schema": "AIDraft",

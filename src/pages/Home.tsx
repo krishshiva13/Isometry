@@ -21,9 +21,11 @@ import { Ticker } from '../components/Ticker';
 import { FactCard } from '../components/FactCard';
 import { StudyHubSection } from '../components/StudyHubSection';
 import { DailyGoalTracker } from '../components/DailyGoalTracker';
+import { RecommendedForYou } from '../components/home/RecommendedForYou';
 import { HomeFilterSidebar, FilterCriteria, GK_TAG_OPTIONS } from '../components/HomeFilterSidebar';
 import { INITIAL_FACTS, INITIAL_BIRTHDAYS, INITIAL_QUIZ } from '../seed';
 import { useAuth } from '../contexts/AuthContext';
+import { searchIndexService } from '../services/searchIndexService';
 
 export const Home = () => {
   const { isAdmin, loading: authLoading } = useAuth();
@@ -50,8 +52,14 @@ export const Home = () => {
         const fetchedFacts = await factService.getFacts(undefined, false, 50, isAdmin);
         const fetchedBDays = await factService.getBirthdays(6);
 
-        if (fetchedFacts && fetchedFacts.length > 0) setFacts(fetchedFacts);
-        if (fetchedBDays && fetchedBDays.length > 0) setBirthdays(fetchedBDays);
+        if (fetchedFacts && fetchedFacts.length > 0) {
+          setFacts(fetchedFacts);
+          searchIndexService.updateWithLiveFacts(fetchedFacts);
+        }
+        if (fetchedBDays && fetchedBDays.length > 0) {
+          setBirthdays(fetchedBDays);
+          searchIndexService.updateWithLiveBirthdays(fetchedBDays);
+        }
       } catch (error) {
         console.error("Failed to load home data", error);
       } finally {
@@ -235,6 +243,9 @@ export const Home = () => {
 
       {/* Interactive Study Tools & Pages Hub */}
       <StudyHubSection />
+
+      {/* Recommended for You based on Reading History & Favorite Topics */}
+      <RecommendedForYou facts={facts} />
 
       {/* Featured Grid */}
       <section className="py-16 px-4 bg-paper2">
