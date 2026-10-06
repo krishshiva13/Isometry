@@ -4,7 +4,27 @@ import { motion, AnimatePresence } from 'motion/react';
 import { factService } from '../services/factService';
 import { QuizQuestion } from '../types';
 import { cn } from '../lib/utils';
-import { Sparkles, RefreshCcw, ArrowLeft, LogIn, ShieldCheck, Calendar as CalendarIcon, Plus, Edit2, Trash2, CheckCircle2, HelpCircle, FileText, Check, Wifi, WifiOff, Clock, Trophy } from 'lucide-react';
+import { 
+  Sparkles, 
+  RefreshCcw, 
+  ArrowLeft, 
+  LogIn, 
+  ShieldCheck, 
+  Calendar as CalendarIcon, 
+  Plus, 
+  Edit2, 
+  Trash2, 
+  CheckCircle2, 
+  HelpCircle, 
+  FileText, 
+  Check, 
+  Wifi, 
+  WifiOff, 
+  Clock, 
+  Trophy,
+  Download,
+  Printer
+} from 'lucide-react';
 import { useAuth } from '../contexts/AuthContext';
 import { authService } from '../services/authService';
 import { INITIAL_QUIZ } from '../seed';
@@ -12,14 +32,22 @@ import { recordQuizCompleted } from '../components/DailyGoalTracker';
 import { notebookService } from '../services/notebookService';
 import { QuizLeaderboard } from '../components/quiz/QuizLeaderboard';
 import { quizOfflineService } from '../services/quizOfflineService';
+import { CrossDayUniquenessModal } from '../components/quiz/CrossDayUniquenessModal';
+import { PrintableA4HandoutModal } from '../components/exam/PrintableA4HandoutModal';
+import { DailyCapsuleData, downloadCurrentAffairsPdf } from '../lib/currentAffairsPdfExport';
 
 const CATEGORIES = ['History', 'Science', 'Inventions', 'Discoveries', 'Birthdays', 'General'];
 
 export const Quiz = () => {
-  // Calendar / Date selection (Default to August 5, 2026 or current date)
-  const [selectedDate, setSelectedDate] = useState<string>('2026-08-05');
+  // Calendar / Date selection (Default to current date: October 5, 2026)
+  const [selectedDate, setSelectedDate] = useState<string>('2026-10-05');
   const [questions, setQuestions] = useState<QuizQuestion[]>([]);
   const [loading, setLoading] = useState(true);
+
+  // Active Daily Capsule data (holding previous day event citations & A4 handout data)
+  const [activeCapsule, setActiveCapsule] = useState<DailyCapsuleData | null>(null);
+  const [showUniquenessModal, setShowUniquenessModal] = useState<boolean>(false);
+  const [showA4HandoutModal, setShowA4HandoutModal] = useState<boolean>(false);
 
   // Playback state & timer
   const [currentIdx, setCurrentIdx] = useState(0);
@@ -55,7 +83,7 @@ export const Quiz = () => {
 
   // Manual Form State
   const [editingQuestionId, setEditingQuestionId] = useState<string | null>(null);
-  const [manualDate, setManualDate] = useState<string>('2026-08-05');
+  const [manualDate, setManualDate] = useState<string>('2026-10-05');
   const [manualQuestion, setManualQuestion] = useState('');
   const [manualCategory, setManualCategory] = useState('History');
   const [manualOptions, setManualOptions] = useState<[string, string, string, string]>(['', '', '', '']);
@@ -69,19 +97,50 @@ export const Quiz = () => {
   const [aiStatus, setAiStatus] = useState("");
   const [isAiLoading, setIsAiLoading] = useState(false);
 
-  // Load quiz for selected date with offline fallback
+  // Load quiz for selected date with date-grounded capsule & offline fallback
   const loadQuizForDate = async (dateStr: string) => {
     setLoading(true);
     try {
       let data: QuizQuestion[] | null = null;
-      
-      // 1. Try online fetch if connected
-      if (quizOfflineService.isOnline()) {
+      let loadedCapsule: DailyCapsuleData | null = null;
+
+      // 1. Try date-grounded daily capsule endpoint first (Grounded in Day D - 1)
+      if (dateStr !== 'all' && quizOfflineService.isOnline()) {
         try {
-          data = await factService.getQuizQuestions(dateStr);
-        } catch (fetchErr) {
-          console.warn('[Quiz] Online fetch failed, checking offline cache:', fetchErr);
+          const capRes = await fetch(`/api/quiz/daily-capsule/${dateStr}`);
+          if (capRes.ok) {
+            const capJson = await capRes.json();
+            if (capJson.capsule && Array.isArray(capJson.capsule.mcqs) && capJson.capsule.mcqs.length > 0) {
+              loadedCapsule = capJson.capsule;
+              data = capJson.capsule.mcqs.map((m: any, idx: number) => ({
+                id: m.id || `q-${dateStr}-${idx + 1}`,
+                q: m.question,
+                opts: m.options,
+                correct: m.correctAnswer,
+                cat: m.category || 'General Studies',
+                explanation: m.explanation + (m.examTrap ? ` (Examiner Trap: ${m.examTrap})` : ''),
+                date: dateStr
+              }));
+            }
+          }
+        } catch (capErr) {
+          console.warn('[Quiz] Could not fetch daily capsule, checking Firestore:', capErr);
         }
+      }
+
+      // 2. Fallback to Firestore getQuizQuestions
+      if (!data || data.length === 0) {
+        if (quizOfflineService.isOnline()) {
+          try {
+            data = await factService.getQuizQuestions(dateStr);
+          } catch (fetchErr) {
+            console.warn('[Quiz] Online fetch failed, checking offline cache:', fetchErr);
+          }
+        }
+      }
+
+      if (loadedCapsule) {
+        setActiveCapsule(loadedCapsule);
       }
 
       if (data && data.length > 0) {
@@ -93,7 +152,7 @@ export const Quiz = () => {
         quizOfflineService.saveQuizForOffline('all', data);
         setIsOfflineActive(false);
       } else {
-        // 2. Check offline local storage cache
+        // 3. Check offline local storage cache
         const cached = quizOfflineService.getCachedQuiz(dateStr);
         if (cached && cached.length > 0) {
           setQuestions(cached);
@@ -123,7 +182,7 @@ export const Quiz = () => {
 
   useEffect(() => {
     loadQuizForDate(selectedDate);
-    setManualDate(selectedDate === 'all' ? '2026-08-05' : selectedDate);
+    setManualDate(selectedDate === 'all' ? '2026-10-05' : selectedDate);
   }, [selectedDate]);
 
   const signIn = async () => {

@@ -1,4 +1,13 @@
-import { VocabularyWord } from "../src/types";
+export interface VocabularyWord {
+  word: string;
+  phonetic?: string;
+  partOfSpeech: string;
+  meaning: string;
+  hindiMeaning?: string;
+  exampleSentence?: string;
+  synonyms?: string[];
+  etymology?: string;
+}
 
 // High-yield educational dictionary for historical, scientific, political, and general academic learning
 export const EDUCATIONAL_VOCAB_MAP: Record<string, Omit<VocabularyWord, "word">> = {

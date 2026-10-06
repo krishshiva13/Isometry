@@ -68,6 +68,8 @@ export interface DailyNewsItem {
 export interface DailyCapsuleData {
   dateKey: string;
   displayDate: string;
+  previousDayKey?: string;
+  previousDayDisplay?: string;
   dayBadge: string;
   themeTitle: string;
   pdfFileName: string;
@@ -77,6 +79,7 @@ export interface DailyCapsuleData {
   currentAffairs: DailyNewsItem[];
   quickPointers: string[];
   isLiveAIGenerated?: boolean;
+  uniquenessVerified?: boolean;
 }
 
 // ═══════════════════════════════════════════════════════════

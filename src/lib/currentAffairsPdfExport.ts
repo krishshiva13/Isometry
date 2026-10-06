@@ -27,6 +27,8 @@ export interface CapsuleCurrentAffair {
 export interface DailyCapsuleData {
   dateKey: string;
   displayDate: string;
+  previousDayKey?: string;
+  previousDayDisplay?: string;
   dayBadge: string;
   themeTitle: string;
   pdfFileName: string;
@@ -35,6 +37,7 @@ export interface DailyCapsuleData {
   quickPointers: string[];
   mcqs: CapsuleMcq[];
   currentAffairs: CapsuleCurrentAffair[];
+  uniquenessVerified?: boolean;
 }
 
 /**
@@ -69,9 +72,10 @@ export function generateCurrentAffairsPdfDoc(capsule: DailyCapsuleData): jsPDF {
   doc.text('FACTHUB DAILY EXAM CAPSULE', margin + 5, cursorY + 8);
 
   doc.setFont('helvetica', 'bold');
-  doc.setFontSize(8);
+  doc.setFontSize(7.5);
   doc.setTextColor(217, 173, 66); // Gold tone
-  doc.text('STEP 1: 5 HIGH-YIELD PRACTICE MCQS & QUESTION SETTER TRAPS', margin + 5, cursorY + 14);
+  const p1Subtitle = `STEP 1: 5 MCQS • GROUNDED IN EVENTS OF ${(capsule.previousDayDisplay || 'PREVIOUS DAY').toUpperCase()}`;
+  doc.text(p1Subtitle, margin + 5, cursorY + 14);
 
   // Date and Page Stamp
   doc.setFont('helvetica', 'bold');
@@ -183,9 +187,10 @@ export function generateCurrentAffairsPdfDoc(capsule: DailyCapsuleData): jsPDF {
   doc.text('FACTHUB DAILY EXAM CAPSULE', margin + 5, cursorY + 8);
 
   doc.setFont('helvetica', 'bold');
-  doc.setFontSize(8);
+  doc.setFontSize(7.5);
   doc.setTextColor(217, 173, 66);
-  doc.text('STEP 2: CURATED CURRENT AFFAIRS DIGEST & PRELIMS FOCUS ANGLES', margin + 5, cursorY + 14);
+  const p2Subtitle = `STEP 2: PRELIMS DIGEST • GROUNDED IN EVENTS OF ${(capsule.previousDayDisplay || 'PREVIOUS DAY').toUpperCase()}`;
+  doc.text(p2Subtitle, margin + 5, cursorY + 14);
 
   doc.setFont('helvetica', 'bold');
   doc.setFontSize(9);

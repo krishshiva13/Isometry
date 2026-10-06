@@ -7,12 +7,23 @@ import dotenv from "dotenv";
 import { initializeApp } from "firebase/app";
 import { getFirestore, collection, getDocs, getDoc, setDoc, doc, query, orderBy, limit, setLogLevel } from "firebase/firestore";
 import fs from "fs";
-import { extractVocabularyFallback, lookupWordFallback } from "./server/vocabularyFallback";
+import { extractVocabularyFallback, lookupWordFallback } from "./server/vocabularyFallback.ts";
+import { 
+  generateDateGroundedCapsule, 
+  verifyAndDeduplicateCapsule, 
+  CURATED_DATE_CAPSULES, 
+  auditAllDateCapsulesUniqueness 
+} from "./server/dateCapsuleRepository.ts";
 
 dotenv.config();
 
 const app = express();
-const PORT = process.env.PORT ? parseInt(process.env.PORT, 10) : 3000;
+// Cloud Run / container sets PORT=8080 for NGINX, while the Node/Express app must run on port 3000 (DEFAULT_APP_PORT) behind NGINX.
+const PORT = Number(
+  process.env.APP_PORT || 
+  process.env.DEFAULT_APP_PORT || 
+  (process.env.PORT && process.env.PORT !== "8080" ? process.env.PORT : 3000)
+);
 
 // High-speed response compression for fast page load & low latency
 app.use(compression());
@@ -2001,15 +2012,27 @@ Respond ONLY with a valid JSON object matching the requested schema.`;
 
 const inMemoryCapsules = new Map<string, any>();
 
+// Seed in-memory capsules with all curated dates
+Object.keys(CURATED_DATE_CAPSULES).forEach((key) => {
+  inMemoryCapsules.set(key, generateDateGroundedCapsule(key));
+});
+
 // GET /api/exam/capsules/recent — Retrieve list of available capsules
 app.get("/api/exam/capsules/recent", async (req, res) => {
   try {
     const capsulesList: any[] = [];
 
-    // 1. Check Firestore for saved daily capsules
+    // 1. Ensure all curated capsules are present
+    Object.keys(CURATED_DATE_CAPSULES).forEach((key) => {
+      if (!inMemoryCapsules.has(key)) {
+        inMemoryCapsules.set(key, generateDateGroundedCapsule(key));
+      }
+    });
+
+    // 2. Check Firestore for saved daily capsules
     if (serverDb) {
       try {
-        const q = query(collection(serverDb, "daily_capsules"), orderBy("dateKey", "desc"), limit(10));
+        const q = query(collection(serverDb, "daily_capsules"), orderBy("dateKey", "desc"), limit(15));
         const snap = await Promise.race([
           getDocs(q),
           new Promise<any>((_, reject) => setTimeout(() => reject(new Error("Firestore query timeout")), 2000))
@@ -2017,8 +2040,7 @@ app.get("/api/exam/capsules/recent", async (req, res) => {
         if (snap && typeof snap.forEach === "function") {
           snap.forEach((docSnap: any) => {
             const data = docSnap.data();
-            if (data && data.dateKey) {
-              capsulesList.push(data);
+            if (data && data.dateKey && !CURATED_DATE_CAPSULES[data.dateKey]) {
               inMemoryCapsules.set(data.dateKey, data);
             }
           });
@@ -2028,12 +2050,12 @@ app.get("/api/exam/capsules/recent", async (req, res) => {
       }
     }
 
-    // 2. Include any in-memory capsules
-    inMemoryCapsules.forEach((capsule, key) => {
-      if (!capsulesList.some(c => c.dateKey === key)) {
-        capsulesList.push(capsule);
-      }
+    // 3. Build sorted list of capsules (newest first)
+    inMemoryCapsules.forEach((capsule) => {
+      capsulesList.push(capsule);
     });
+
+    capsulesList.sort((a, b) => (b.dateKey || "").localeCompare(a.dateKey || ""));
 
     return res.json({ capsules: capsulesList });
   } catch (error: any) {
@@ -2042,16 +2064,26 @@ app.get("/api/exam/capsules/recent", async (req, res) => {
   }
 });
 
-// GET /api/exam/capsule/:dateKey — Retrieve a specific daily capsule
+// GET /api/exam/capsule/:dateKey — Retrieve a specific daily capsule (Always grounded in Day D - 1)
 app.get("/api/exam/capsule/:dateKey", async (req, res) => {
   const { dateKey } = req.params;
   try {
-    // 1. Check memory cache
+    // 1. Priority: If curated capsule exists for this date, ensure fresh verified data is served
+    if (CURATED_DATE_CAPSULES[dateKey]) {
+      const curated = generateDateGroundedCapsule(dateKey);
+      inMemoryCapsules.set(dateKey, curated);
+      if (serverDb) {
+        setDoc(doc(serverDb, "daily_capsules", dateKey), curated).catch(() => {});
+      }
+      return res.json({ capsule: curated, source: "curated" });
+    }
+
+    // 2. Check memory cache
     if (inMemoryCapsules.has(dateKey)) {
       return res.json({ capsule: inMemoryCapsules.get(dateKey), source: "memory" });
     }
 
-    // 2. Check Firestore
+    // 3. Check Firestore
     if (serverDb) {
       try {
         const docSnap = await Promise.race([
@@ -2060,17 +2092,63 @@ app.get("/api/exam/capsule/:dateKey", async (req, res) => {
         ]);
         if (docSnap && typeof docSnap.exists === "function" && docSnap.exists()) {
           const data = docSnap.data();
-          inMemoryCapsules.set(dateKey, data);
-          return res.json({ capsule: data, source: "firestore" });
+          if (data && data.previousDayKey && Array.isArray(data.mcqs) && data.mcqs.length > 0) {
+            inMemoryCapsules.set(dateKey, data);
+            return res.json({ capsule: data, source: "firestore" });
+          }
         }
       } catch (dbErr) {
-        // Fallback to inMemoryCapsules or 404
+        // Fallback to generator
       }
     }
 
-    return res.status(404).json({ error: `No capsule found for date ${dateKey}` });
+    // 4. Dynamic date-grounded generation (Guaranteed never 404!)
+    const dateGrounded = generateDateGroundedCapsule(dateKey);
+    const verified = verifyAndDeduplicateCapsule(dateGrounded as any, inMemoryCapsules);
+    inMemoryCapsules.set(dateKey, verified);
+
+    if (serverDb) {
+      setDoc(doc(serverDb, "daily_capsules", dateKey), verified).catch(() => {});
+    }
+
+    return res.json({ capsule: verified, source: "generated" });
   } catch (error: any) {
-    return res.status(500).json({ error: "Failed to load capsule" });
+    return res.status(500).json({ error: "Failed to load capsule", details: error?.message || String(error) });
+  }
+});
+
+// GET /api/exam/verify-uniqueness — Automated Cross-Day Question Deduplication & Uniqueness Audit
+app.get("/api/exam/verify-uniqueness", (req, res) => {
+  try {
+    const auditReport = auditAllDateCapsulesUniqueness(inMemoryCapsules);
+    return res.json({ success: true, ...auditReport });
+  } catch (err: any) {
+    console.error("Uniqueness audit error:", err);
+    return res.status(500).json({ error: "Failed to perform uniqueness audit", details: err?.message });
+  }
+});
+
+// GET /api/quiz/daily-capsule/:dateKey — Synchronized Daily Quiz endpoint grounded in previous day events
+app.get("/api/quiz/daily-capsule/:dateKey", async (req, res) => {
+  const { dateKey } = req.params;
+  try {
+    let capsule = CURATED_DATE_CAPSULES[dateKey] ? generateDateGroundedCapsule(dateKey) : inMemoryCapsules.get(dateKey);
+    if (!capsule && serverDb) {
+      try {
+        const snap = await getDoc(doc(serverDb, "daily_capsules", dateKey));
+        if (snap.exists() && snap.data()?.previousDayKey) {
+          capsule = snap.data();
+        }
+      } catch {}
+    }
+    if (!capsule) {
+      capsule = generateDateGroundedCapsule(dateKey);
+    }
+    const verified = verifyAndDeduplicateCapsule(capsule as any, inMemoryCapsules);
+    inMemoryCapsules.set(dateKey, verified);
+    return res.json({ success: true, capsule: verified });
+  } catch (err: any) {
+    return res.status(500).json({ error: "Failed to get daily quiz capsule", details: err?.message });
   }
 });
 
@@ -2087,6 +2165,16 @@ app.post("/api/exam/generate-capsule", async (req, res) => {
 
     const dateObj = new Date(dateKey + "T00:00:00Z");
     const displayDate = dateObj.toLocaleDateString("en-US", {
+      month: "long",
+      day: "numeric",
+      year: "numeric"
+    });
+
+    // Derive the previous day (Day D - 1) on which real-world events occurred
+    const prevDateObj = new Date(dateObj);
+    prevDateObj.setUTCDate(prevDateObj.getUTCDate() - 1);
+    const prevDateKey = prevDateObj.toISOString().split("T")[0];
+    const prevDisplayDate = prevDateObj.toLocaleDateString("en-US", {
       month: "long",
       day: "numeric",
       year: "numeric"
@@ -2125,29 +2213,34 @@ app.post("/api/exam/generate-capsule", async (req, res) => {
       }
     }
 
-    console.log(`[Exam Generator] Initiating Live AI Daily Capsule creation for ${displayDate} (${dateKey})...`);
+    console.log(`[Exam Generator] Creating Daily Capsule for ${displayDate} (${dateKey}) grounded in previous day events of ${prevDisplayDate} (${prevDateKey})...`);
 
     // 2. Generate with Gemini + Live Google Search Grounding
     if (hasGeminiApiKey()) {
       try {
-        const searchPrompt = `Search Google in real time for breaking Indian national news, PIB announcements, Union Cabinet decisions, RBI notifications, Environment & Ecology developments, Science & Space milestones, and key Global Summits for ${displayDate} (${dateKey}) relevant to Indian competitive exams (UPSC Civil Services Prelims & Mains GS, SSC CGL, Banking/RBI Grade B, and State PSCs).
+        const searchPrompt = `You are the Senior Examination Curator and Chief Fact-Checker for FActHub.
+Generate the verified Daily Exam Current Affairs Capsule and 5-MCQ Practice Quiz for ${displayDate} (${dateKey}).
+
+CORE DATE GROUNDING MANDATE:
+All content, news items, and 5 MCQs MUST be strictly based on the real-world events, Press Information Bureau (PIB) releases, Union Cabinet decisions, RBI notifications, environmental rulings, and scientific/space milestones that occurred on the PRECEDING DAY: ${prevDisplayDate} (${prevDateKey}).
+Do NOT repeat generic static trivia. Every question must test specific, authentic developments that occurred on ${prevDisplayDate}.
 ${customFocus ? `Specific Exam Focus: ${customFocus}` : ''}
 
 Synthesize a comprehensive, high-yield educational study capsule:
-1. "themeTitle": A punchy 1-sentence headline capturing 3 major themes of the day.
-2. "dayBadge": A special commemoration badge or "Daily Current Affairs Special".
-3. "quickPointers": 4 crisp one-line memory pointers for 60-second rapid revision.
+1. "themeTitle": A punchy 1-sentence headline capturing 3 major themes of ${prevDisplayDate}.
+2. "dayBadge": "Edition: ${displayDate} • Events of ${prevDisplayDate}".
+3. "quickPointers": 4 crisp one-line memory pointers for 60-second rapid revision based on ${prevDisplayDate} events.
 4. "mcqs": 5 high-yield multiple-choice questions matching actual UPSC Prelims / SSC CGL standard:
-   - "category": e.g. "Modern History & Governance", "Polity & Constitution", "Environment & Energy", "Economy & Banking", "Science & Space"
+   - "category": e.g. "Science & Deep Tech (${prevDisplayDate} Event)", "Economy & Banking", "Polity & Law"
    - "targetExam": e.g. "UPSC GS-1 / SSC CGL", "UPSC GS-3", "Banking / RBI", "State PSC"
    - "tagClass": Tailwind badge class (e.g. "bg-purple-100 text-purple-900 border-purple-200")
-   - "question": Rigorous multi-statement or direct analytical question.
+   - "question": Analytical question testing the development from ${prevDisplayDate}.
    - "options": 4 plausible options (ABCD).
    - "correctAnswer": Zero-based index (0, 1, 2, or 3).
-   - "explanation": In-depth fact-checked explanation detailing historical/statutory context.
+   - "explanation": In-depth fact-checked explanation detailing context and statutory background.
    - "examTrap": Explicit examiner trap warning (e.g., "Examiner trap: Students confuse year X with year Y...").
-5. "currentAffairs": 4 curated news items:
-   - "title": Clean, factual headline.
+5. "currentAffairs": 4 curated news items that took place on ${prevDisplayDate}:
+   - "title": Clean, factual headline from ${prevDisplayDate}.
    - "summary": 2-3 sentence context explaining the development.
    - "category": "Governance", "Economy", "Environment", "Science & Tech", or "International"
    - "examAngle": Explicit syllabus link (e.g. "UPSC GS-3: Green Hydrogen vs Grey Hydrogen; SIGHT guidelines").
@@ -2161,7 +2254,7 @@ Synthesize a comprehensive, high-yield educational study capsule:
           contents: searchPrompt,
           allowSearchFallback: false,
           config: {
-            systemInstruction: "You are the Chief Educational Fact-Checker & Senior Examination Curator for FActHub. You generate verified, syllabus-aligned daily exam capsules with live Google Search Grounding.",
+            systemInstruction: "You are the Chief Educational Fact-Checker for FActHub. You generate verified, syllabus-aligned daily exam capsules grounded strictly in previous day real-world events.",
             tools: [{ googleSearch: {} }],
             responseMimeType: "application/json",
             responseSchema: {
@@ -2225,7 +2318,7 @@ Synthesize a comprehensive, high-yield educational study capsule:
           }
         }),
         new Promise<{ text: string; rawResponse: any; usedSearch: boolean }>((_, reject) =>
-          setTimeout(() => reject(new Error("AI generation timeout")), 12000)
+          setTimeout(() => reject(new Error("AI generation timeout")), 25000)
         )
       ]);
 
@@ -2235,7 +2328,7 @@ Synthesize a comprehensive, high-yield educational study capsule:
       // Normalize MCQs
       const normalizedMcqs = (parsed.mcqs || []).slice(0, 5).map((q: any, i: number) => ({
         id: `q-${cleanId}-${i + 1}`,
-        category: q.category || "General Studies",
+        category: q.category || `General Studies (${prevDisplayDate} Event)`,
         targetExam: q.targetExam || "UPSC / SSC CGL",
         tagClass: q.tagClass || "bg-blue-100 text-blue-900 border-blue-200",
         question: q.question,
@@ -2264,151 +2357,73 @@ Synthesize a comprehensive, high-yield educational study capsule:
       const newCapsule = {
         dateKey,
         displayDate,
-        dayBadge: parsed.dayBadge || "Live AI Verified Daily Capsule",
-        themeTitle: parsed.themeTitle || `High-Yield Current Affairs & Practice MCQs for ${displayDate}`,
+        previousDayKey: prevDateKey,
+        previousDayDisplay: prevDisplayDate,
+        dayBadge: parsed.dayBadge || `Edition: ${displayDate} • Events of ${prevDisplayDate}`,
+        themeTitle: parsed.themeTitle || `High-Yield Current Affairs & Practice MCQs Grounded in ${prevDisplayDate}`,
         pdfFileName: `FactHub-Daily-Current-Affairs-${dateKey}.pdf`,
         pdfFileSize: "184 KB",
         pdfPageCount: 2,
         quickPointers: Array.isArray(parsed.quickPointers) && parsed.quickPointers.length > 0 
           ? parsed.quickPointers.slice(0, 4) 
           : [
-              `Daily Current Affairs digest prepared on ${displayDate} with real-time Google search verification.`,
-              `Cabinet approvals and economic guidelines mapped directly to UPSC Prelims & Mains.`,
+              `Daily Current Affairs digest prepared on ${displayDate}, analyzing events of ${prevDisplayDate}.`,
+              `Policy decisions and regulatory notifications mapped directly to UPSC & State PSC.`,
               `Practice 5 exam-grade MCQs with answer keys and trap warnings.`,
               `Download printable 2-page A4 study handout for offline revision.`
             ],
         mcqs: normalizedMcqs,
         currentAffairs: normalizedCurrentAffairs,
         generatedAt: new Date().toISOString(),
-        isLiveAIGenerated: true
+        isLiveAIGenerated: true,
+        uniquenessVerified: true
       };
 
-      // 3. Save to Firestore (non-blocking background persist)
+      // Uniqueness check against all known dates
+      const verifiedCapsule = verifyAndDeduplicateCapsule(newCapsule as any, inMemoryCapsules);
+
+      // Save to Firestore
       if (serverDb) {
-        setDoc(doc(serverDb, "daily_capsules", dateKey), newCapsule)
-          .then(() => console.log(`[Exam Generator] Saved live capsule ${dateKey} to Firestore.`))
+        setDoc(doc(serverDb, "daily_capsules", dateKey), verifiedCapsule)
+          .then(() => console.log(`[Exam Generator] Saved verified live capsule ${dateKey} to Firestore.`))
           .catch(dbErr => console.warn("[Exam Generator] Could not persist capsule to Firestore:", dbErr));
       }
 
-      inMemoryCapsules.set(dateKey, newCapsule);
+      inMemoryCapsules.set(dateKey, verifiedCapsule);
 
       return res.json({
         success: true,
-        capsule: newCapsule,
+        capsule: verifiedCapsule,
         generatedLive: true,
-        usedSearch: aiResponse.usedSearch
+        usedSearch: aiResponse.usedSearch,
+        previousDayKey: prevDateKey,
+        previousDayDisplay: prevDisplayDate,
+        uniquenessVerified: true
       });
     } catch (aiErr: any) {
-      console.warn("[Exam Generator] AI live search generation encountered error, falling back to high-yield capsule:", aiErr.message || aiErr);
+      console.warn("[Exam Generator] AI live search generation encountered error, activating date-grounded repository:", aiErr.message || aiErr);
     }
   }
 
-  // Fallback if AI key is unavailable or quota reached
-    const fallbackCleanId = dateKey.replace(/-/g, "");
-    const fallbackCapsule = {
-      dateKey,
-      displayDate,
-      dayBadge: "Daily Competitive Exam Compendium",
-      themeTitle: `Current Affairs, National Schemes, and High-Yield GK for ${displayDate}`,
-      pdfFileName: `FactHub-Daily-Current-Affairs-${dateKey}.pdf`,
-      pdfFileSize: "180 KB",
-      pdfPageCount: 2,
-      quickPointers: [
-        `Key milestones and government policy initiatives active as of ${displayDate}.`,
-        `Core constitutional and economic frameworks frequently tested in UPSC Prelims and SSC CGL.`,
-        `Includes 5 practice MCQs with examiner trap warnings and analytical reasoning.`,
-        `Optimized for 2-page A4 printouts and smart device reading.`
-      ],
-      mcqs: [
-        {
-          id: `q-${fallbackCleanId}-1`,
-          category: "Polity & Governance",
-          targetExam: "UPSC GS-2 / SSC CGL",
-          tagClass: "bg-purple-100 text-purple-900 border-purple-200",
-          question: `Regarding constitutional bodies in India, which article of the Constitution establishes the Election Commission of India?`,
-          options: ["Article 280", "Article 324", "Article 352", "Article 360"],
-          correctAnswer: 1,
-          explanation: "Article 324 provides for the superintendence, direction, and control of elections to Parliament, State Legislatures, and the offices of President and Vice-President to be vested in the Election Commission.",
-          examTrap: "Trap: Article 280 is Finance Commission, while Articles 352-360 deal with Emergency Provisions."
-        },
-        {
-          id: `q-${fallbackCleanId}-2`,
-          category: "Environment & Renewable Energy",
-          targetExam: "UPSC GS-3",
-          tagClass: "bg-emerald-100 text-emerald-900 border-emerald-200",
-          question: `Under India's updated Nationally Determined Contributions (NDCs), what is the target for cumulative electric power installed capacity from non-fossil fuel-based energy resources by 2030?`,
-          options: ["30%", "40%", "50%", "75%"],
-          correctAnswer: 2,
-          explanation: "India has committed to achieving about 50 percent cumulative electric power installed capacity from non-fossil fuel-based energy resources by 2030, enhancing its earlier target of 40%.",
-          examTrap: "Trap: 40% was the original target achieved ahead of schedule in 2021; 50% is the updated NDC pledge."
-        },
-        {
-          id: `q-${fallbackCleanId}-3`,
-          category: "Economy & Banking",
-          targetExam: "IBPS PO / RBI Grade B",
-          tagClass: "bg-blue-100 text-blue-900 border-blue-200",
-          question: `The 'Priority Sector Lending' (PSL) guidelines issued by the RBI require domestic commercial banks to allocate what minimum percentage of Adjusted Net Bank Credit (ANBC) to priority sectors?`,
-          options: ["25%", "35%", "40%", "50%"],
-          correctAnswer: 2,
-          explanation: "Domestic scheduled commercial banks and foreign banks with 20 branches and above have a priority sector lending target of 40 percent of Adjusted Net Bank Credit (ANBC) or Credit Equivalent Amount of Off-Balance Sheet Exposure.",
-          examTrap: "Trap: Small Finance Banks have a higher PSL target of 75%, while general commercial banks have 40%."
-        },
-        {
-          id: `q-${fallbackCleanId}-4`,
-          category: "Science & Space",
-          targetExam: "UPSC GS-3 / RRB NTPC",
-          tagClass: "bg-amber-100 text-amber-900 border-amber-200",
-          question: `Which specialized launch vehicle was developed by ISRO primarily to cater to the small satellite launch market up to 500 kg to Low Earth Orbit (LEO)?`,
-          options: ["PSLV-XL", "GSLV Mk-III (LVM3)", "SSLV (Small Satellite Launch Vehicle)", "Sounding Rocket RH-200"],
-          correctAnswer: 2,
-          explanation: "The Small Satellite Launch Vehicle (SSLV) is a 3-stage all-solid vehicle designed by ISRO to launch small satellites up to 500 kg into a 500 km planar orbit at low cost and rapid turnaround time.",
-          examTrap: "Trap: PSLV is the workhorse for 1750 kg payloads, whereas SSLV is specifically for mini/micro satellites under 500 kg."
-        },
-        {
-          id: `q-${fallbackCleanId}-5`,
-          category: "Modern Indian History",
-          targetExam: "UPSC GS-1 / State PSC",
-          tagClass: "bg-rose-100 text-rose-900 border-rose-200",
-          question: `The historic Poona Pact (1932) was signed between Mahatma Gandhi and Dr. B.R. Ambedkar in which prison?`,
-          options: ["Cellular Jail, Port Blair", "Yerwada Central Jail, Pune", "Alipore Jail, Kolkata", "Tihar Jail, Delhi"],
-          correctAnswer: 1,
-          explanation: "The Poona Pact was signed on September 24, 1932, at Yerwada Central Jail in Pune, Maharashtra, following Gandhi's fast against the British Communal Award.",
-          examTrap: "Trap: Gandhi was in Yerwada Jail (Pune), not Cellular Jail or Sabarmati."
-        }
-      ],
-      currentAffairs: [
-        {
-          id: `ca-${fallbackCleanId}-1`,
-          num: "01",
-          title: "National Clean Energy Initiatives & Green Corridor Infrastructure",
-          summary: "Union Cabinet reviews transmission infrastructure expansion under the Green Energy Corridor Phase-II, accelerating integration of large-scale renewable projects into the National Grid.",
-          category: "Environment & Energy",
-          examAngle: "UPSC GS-3: Grid stability, Renewable Energy Certificates (REC), and Inter-State Transmission System (ISTS) charges.",
-          keyTakeaway: "Target: 500 GW non-fossil capacity by 2030; Nodal Ministry: Ministry of Power.",
-          source: "PIB New Delhi",
-          exams: [{ name: "UPSC GS-3", tagClass: "bg-blue-100 text-blue-900 border-blue-200" }]
-        },
-        {
-          id: `ca-${fallbackCleanId}-2`,
-          num: "02",
-          title: "Insolvency and Bankruptcy Code (IBC) Regulatory Amendments",
-          summary: "Insolvency and Bankruptcy Board of India (IBBI) notifies streamlined pre-packaged resolution frameworks for MSMEs to reduce litigation timelines and preserve asset value.",
-          category: "Economy & Corporate Law",
-          examAngle: "UPSC GS-3: Resolution vs Liquidation ratios, National Company Law Tribunal (NCLT) bench capacity.",
-          keyTakeaway: "Pre-pack resolution period capped at 120 days; Nodal Agency: IBBI / Ministry of Corporate Affairs.",
-          source: "Official Gazette / MCA",
-          exams: [{ name: "UPSC GS-3", tagClass: "bg-emerald-100 text-emerald-900 border-emerald-200" }, { name: "Banking", tagClass: "bg-purple-100 text-purple-900 border-purple-200" }]
-        }
-      ],
-      isLiveAIGenerated: false
-    };
+  // 3. Fallback to Dynamic Date-Grounded Repository with Uniqueness Guarantee
+  const dateGroundedCapsule = generateDateGroundedCapsule(dateKey);
+  const verifiedDateCapsule = verifyAndDeduplicateCapsule(dateGroundedCapsule as any, inMemoryCapsules);
 
-    inMemoryCapsules.set(dateKey, fallbackCapsule);
-    return res.json({
-      success: true,
-      capsule: fallbackCapsule,
-      generatedLive: false
-    });
+  inMemoryCapsules.set(dateKey, verifiedDateCapsule);
+  
+  if (serverDb) {
+    setDoc(doc(serverDb, "daily_capsules", dateKey), verifiedDateCapsule)
+      .catch(dbErr => console.warn("[Exam Generator] Could not persist date capsule to Firestore:", dbErr));
+  }
+
+  return res.json({
+    success: true,
+    capsule: verifiedDateCapsule,
+    generatedLive: false,
+    previousDayKey: prevDateKey,
+    previousDayDisplay: prevDisplayDate,
+    uniquenessVerified: true
+  });
   } catch (err: any) {
     console.error("Live capsule generator error:", err);
     return res.status(500).json({ error: "Failed to generate daily exam capsule", details: err?.message || String(err) });
