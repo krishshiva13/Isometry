@@ -376,6 +376,17 @@ export const Header = () => {
                             <span className="text-[9px] bg-sky-100 text-sky-800 px-1.5 py-0.5 rounded font-mono uppercase">Admin Only</span>
                           </Link>
                           <Link
+                            to="/admin/daily-quiz"
+                            onClick={() => setIsProfileOpen(false)}
+                            className="w-full flex items-center justify-between px-3 py-2 text-xs font-bold text-amber-900 hover:bg-gold/15 rounded-xl transition-colors text-left"
+                          >
+                            <span className="flex items-center gap-2">
+                              <span>🎯</span>
+                              <span>Daily Quiz Curation (10 Qs → 5 Qs)</span>
+                            </span>
+                            <span className="text-[9px] bg-gold text-black font-mono font-black px-1.5 py-0.5 rounded uppercase">Admin</span>
+                          </Link>
+                          <Link
                             to="/magazine"
                             onClick={() => setIsProfileOpen(false)}
                             className="w-full flex items-center justify-between px-3 py-2 text-xs font-bold text-amber-800 hover:bg-amber-50 rounded-xl transition-colors text-left"

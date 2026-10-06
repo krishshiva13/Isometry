@@ -27,8 +27,11 @@ import {
   Layers,
   HelpCircle,
   ExternalLink,
-  RefreshCw
+  RefreshCw,
+  ShieldCheck,
+  ArrowRight
 } from 'lucide-react';
+import { useAuth } from '../contexts/AuthContext';
 import { cn } from '../lib/utils';
 import { factService } from '../services/factService';
 import { notebookService } from '../services/notebookService';
@@ -729,6 +732,7 @@ export function getDefaultDailyCapsules(): Record<string, DailyCapsuleData> {
 }
 
 export const ExamPrep: React.FC = () => {
+  const { isAdmin } = useAuth();
   const todayKey = getRelativeDateKey(0);
   const yesterdayKey = getRelativeDateKey(1);
   const dayBeforeKey = getRelativeDateKey(2);
@@ -1002,6 +1006,35 @@ export const ExamPrep: React.FC = () => {
       <section className="bg-[#09142A] text-white pt-8 pb-7 px-4 sm:px-6 lg:px-8 border-b border-white/10 relative overflow-hidden">
         <div className="max-w-6xl mx-auto space-y-6 relative z-10">
           
+          {/* Admin Editorial Workbench Notice */}
+          {isAdmin && (
+            <div className="bg-gradient-to-r from-amber-500/20 via-gold/20 to-amber-500/10 border border-gold/50 rounded-2xl p-4 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 text-white">
+              <div className="flex items-center gap-3">
+                <span className="p-2 rounded-xl bg-gold/25 text-gold shrink-0">
+                  <ShieldCheck size={20} />
+                </span>
+                <div>
+                  <div className="flex items-center gap-2">
+                    <span className="text-[10px] font-mono font-black uppercase px-2 py-0.5 rounded bg-gold text-black">
+                      ADMIN EDITORIAL
+                    </span>
+                    <strong className="text-xs sm:text-sm font-bold text-white">Daily Quiz Fact-Check & Curation Workbench</strong>
+                  </div>
+                  <p className="text-xs text-white/80 mt-0.5">
+                    Review 10 candidate questions, fact-check and AI-correct any inaccuracies, and publish tomorrow's 5-question Daily Quiz with the A4 Handout.
+                  </p>
+                </div>
+              </div>
+              <Link
+                to="/admin/daily-quiz"
+                className="px-4 py-2 rounded-xl bg-gold hover:bg-gold-l text-black font-bold text-xs flex items-center gap-1.5 shrink-0 shadow-md transition-all cursor-pointer"
+              >
+                <span>Open Curation Workbench</span>
+                <ArrowRight size={14} />
+              </Link>
+            </div>
+          )}
+
           {/* Header Row */}
           <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
             <div className="space-y-1.5">

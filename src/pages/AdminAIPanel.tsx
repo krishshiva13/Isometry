@@ -890,6 +890,15 @@ export const AdminAIPanel = () => {
               <Terminal size={14} className="text-rose-500" />
               <span>Debug Console</span>
             </button>
+            <Link
+              to="/admin/daily-quiz"
+              className="px-3.5 py-1.5 rounded-lg font-bold transition-all flex items-center gap-1.5 bg-gold/20 hover:bg-gold text-amber-950 hover:text-black border border-gold/40 shadow-xs"
+              title="Daily Quiz Fact-Check & Curation Workbench (10 Candidates -> 5 Questions & A4 Handout)"
+            >
+              <span>🎯</span>
+              <span>Daily Quiz Curation (10 Qs → 5 Qs)</span>
+              <span className="bg-gold text-black text-[9px] px-1.5 py-0.2 rounded-md font-mono font-black">Admin</span>
+            </Link>
           </div>
 
           <div className="flex items-center gap-3 text-ink3 font-mono text-[11px]">

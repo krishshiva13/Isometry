@@ -7,7 +7,7 @@ specVersion: v1beta1
 runConfig:
   concurrency: 80
   cpu: 1
-  memoryMiB: 512
+  memoryMiB: 1024
 
 # Secrets mapped from Google Cloud Secret Manager
 # App Hosting will securely fetch this secret and inject it as GEMINI_API_KEY in the environment.

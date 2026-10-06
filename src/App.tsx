@@ -135,6 +135,7 @@ const Sitemap = lazyWithRetry(() => import('./pages/Sitemap'), 'Sitemap');
 const ExamPrep = lazyWithRetry(() => import('./pages/ExamPrep'), 'ExamPrep');
 const Magazine = lazyWithRetry(() => import('./pages/Magazine'), 'Magazine');
 const AdminAIPanel = lazyWithRetry(() => import('./pages/AdminAIPanel'), 'AdminAIPanel');
+const AdminQuizCuration = lazyWithRetry(() => import('./pages/AdminQuizCuration'), 'AdminQuizCuration');
 const DailyStreakChallenge = lazyWithRetry(() => import('./pages/DailyStreakChallenge'), 'DailyStreakChallenge');
 const StudentNotebook = lazyWithRetry(() => import('./pages/StudentNotebook'), 'StudentNotebook');
 const Bookmarks = lazyWithRetry(() => import('./pages/Bookmarks'), 'Bookmarks');
@@ -200,6 +201,7 @@ export default function App() {
                     <Route path="/exam-prep" element={<ExamPrep />} />
                     <Route path="/magazine" element={<AdminRoute><Magazine /></AdminRoute>} />
                     <Route path="/admin/ai-creator" element={<AdminRoute><AdminAIPanel /></AdminRoute>} />
+                    <Route path="/admin/daily-quiz" element={<AdminRoute><AdminQuizCuration /></AdminRoute>} />
                     <Route path="/daily-streak" element={<DailyStreakChallenge />} />
                     <Route path="/notebook" element={<StudentNotebook />} />
                     <Route path="/bookmarks" element={<Bookmarks />} />

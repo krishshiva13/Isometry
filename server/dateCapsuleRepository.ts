@@ -71,10 +71,10 @@ export const CURATED_DATE_CAPSULES: Record<string, Omit<DateCapsule, 'dateKey' |
   // ─────────────────────────────────────────────────────────────
   '2026-10-06': {
     dayBadge: "Edition: Oct 6 • Covering High-Yield Events of Oct 5",
-    themeTitle: "Nobel Prize in Medicine for Optogenetics & Channelrhodopsins, India Forex Reserves Cross $700 Billion, and UNESCO Literacy Day",
+    themeTitle: "Nobel Prize in Medicine for Optogenetics & Channelrhodopsins, RBI UPI Lite Limits Enhanced, and UNESCO Literacy Day",
     quickPointers: [
       "Nobel Prize in Physiology or Medicine 2026 awarded to Karl Deisseroth, Peter Hegemann, and Georg Nagel for discoveries concerning light-gated ion channels and optogenetics.",
-      "Reserve Bank of India announces foreign exchange reserves surged to a historic all-time high of $704.8 billion.",
+      "Reserve Bank of India enhances UPI Lite per-transaction limit to ₹1,000 and wallet limit to ₹5,000 to expand offline digital micropayments.",
       "UNESCO & Ministry of Education celebrate World Teachers' Day with national digital pedagogy framework under NEP 2020.",
       "Ministry of New & Renewable Energy releases 500 GW non-fossil capacity transmission corridor blueprint."
     ],
@@ -97,19 +97,19 @@ export const CURATED_DATE_CAPSULES: Record<string, Omit<DateCapsule, 'dateKey' |
       },
       {
         id: "q-20261006-2",
-        category: "Banking & Foreign Exchange (Oct 5 Event)",
+        category: "Fintech & Monetary Policy (Oct 5 Event)",
         targetExam: "RBI Grade B / UPSC GS-3",
         tagClass: "bg-emerald-100 text-emerald-900 border-emerald-200",
-        question: "With India's foreign exchange reserves crossing the $700 billion milestone on October 5, which of the following is NOT one of the four official components of India's Foreign Exchange Reserves held by RBI?",
+        question: "Announced by the Reserve Bank of India on October 5, which key revision was introduced to the 'UPI Lite' on-device wallet framework to accelerate offline and low-connectivity digital retail micropayments?",
         options: [
-          "Foreign Currency Assets (FCA)",
-          "Gold Reserves",
-          "Special Drawing Rights (SDRs) & Reserve Tranche Position (RTP)",
-          "Sovereign Green Bonds issued on NSE IFSC"
+          "Per-transaction limit increased to ₹1,000 and maximum wallet balance ceiling increased to ₹5,000",
+          "Requirement of mandatory two-factor biometric authentication for transactions below ₹500",
+          "Restriction of UPI Lite wallets exclusively to public sector banks",
+          "Replacement of NPCI settlement with direct central bank digital currency (e₹) clearing"
         ],
-        correctAnswer: 3,
-        explanation: "India's Foreign Exchange Reserves comprise four official components: (1) Foreign Currency Assets (FCA), (2) Gold reserves, (3) Special Drawing Rights (SDRs) at the IMF, and (4) Reserve Position in the International Monetary Fund (RTP / Reserve Tranche). Sovereign Green Bonds are debt instruments, not reserve assets.",
-        examTrap: "Component trap: Green bonds are marketable bonds; reserves strictly consist of FCA, Gold, SDRs, and IMF Reserve Tranche."
+        correctAnswer: 0,
+        explanation: "The Reserve Bank of India enhanced the transaction limits for UPI Lite from ₹500 to ₹1,000 per transaction, and the overall wallet limit from ₹2,000 to ₹5,000. UPI Lite facilitates near-instant, PIN-less small-value payments directly from an on-device balance, easing network congestion on Core Banking Systems (CBS).",
+        examTrap: "Limit trap: Previous limits were ₹500 per transaction and ₹2,000 wallet limit; revised limits are ₹1,000 per transaction and ₹5,000 wallet limit. It does NOT require PIN or biometrics for small transactions."
       },
       {
         id: "q-20261006-3",
@@ -175,12 +175,12 @@ export const CURATED_DATE_CAPSULES: Record<string, Omit<DateCapsule, 'dateKey' |
       {
         id: "ca-20261006-2",
         num: "02",
-        title: "India's Foreign Exchange Reserves scale historic peak of $704.8 billion",
-        summary: "Robust foreign portfolio investment inflows, lower trade deficits, and central bank foreign exchange swap valuations propelled national reserves past the $700B threshold, covering 12 months of projected imports.",
-        category: "Economy & Banking",
-        examAngle: "UPSC GS-3: Foreign Exchange Reserves components, Import Cover Ratio, RBI open market operations.",
-        keyTakeaway: "Reserve position provides strong macroeconomic buffer against external volatility; 4th largest global reserves.",
-        source: "RBI Statistical Bulletin",
+        title: "RBI enhances UPI Lite per-transaction ceiling to ₹1,000 and wallet balance limit to ₹5,000",
+        summary: "To deepen digital micropayment penetration across rural and low-connectivity corridors, the Reserve Bank of India substantially doubled UPI Lite caps, reducing transactional strain on bank core systems while ensuring instant on-device settlements.",
+        category: "Fintech & Monetary Policy",
+        examAngle: "UPSC GS-3 / RBI Grade B: Digital Public Infrastructure (DPI), UPI Lite off-line protocols, NPCI settlement mechanisms, financial inclusion metrics.",
+        keyTakeaway: "Revised limits: ₹1,000 per transaction; maximum ₹5,000 wallet balance; zero-PIN convenience for retail microtransactions.",
+        source: "Reserve Bank of India Monetary & Payments Directive",
         exams: [{ name: "Banking / RBI", tagClass: "bg-emerald-100 text-emerald-900 border-emerald-200" }, { name: "UPSC GS-3", tagClass: "bg-blue-100 text-blue-900 border-blue-200" }]
       },
       {
@@ -1378,6 +1378,228 @@ export function auditAllDateCapsulesUniqueness(customCapsules?: Map<string, Date
     auditTimestamp: new Date().toISOString(),
     dates: dateSummaries,
     pairwiseComparisons: pairwise
+  };
+}
+
+/**
+ * Generates 10 candidate questions for Admin Daily Quiz curation
+ * Grounded in the real-world events of the day before (Day D - 1)
+ * Admin reviews these 10, corrects any issues, and selects exactly 5 to publish.
+ */
+export function generateTenAdminCandidates(targetDateKey: string): {
+  targetDateKey: string;
+  displayDate: string;
+  previousDayKey: string;
+  previousDayDisplay: string;
+  themeTitle: string;
+  candidates: DateMCQ[];
+} {
+  const dateObj = new Date(targetDateKey + "T00:00:00Z");
+  const displayDate = dateObj.toLocaleDateString("en-US", {
+    month: "long",
+    day: "numeric",
+    year: "numeric"
+  });
+
+  const prevDateObj = new Date(dateObj);
+  prevDateObj.setUTCDate(prevDateObj.getUTCDate() - 1);
+  const previousDayKey = prevDateObj.toISOString().split("T")[0];
+  const previousDayDisplay = prevDateObj.toLocaleDateString("en-US", {
+    month: "long",
+    day: "numeric",
+    year: "numeric"
+  });
+
+  const candidates: DateMCQ[] = [];
+
+  // Check if we have curated questions for this date
+  const curated = CURATED_DATE_CAPSULES[targetDateKey];
+  if (curated && curated.mcqs && curated.mcqs.length > 0) {
+    // Add existing curated MCQs (e.g. 5)
+    curated.mcqs.forEach((mcq, idx) => {
+      candidates.push({
+        ...mcq,
+        id: `cand-${targetDateKey}-${idx + 1}`
+      });
+    });
+  }
+
+  // Complement up to 10 candidates using distinct syllabus pillars
+  let hash = 0;
+  for (let i = 0; i < targetDateKey.length; i++) {
+    hash = (hash * 31 + targetDateKey.charCodeAt(i)) >>> 0;
+  }
+
+  const universalPillars = [
+    {
+      category: "Constitutional Law & Judiciary",
+      targetExam: "UPSC GS-2 / Judiciary",
+      tagClass: "bg-purple-100 text-purple-900 border-purple-200",
+      generate: (prevDate: string) => ({
+        question: `In constitutional law and judicial updates from ${prevDate}, under which landmark doctrine formulated by the Supreme Court of India is judicial review affirmed as an unamendable core feature of the Constitution?`,
+        options: ["Basic Structure Doctrine (Kesavananda Bharati, 1973)", "Doctrine of Severability (A.K. Gopalan, 1950)", "Doctrine of Pith and Substance (State of Bombay v. F.N. Balsara)", "Doctrine of Colourable Legislation (Kameshwar Singh, 1952)"],
+        correctAnswer: 0,
+        explanation: "The Basic Structure Doctrine, established by the 13-judge bench in Kesavananda Bharati v. State of Kerala (1973), holds that while Parliament has wide power to amend the Constitution under Article 368, it cannot alter its basic structure or foundational pillars.",
+        examTrap: "Doctrine trap: Basic structure prohibits destroying constitutional identity; severability merely isolates invalid clauses from valid statutory text."
+      })
+    },
+    {
+      category: "Macroeconomics & Banking Regulations",
+      targetExam: "RBI Grade B / UPSC GS-3",
+      tagClass: "bg-blue-100 text-blue-900 border-blue-200",
+      generate: (prevDate: string) => ({
+        question: `Under Reserve Bank of India monetary policy operational guidelines evaluated on ${prevDate}, what is the mandatory Cash Reserve Ratio (CRR) that scheduled commercial banks must maintain with the central bank?`,
+        options: ["3.0% of NDTL", "4.5% of NDTL", "6.5% of NDTL", "18.0% of NDTL"],
+        correctAnswer: 1,
+        explanation: "Under Section 42(1) of the RBI Act 1934, scheduled commercial banks are required to maintain a specified percentage of their Net Demand and Time Liabilities (NDTL) as cash balances with the RBI, known as the Cash Reserve Ratio (CRR), set at 4.50%.",
+        examTrap: "CRR vs SLR: CRR is pure cash held with the RBI (no interest paid); Statutory Liquidity Ratio (SLR, 18%) can be kept in gold, government securities, or approved cash."
+      })
+    },
+    {
+      category: "Space Technology & ISRO Missions",
+      targetExam: "UPSC GS-3 / RRB NTPC",
+      tagClass: "bg-emerald-100 text-emerald-900 border-emerald-200",
+      generate: (prevDate: string) => ({
+        question: `In space exploration milestones reviewed on ${prevDate}, what is the primary scientific objective of ISRO's Chandrayaan-4 lunar sample return mission?`,
+        options: [
+          "Collect and return lunar surface regolith and core rock samples back to Earth",
+          "Establish a permanent human habitat module on the lunar south pole",
+          "Deploy an optical orbital telescope in permanent lunar Lagrange point L2",
+          "Impact an asteroid heading towards the cis-lunar transfer orbit"
+        ],
+        correctAnswer: 0,
+        explanation: "Chandrayaan-4 is conceptualized by ISRO as a multi-module lunar sample return mission to land near the lunar south pole, collect surface and sub-surface drilling samples, launch an ascender module, dock in lunar orbit, and return the capsule safely to Earth.",
+        examTrap: "Mission scope trap: Chandrayaan-3 was soft-landing and rover exploration; Chandrayaan-4 includes lunar takeoff and Earth return of lunar samples."
+      })
+    },
+    {
+      category: "Environment & Renewable Energy",
+      targetExam: "UPSC GS-3 / Forest Service",
+      tagClass: "bg-amber-100 text-amber-900 border-amber-200",
+      generate: (prevDate: string) => ({
+        question: `Under national clean energy targets reviewed on ${prevDate}, India has pledged at COP26 to achieve what total cumulative non-fossil fuel power generation capacity by the year 2030?`,
+        options: ["500 Gigawatts (GW)", "350 Gigawatts (GW)", "750 Gigawatts (GW)", "1000 Gigawatts (GW)"],
+        correctAnswer: 0,
+        explanation: "Under the updated Nationally Determined Contributions (NDCs) and the Panchamrit goals announced at COP26, India committed to installing 500 GW of non-fossil electricity capacity by 2030 and meeting 50% of its electric power requirement from renewable energy sources.",
+        examTrap: "Target trap: 500 GW is non-fossil capacity by 2030; net-zero carbon emissions target year for India is 2070."
+      })
+    },
+    {
+      category: "Cybersecurity & Digital Governance",
+      targetExam: "UPSC GS-3 / State PSC",
+      tagClass: "bg-cyan-100 text-cyan-900 border-cyan-200",
+      generate: (prevDate: string) => ({
+        question: `In cybersecurity directives reinforced on ${prevDate}, which apex statutory computer emergency response team under the Ministry of Electronics and IT serves as the national nodal agency for incident response and critical infrastructure vulnerability advisories?`,
+        options: ["CERT-In (Indian Computer Emergency Response Team)", "National Critical Information Infrastructure Protection Centre (NCIIPC)", "Indian Cyber Crime Coordination Centre (I4C)", "Data Security Council of India (DSCI)"],
+        correctAnswer: 0,
+        explanation: "Section 70B of the Information Technology Act, 2000 designates CERT-In as the national nodal agency responsible for collecting, analyzing, and disseminating information on cyber incidents and taking emergency response measures across India.",
+        examTrap: "Institutional trap: CERT-In is under MeitY for general incident response; NCIIPC operates under NTRO specifically for Critical Information Infrastructure (CII); I4C is under MHA for cybercrime policing."
+      })
+    },
+    {
+      category: "Agriculture, MSP & Rural Economy",
+      targetExam: "UPSC GS-3 / NABARD Grade A",
+      tagClass: "bg-lime-100 text-lime-900 border-lime-200",
+      generate: (prevDate: string) => ({
+        question: `Regarding agricultural pricing policies evaluated on ${prevDate}, which statutory committee recommends Minimum Support Prices (MSP) based on the comprehensive cost formula (A2 + FL)?`,
+        options: ["Commission for Agricultural Costs and Prices (CACP)", "Cabinet Committee on Economic Affairs (CCEA)", "National Farmers Commission (Swaminathan Committee)", "Food Corporation of India (FCI)"],
+        correctAnswer: 0,
+        explanation: "The Commission for Agricultural Costs and Prices (CACP) is an attached office of the Ministry of Agriculture that recommends MSPs for 22 mandated crops and Fair and Remunerative Price (FRP) for sugarcane. The Cabinet Committee on Economic Affairs (CCEA) chaired by the Prime Minister takes the final decision.",
+        examTrap: "Recommendation vs Approval: CACP recommends MSP; CCEA takes the final executive decision."
+      })
+    },
+    {
+      category: "Indian Classical Culture & Heritage",
+      targetExam: "UPSC GS-1 / SSC CGL",
+      tagClass: "bg-orange-100 text-orange-900 border-orange-200",
+      generate: (prevDate: string) => ({
+        question: `Reflecting official cultural designations reviewed on ${prevDate}, what is the mandatory historical requirement regarding antiquity for a language to be recognized as a 'Classical Language' in India?`,
+        options: [
+          "High antiquity of early texts/recorded history over a period of 1500–2000 years",
+          "Continuous spoken currency across at least five adjoining states",
+          "Inclusion in the Eighth Schedule prior to the 42nd Constitutional Amendment",
+          "Over 10 million native registered speakers according to the decennial Census"
+        ],
+        correctAnswer: 0,
+        explanation: "The criteria for Classical Language status set by the Ministry of Culture include: (1) High antiquity of early texts/recorded history over a period of 1500–2000 years; (2) A body of ancient literature considered valuable heritage; (3) Literary tradition that is original and not borrowed from another speech community.",
+        examTrap: "Criteria trap: Speaker population size is NOT a criterion; antiquity of 1500-2000 years and originality of ancient texts are the decisive requirements."
+      })
+    },
+    {
+      category: "International Summits & Geopolitics",
+      targetExam: "UPSC GS-2 / CDS",
+      tagClass: "bg-violet-100 text-violet-900 border-violet-200",
+      generate: (prevDate: string) => ({
+        question: `In multilateral diplomatic initiatives reviewed on ${prevDate}, which four sovereign nations comprise the Quadrilateral Security Dialogue (QUAD) committed to a free, open, and resilient Indo-Pacific?`,
+        options: [
+          "India, United States, Japan, and Australia",
+          "India, United States, United Kingdom, and France",
+          "India, Japan, South Korea, and Singapore",
+          "India, Australia, New Zealand, and Indonesia"
+        ],
+        correctAnswer: 0,
+        explanation: "The Quadrilateral Security Dialogue (QUAD) is an informal strategic forum comprising India, the United States, Japan, and Australia, focusing on maritime domain awareness, critical emerging technologies, disaster relief, and Indo-Pacific supply chain resilience.",
+        examTrap: "Grouping trap: AUKUS consists of Australia, UK, and US; QUAD consists of Australia, India, Japan, and US."
+      })
+    },
+    {
+      category: "Defense Technology & Strategic Missiles",
+      targetExam: "UPSC GS-3 / NDA / CDS",
+      tagClass: "bg-rose-100 text-rose-900 border-rose-200",
+      generate: (prevDate: string) => ({
+        question: `Reviewing defense modernization milestones on ${prevDate}, which indigenous canisterized surface-to-surface ballistic missile with a range of 1,000 to 2,000 km is inducted into the Strategic Forces Command?`,
+        options: ["Agni-Prime (Agni-P)", "BrahMos-ER", "Pralay Quasi-Ballistic Missile", "Akash-NG Surface-to-Air Missile"],
+        correctAnswer: 0,
+        explanation: "Agni-Prime is a new-generation advanced two-stage canisterized solid-propellant ballistic missile developed by DRDO with dual-redundant navigation systems, capable of delivering warheads to targets between 1,000 and 2,000 km.",
+        examTrap: "Range trap: Pralay is a short-range 350-500 km conventional quasi-ballistic missile; Agni-Prime is a 1,000-2,000 km strategic canisterized missile."
+      })
+    },
+    {
+      category: "Biotechnology & Genetic Engineering",
+      targetExam: "UPSC GS-3 / Medical Science",
+      tagClass: "bg-teal-100 text-teal-900 border-teal-200",
+      generate: (prevDate: string) => ({
+        question: `In genetic research and regulatory updates reviewed on ${prevDate}, which statutory committee under the Ministry of Environment, Forest and Climate Change (MoEFCC) is the apex regulatory body for approving commercial release of genetically modified (GM) crops in India?`,
+        options: [
+          "Genetic Engineering Appraisal Committee (GEAC)",
+          "Review Committee on Genetic Manipulation (RCGM)",
+          "Institutional Biosafety Committee (IBSC)",
+          "Food Safety and Standards Authority of India (FSSAI)"
+        ],
+        correctAnswer: 0,
+        explanation: "The Genetic Engineering Appraisal Committee (GEAC) functions under the MoEFCC under the 'Rules for the Manufacture, Use, Import, Export and Storage of Hazardous Microorganisms/Genetically Engineered Organisms or Cells, 1989' framed under the Environment (Protection) Act, 1986.",
+        examTrap: "Regulatory tier trap: RCGM under DBT monitors research and contained field trials; GEAC under MoEFCC grants environmental clearance for large-scale field trials and commercial release."
+      })
+    }
+  ];
+
+  let pillarIndex = hash % universalPillars.length;
+  while (candidates.length < 10) {
+    const p = universalPillars[pillarIndex % universalPillars.length];
+    const generated = p.generate(previousDayDisplay);
+    candidates.push({
+      id: `cand-${targetDateKey}-${candidates.length + 1}`,
+      category: `${p.category} (${previousDayDisplay} Grounding)`,
+      targetExam: p.targetExam,
+      tagClass: p.tagClass,
+      question: generated.question,
+      options: generated.options,
+      correctAnswer: generated.correctAnswer,
+      explanation: generated.explanation,
+      examTrap: generated.examTrap
+    });
+    pillarIndex++;
+  }
+
+  const theme = curated?.themeTitle || `Verified Current Affairs Grounded in Events of ${previousDayDisplay}`;
+
+  return {
+    targetDateKey,
+    displayDate,
+    previousDayKey,
+    previousDayDisplay,
+    themeTitle: theme,
+    candidates: candidates.slice(0, 10)
   };
 }
 

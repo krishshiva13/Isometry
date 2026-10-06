@@ -23,7 +23,8 @@ import {
   Clock, 
   Trophy,
   Download,
-  Printer
+  Printer,
+  ArrowRight
 } from 'lucide-react';
 import { useAuth } from '../contexts/AuthContext';
 import { authService } from '../services/authService';
@@ -385,6 +386,35 @@ export const Quiz = () => {
           </h1>
           <p className="text-ink3 text-sm">Challenge your knowledge with daily facts and trivia</p>
         </div>
+
+        {/* Admin Editorial Callout Banner */}
+        {isAdmin && (
+          <div className="bg-gradient-to-r from-amber-500/15 via-gold/15 to-amber-500/10 border border-gold/40 rounded-2xl p-4 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 text-ink">
+            <div className="flex items-center gap-2.5">
+              <span className="p-2 bg-gold/20 text-gold rounded-xl shrink-0">
+                <ShieldCheck size={18} />
+              </span>
+              <div>
+                <div className="flex items-center gap-2">
+                  <span className="text-[10px] font-mono font-black uppercase px-2 py-0.5 rounded bg-gold text-black">
+                    ADMIN EDITORIAL
+                  </span>
+                  <strong className="text-xs font-bold">Daily Quiz Fact-Check & Curation Workbench</strong>
+                </div>
+                <p className="text-xs text-ink3 mt-0.5">
+                  Review 10 candidate questions every day, request AI fact-checks & corrections, and select 5 questions to publish for tomorrow with the A4 Handout.
+                </p>
+              </div>
+            </div>
+            <Link
+              to="/admin/daily-quiz"
+              className="px-3.5 py-1.5 rounded-xl bg-gold hover:bg-gold-l text-black font-bold text-xs flex items-center gap-1.5 shrink-0 shadow-xs transition-all cursor-pointer"
+            >
+              <span>Open Curation Workbench</span>
+              <ArrowRight size={13} />
+            </Link>
+          </div>
+        )}
 
         {/* Offline Mode Banner */}
         {isOfflineActive && (
