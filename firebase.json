@@ -10,8 +10,8 @@
       {
         "source": "/api/**",
         "run": {
-          "serviceId": "facthub-api",
-          "region": "us-central1"
+          "serviceId": "facthub-app",
+          "region": "asia-southeast1"
         }
       },
       {
