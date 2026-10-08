@@ -9,3 +9,11 @@ runConfig:
 env:
   - variable: NODE_ENV
     value: production
+  - variable: GOOGLE_PACKAGE_MANAGER
+    value: npm
+    availability:
+      - BUILD
+  - variable: GOOGLE_NODEJS_VERSION
+    value: 22.x
+    availability:
+      - BUILD
