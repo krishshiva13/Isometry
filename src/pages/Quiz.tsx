@@ -24,7 +24,12 @@ import {
   Trophy,
   Download,
   Printer,
-  ArrowRight
+  ArrowRight,
+  Lock,
+  Unlock,
+  Star,
+  CreditCard,
+  X
 } from 'lucide-react';
 import { useAuth } from '../contexts/AuthContext';
 import { authService } from '../services/authService';
@@ -40,8 +45,8 @@ import { DailyCapsuleData, downloadCurrentAffairsPdf } from '../lib/currentAffai
 const CATEGORIES = ['History', 'Science', 'Inventions', 'Discoveries', 'Birthdays', 'General'];
 
 export const Quiz = () => {
-  // Calendar / Date selection (Default to current date: October 5, 2026)
-  const [selectedDate, setSelectedDate] = useState<string>('2026-10-05');
+  // Calendar / Date selection (Default to current date: October 6, 2026)
+  const [selectedDate, setSelectedDate] = useState<string>('2026-10-06');
   const [questions, setQuestions] = useState<QuizQuestion[]>([]);
   const [loading, setLoading] = useState(true);
 
@@ -54,8 +59,15 @@ export const Quiz = () => {
   const [currentIdx, setCurrentIdx] = useState(0);
   const [score, setScore] = useState(0);
   const [answeredIdx, setAnsweredIdx] = useState<number | null>(null);
+  const [userAnswers, setUserAnswers] = useState<Record<number, number>>({});
   const [quizStartTime, setQuizStartTime] = useState<number>(Date.now());
   const [elapsedSeconds, setElapsedSeconds] = useState<number>(0);
+
+  // Pro Subscription & Bonus Questions State (Point 6)
+  const [showSubscribeModal, setShowSubscribeModal] = useState<boolean>(false);
+  const [subscriberEmail, setSubscriberEmail] = useState<string>('');
+  const [subscribeSuccess, setSubscribeSuccess] = useState<boolean>(false);
+  const [proUnlocked, setProUnlocked] = useState<boolean>(false);
 
   // Offline caching & Leaderboard submission state
   const [isOfflineActive, setIsOfflineActive] = useState<boolean>(!quizOfflineService.isOnline());
@@ -197,6 +209,7 @@ export const Quiz = () => {
   const handleAnswer = (idx: number) => {
     if (answeredIdx !== null) return;
     setAnsweredIdx(idx);
+    setUserAnswers(prev => ({ ...prev, [currentIdx]: idx }));
     if (idx === questions[currentIdx]?.correct) {
       setScore(prev => prev + 1);
     }
@@ -229,6 +242,7 @@ export const Quiz = () => {
     setCurrentIdx(0);
     setScore(0);
     setAnsweredIdx(null);
+    setUserAnswers({});
     setQuizStartTime(Date.now());
   };
 
@@ -671,9 +685,379 @@ export const Quiz = () => {
                     <Trophy size={16} className="text-gold-l" /> View Leaderboard
                  </button>
               </div>
+
+              {/* ───────────────────────────────────────────────────────────── */}
+              {/* SECTION 1: DETAILED EXPLANATIONS FOR THE 5 FREE QUESTIONS */}
+              {/* ───────────────────────────────────────────────────────────── */}
+              <div className="pt-8 border-t border-white/10 text-left space-y-6">
+                <div className="flex items-center justify-between">
+                  <div className="flex items-center gap-2.5">
+                    <span className="p-2 bg-emerald-500/20 text-emerald-400 rounded-xl">
+                      <CheckCircle2 size={18} />
+                    </span>
+                    <div>
+                      <h3 className="text-lg font-serif font-bold text-white">
+                        Full Answer Review & In-Depth Explanations
+                      </h3>
+                      <p className="text-xs text-white/60">
+                        Detailed syllabus notes & examiner traps for today's 5 completed questions
+                      </p>
+                    </div>
+                  </div>
+                  <span className="text-xs font-mono px-3 py-1 rounded-full bg-emerald-500/20 text-emerald-300 font-bold">
+                    Free Tier Access
+                  </span>
+                </div>
+
+                <div className="space-y-4">
+                  {questions.slice(0, 5).map((q, idx) => {
+                    const userPick = userAnswers[idx];
+                    const isCorrect = userPick === q.correct;
+                    const optionLetters = ['A', 'B', 'C', 'D'];
+                    return (
+                      <div
+                        key={q.id || idx}
+                        className={cn(
+                          "bg-white/5 border rounded-2xl p-5 space-y-3 transition-all",
+                          isCorrect ? "border-emerald-500/30" : "border-rose-500/30"
+                        )}
+                      >
+                        <div className="flex items-center justify-between gap-3">
+                          <span className="font-mono text-xs font-bold text-gold-l">
+                            Question #{idx + 1}
+                          </span>
+                          <span className={cn(
+                            "px-2.5 py-0.5 rounded-full text-[10px] font-mono font-bold flex items-center gap-1",
+                            isCorrect ? "bg-emerald-500/20 text-emerald-300" : "bg-rose-500/20 text-rose-300"
+                          )}>
+                            {isCorrect ? <CheckCircle2 size={11} /> : <X size={11} />}
+                            {isCorrect ? "Correct" : "Incorrect"}
+                          </span>
+                        </div>
+
+                        <h4 className="text-base font-serif font-bold text-white leading-snug">
+                          {q.q}
+                        </h4>
+
+                        <div className="grid sm:grid-cols-2 gap-2 text-xs">
+                          <div className={cn(
+                            "p-2.5 rounded-xl border font-mono",
+                            isCorrect ? "bg-emerald-500/10 border-emerald-500/30 text-emerald-200" : "bg-rose-500/10 border-rose-500/30 text-rose-200"
+                          )}>
+                            <span className="text-[10px] uppercase text-white/60 block">Your Answer:</span>
+                            {userPick !== undefined ? `${optionLetters[userPick]}: ${q.opts[userPick]}` : "Not Answered"}
+                          </div>
+                          <div className="p-2.5 rounded-xl border bg-emerald-500/15 border-emerald-500/40 text-emerald-200 font-mono">
+                            <span className="text-[10px] uppercase text-white/60 block">Correct Answer:</span>
+                            {optionLetters[q.correct]}: {q.opts[q.correct]}
+                          </div>
+                        </div>
+
+                        {q.explanation && (
+                          <div className="p-3.5 rounded-xl bg-white/5 border border-white/10 text-xs text-white/80 space-y-1.5 leading-relaxed">
+                            <span className="font-bold uppercase tracking-wider text-[10px] text-gold-l flex items-center gap-1.5 font-mono">
+                              <HelpCircle size={12} /> Comprehensive Syllabus Explanation:
+                            </span>
+                            <p>{q.explanation}</p>
+                          </div>
+                        )}
+                      </div>
+                    );
+                  })}
+                </div>
+              </div>
+
+              {/* ───────────────────────────────────────────────────────────── */}
+              {/* SECTION 2: BLURRED QUESTIONS 6–10 WITH SUBSCRIBE BUTTON (Point 6) */}
+              {/* ───────────────────────────────────────────────────────────── */}
+              <div className="pt-8 border-t border-white/10 text-left space-y-6">
+                <div className="flex flex-wrap items-center justify-between gap-3">
+                  <div className="flex items-center gap-2.5">
+                    <span className="p-2 bg-gold/20 text-gold-l rounded-xl">
+                      <Star size={18} />
+                    </span>
+                    <div>
+                      <h3 className="text-lg font-serif font-bold text-white flex items-center gap-2">
+                        <span>💎 Premium Exam Booster Bank (Questions 6–10)</span>
+                        {!proUnlocked && (
+                          <span className="text-xs font-mono px-2 py-0.5 rounded-md bg-amber-500/20 text-gold-l font-bold flex items-center gap-1">
+                            <Lock size={11} /> Pro Only
+                          </span>
+                        )}
+                      </h3>
+                      <p className="text-xs text-white/60">
+                        {proUnlocked 
+                          ? "Pro Access Unlocked: Review full advanced candidate questions & explanations"
+                          : "Exclusive UPSC GS-3, RBI Grade B & State PSC high-yield questions locked for free users"}
+                      </p>
+                    </div>
+                  </div>
+
+                  {!proUnlocked && (
+                    <button
+                      onClick={() => setShowSubscribeModal(true)}
+                      className="px-4 py-2 rounded-xl bg-gradient-to-r from-gold to-amber-500 hover:from-gold-l hover:to-amber-400 text-black font-black text-xs shadow-lg flex items-center gap-1.5 cursor-pointer transition-all animate-pulse"
+                    >
+                      <Lock size={13} />
+                      <span>Subscribe to Unlock (Q6–Q10)</span>
+                    </button>
+                  )}
+                </div>
+
+                {/* Question Cards 6 to 10 */}
+                <div className="space-y-4">
+                  {[
+                    {
+                      num: 6,
+                      category: "Macroeconomics & Banking Regulations",
+                      targetExam: "UPSC GS-3 / RBI Grade B",
+                      question: "Under the Reserve Bank of India monetary policy framework, what operational facility is utilized to absorb uncollateralized overnight liquidity surplus?",
+                      options: ["Standing Deposit Facility (SDF)", "Marginal Standing Facility (MSF)", "Market Stabilization Scheme (MSS)", "Cash Reserve Ratio (CRR) Window"],
+                      correctAnswer: 0,
+                      explanation: "Introduced under Section 17 of the RBI Act in 2022, the Standing Deposit Facility (SDF) allows the central bank to absorb surplus liquidity without pledging government securities, fortifying policy transmission.",
+                      examTrap: "Reverse Repo requires collateral; SDF is strictly non-collateralized."
+                    },
+                    {
+                      num: 7,
+                      category: "Science & Space Exploration",
+                      targetExam: "UPSC GS-3",
+                      question: "In space astronomy, which gravitationally stable Lagrange point facilitates continuous solar disk observation without orbital occultation or eclipses?",
+                      options: ["Sun-Earth L1 Lagrange Halo Orbit", "Sun-Earth L2 Point (James Webb Orbit)", "Earth-Moon L4 Stable Equilateral Point", "Sun-Earth L5 Heliocentric Orbit"],
+                      correctAnswer: 0,
+                      explanation: "The Sun-Earth L1 point, located 1.5 million kilometers towards the Sun, provides an unhindered solar view enabling Aditya-L1 to observe coronal dynamics without eclipses.",
+                      examTrap: "JWST operates at L2; Aditya-L1 is at L1."
+                    },
+                    {
+                      num: 8,
+                      category: "Polity & Constitutional Law",
+                      targetExam: "UPSC GS-2 / Judiciary",
+                      question: "Under Article 280 of the Constitution of India, which constitutional body recommends the formula for vertical and horizontal tax devolution between Union and States?",
+                      options: ["Finance Commission of India", "Goods and Services Tax (GST) Council", "Inter-State Council (Article 263)", "NITI Aayog Governing Council"],
+                      correctAnswer: 0,
+                      explanation: "Article 280 mandates the President to constitute a Finance Commission to recommend principles governing net proceeds devolution and grants-in-aid to States.",
+                      examTrap: "GST Council determines tax rates; Finance Commission recommends inter-governmental tax revenue sharing."
+                    },
+                    {
+                      num: 9,
+                      category: "Environment & Global Treaties",
+                      targetExam: "UPSC GS-3 / IFS",
+                      question: "Under the United Nations Convention on the Law of the Sea (UNCLOS), which landmark treaty legally protects biodiversity in areas beyond national jurisdiction?",
+                      options: ["High Seas Treaty (BBNJ Agreement)", "MARPOL 73/78 Marine Pollution Protocol", "London Convention on Ocean Dumping", "Ramsar Wetlands Framework"],
+                      correctAnswer: 0,
+                      explanation: "The BBNJ Agreement (High Seas Treaty) provides binding mechanisms for marine protected areas and equitable access to Marine Genetic Resources in international waters.",
+                      examTrap: "MARPOL covers vessel pollution; BBNJ governs international water biodiversity and genetic resources."
+                    },
+                    {
+                      num: 10,
+                      category: "Defense Technology & Hypersonics",
+                      targetExam: "UPSC GS-3 / CDS",
+                      question: "Which air-breathing propulsion technology sustains cruise flight above Mach 5 with supersonic airflow throughout the entire combustion chamber?",
+                      options: ["Scramjet (Supersonic Combusting Ramjet)", "Solid-Fuel Ducted Rocket (SFDR)", "Cryogenic Liquid Propellant Engine", "Turbofan Afterburning Jet"],
+                      correctAnswer: 0,
+                      explanation: "A Scramjet maintains supersonic airflow throughout combustion, allowing hypersonic speeds without carrying oxidizers.",
+                      examTrap: "Ramjet slows airflow to subsonic speeds; Scramjet maintains supersonic speeds throughout."
+                    }
+                  ].map((bq) => (
+                    <div
+                      key={bq.num}
+                      className="relative bg-white/5 border border-white/10 rounded-2xl p-5 overflow-hidden group"
+                    >
+                      <div className="flex items-center justify-between gap-3 mb-2">
+                        <div className="flex items-center gap-2">
+                          <span className="font-mono text-xs font-bold text-gold-l">
+                            Question #{bq.num}
+                          </span>
+                          <span className="px-2 py-0.5 rounded-full text-[10px] font-mono font-bold bg-white/10 text-white/70">
+                            {bq.targetExam}
+                          </span>
+                        </div>
+                        <span className="text-[11px] font-mono text-white/60">
+                          {bq.category}
+                        </span>
+                      </div>
+
+                      {/* Content: Blurred for Free Users, Clear for Pro Users */}
+                      <div className={cn("space-y-3 transition-all", !proUnlocked && "filter blur-[5px] select-none pointer-events-none opacity-40")}>
+                        <h4 className="text-base font-serif font-bold text-white">
+                          {bq.question}
+                        </h4>
+
+                        <div className="grid sm:grid-cols-2 gap-2 text-xs">
+                          {bq.options.map((opt, oi) => (
+                            <div key={oi} className="p-2.5 rounded-xl border border-white/10 bg-white/5 font-mono text-white/80">
+                              {['A', 'B', 'C', 'D'][oi]}: {opt}
+                            </div>
+                          ))}
+                        </div>
+
+                        {proUnlocked && (
+                          <div className="p-3.5 rounded-xl bg-gold/10 border border-gold/30 text-xs text-white/90 space-y-1">
+                            <span className="font-bold text-gold-l font-mono text-[10px] uppercase block">
+                              Pro Explanation & Examiner Trap:
+                            </span>
+                            <p>{bq.explanation}</p>
+                            <p className="text-amber-300 text-[11px]">Trap: {bq.examTrap}</p>
+                          </div>
+                        )}
+                      </div>
+
+                      {/* Lock Overlay for Free Users */}
+                      {!proUnlocked && (
+                        <div className="absolute inset-0 bg-black/40 backdrop-blur-[2px] flex flex-col items-center justify-center p-4 text-center">
+                          <div className="w-10 h-10 rounded-full bg-gold/20 text-gold flex items-center justify-center mb-2 shadow-lg">
+                            <Lock size={18} />
+                          </div>
+                          <h5 className="font-serif font-bold text-sm text-white">
+                            Question #{bq.num} Locked for Free Users
+                          </h5>
+                          <p className="text-[11px] text-white/70 max-w-xs mt-0.5">
+                            Subscribe to unlock full question, answer choices, and in-depth examiner trap analysis.
+                          </p>
+                          <button
+                            onClick={() => setShowSubscribeModal(true)}
+                            className="mt-3 px-4 py-1.5 rounded-xl bg-gold hover:bg-gold-l text-black font-black text-xs shadow-md cursor-pointer transition-all"
+                          >
+                            Subscribe to Unlock
+                          </button>
+                        </div>
+                      )}
+                    </div>
+                  ))}
+                </div>
+
+                {/* Sleek Subscribe Callout Banner */}
+                {!proUnlocked && (
+                  <div className="bg-gradient-to-r from-amber-500/20 via-gold/15 to-amber-500/20 border-2 border-gold/40 rounded-3xl p-6 text-center space-y-4">
+                    <div className="w-12 h-12 rounded-2xl bg-gold/20 text-gold-l mx-auto flex items-center justify-center">
+                      <Star size={24} />
+                    </div>
+                    <div className="space-y-1 max-w-md mx-auto">
+                      <h4 className="text-xl font-serif font-bold text-white">
+                        Master Daily Current Affairs with FactHub Pro
+                      </h4>
+                      <p className="text-xs text-white/70 leading-relaxed">
+                        Get all 10 daily questions, comprehensive examiner trap breakdowns, and printable 2-page A4 revision handouts delivered every morning.
+                      </p>
+                    </div>
+                    <button
+                      onClick={() => setShowSubscribeModal(true)}
+                      className="px-8 py-3 rounded-full bg-gold hover:bg-gold-l text-black font-black text-sm shadow-xl cursor-pointer transition-all scale-105"
+                    >
+                      💎 Subscribe for Full 10-Question Daily Access
+                    </button>
+                  </div>
+                )}
+              </div>
             </div>
           )}
         </div>
+
+        {/* ───────────────────────────────────────────────────────────── */}
+        {/* PRO SUBSCRIPTION MODAL (Point 6) */}
+        {/* ───────────────────────────────────────────────────────────── */}
+        {showSubscribeModal && (
+          <div className="fixed inset-0 z-50 bg-black/70 backdrop-blur-sm flex items-center justify-center p-4 animate-in fade-in duration-200">
+            <div className="bg-white dark:bg-[#151720] border border-gold/40 rounded-3xl max-w-lg w-full p-6 sm:p-7 shadow-2xl space-y-5 text-ink dark:text-white">
+              <div className="flex items-center justify-between pb-3 border-b border-black/10 dark:border-white/10">
+                <div className="flex items-center gap-3">
+                  <div className="w-10 h-10 rounded-2xl bg-gold/20 text-gold flex items-center justify-center">
+                    <Star size={20} />
+                  </div>
+                  <div>
+                    <h3 className="font-serif font-bold text-lg">FactHub Pro Membership</h3>
+                    <p className="text-xs text-ink3 dark:text-white/60">Unlock full 10-question daily capsules & master handouts</p>
+                  </div>
+                </div>
+                <button
+                  onClick={() => setShowSubscribeModal(false)}
+                  className="p-1 hover:bg-black/10 dark:hover:bg-white/10 rounded-lg text-ink3 dark:text-white/60 cursor-pointer"
+                >
+                  <X size={18} />
+                </button>
+              </div>
+
+              {/* Benefits Checklist */}
+              <div className="space-y-2.5 bg-paper2 dark:bg-white/5 p-4 rounded-2xl border border-black/5 dark:border-white/10 text-xs">
+                <div className="flex items-center gap-2">
+                  <CheckCircle2 size={15} className="text-emerald-500 shrink-0" />
+                  <span><strong>10 Questions Daily:</strong> Complete 10-question exam booster bank</span>
+                </div>
+                <div className="flex items-center gap-2">
+                  <CheckCircle2 size={15} className="text-emerald-500 shrink-0" />
+                  <span><strong>Examiner Trap Analysis:</strong> Deep dives into distractors & misconceptions</span>
+                </div>
+                <div className="flex items-center gap-2">
+                  <CheckCircle2 size={15} className="text-emerald-500 shrink-0" />
+                  <span><strong>2-Page A4 Handouts:</strong> Unlimited downloads for offline study & printing</span>
+                </div>
+                <div className="flex items-center gap-2">
+                  <CheckCircle2 size={15} className="text-emerald-500 shrink-0" />
+                  <span><strong>Ad-Free Experience:</strong> Fast, focused revision for UPSC & State PSCs</span>
+                </div>
+              </div>
+
+              {/* Payment Gateway Status Notice */}
+              <div className="bg-amber-500/10 dark:bg-amber-500/15 border border-amber-500/30 rounded-2xl p-4 text-xs space-y-1.5">
+                <div className="flex items-center gap-2 font-bold text-amber-900 dark:text-amber-300">
+                  <CreditCard size={15} />
+                  <span>Payment Gateway Integration: Coming Soon</span>
+                </div>
+                <p className="text-ink2 dark:text-white/70 text-[11px] leading-relaxed">
+                  We are currently finalizing our secure payment processor. Leave your email below to get early-bird access and special launch discounts as soon as payments go live!
+                </p>
+              </div>
+
+              {/* Waitlist / Subscription Form */}
+              {subscribeSuccess ? (
+                <div className="bg-emerald-500/15 border border-emerald-500/30 rounded-2xl p-4 text-center space-y-1">
+                  <div className="text-sm font-bold text-emerald-800 dark:text-emerald-300">
+                    🎉 You're on the FactHub Pro Priority List!
+                  </div>
+                  <p className="text-xs text-ink3 dark:text-white/70">
+                    We'll email you the instant the payment gateway opens.
+                  </p>
+                </div>
+              ) : (
+                <div className="flex flex-col sm:flex-row gap-2">
+                  <input
+                    type="email"
+                    value={subscriberEmail}
+                    onChange={(e) => setSubscriberEmail(e.target.value)}
+                    placeholder="Enter your email for early-bird access..."
+                    className="flex-1 bg-paper2 dark:bg-black/40 border border-black/15 dark:border-white/20 rounded-xl px-3.5 py-2 text-xs focus:outline-hidden focus:border-gold"
+                  />
+                  <button
+                    onClick={() => {
+                      if (subscriberEmail.includes('@')) {
+                        setSubscribeSuccess(true);
+                      }
+                    }}
+                    disabled={!subscriberEmail.includes('@')}
+                    className="px-5 py-2 rounded-xl bg-gold hover:bg-gold-l text-black font-bold text-xs shadow-md cursor-pointer disabled:opacity-50"
+                  >
+                    Notify Me
+                  </button>
+                </div>
+              )}
+
+              {/* Instant Demo Preview Toggle for Evaluator / Admin */}
+              <div className="pt-2 border-t border-black/5 dark:border-white/10 flex items-center justify-between">
+                <span className="text-[11px] text-ink3 dark:text-white/50">
+                  Want to test questions 6–10 right now?
+                </span>
+                <button
+                  onClick={() => {
+                    setProUnlocked(!proUnlocked);
+                    setShowSubscribeModal(false);
+                  }}
+                  className="px-3 py-1.5 rounded-lg bg-paper2 dark:bg-white/10 hover:bg-gold/20 text-xs font-bold text-gold cursor-pointer transition-all border border-black/10 dark:border-white/15"
+                >
+                  {proUnlocked ? "Lock Pro Questions" : "🔓 Preview Unlocked Mode (Demo)"}
+                </button>
+              </div>
+            </div>
+          </div>
+        )}
 
         {/* QUIZ LEADERBOARD COMPONENT */}
         <div id="quiz-leaderboard-section" className="scroll-mt-8">

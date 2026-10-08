@@ -122,6 +122,13 @@ service cloud.firestore {
         && data.currentAffairs is list;
     }
 
+    function isValidQuizDraft(data) {
+      return data.keys().hasAll(['targetDateKey'])
+        && data.targetDateKey is string && data.targetDateKey.size() <= 64
+        && (!('status' in data) || data.status is string)
+        && (!('candidates' in data) || data.candidates is list);
+    }
+
     function isValidLeaderboardEntry(data) {
       let requiredFields = ['userName', 'score', 'totalQuestions', 'accuracy', 'quizDate'];
       return data.keys().hasAll(requiredFields)
@@ -194,8 +201,13 @@ service cloud.firestore {
 
     match /daily_capsules/{capsuleId} {
       allow read: if true;
-      allow create: if isValidDailyCapsule(incoming());
-      allow update: if isAdmin();
+      allow create, update: if isAdmin() || isValidDailyCapsule(incoming());
+      allow delete: if isAdmin();
+    }
+
+    match /admin_quiz_drafts/{draftId} {
+      allow read: if true;
+      allow create, update: if isAdmin() || isValidQuizDraft(incoming());
       allow delete: if isAdmin();
     }
 

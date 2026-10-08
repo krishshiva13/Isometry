@@ -205,6 +205,10 @@
       "schema": "DailyCapsule",
       "description": "Daily exam prep capsules and syllabus-mapped compendiums."
     },
+    "/admin_quiz_drafts/{draftId}": {
+      "schema": "DailyCapsule",
+      "description": "Candidate questions draft bank for admin editorial review."
+    },
     "/users/{uid}/bookmarks/{bookmarkId}": {
       "schema": "UserBookmark",
       "description": "Bookmarked facts for user."
