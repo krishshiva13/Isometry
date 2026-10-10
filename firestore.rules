@@ -159,6 +159,10 @@ service cloud.firestore {
     //  RULES
     // ═══════════════════════════════════════════
 
+    match /test/{testId} {
+      allow read: if true;
+    }
+
     match /ai_drafts/{draftId} {
       allow read, write: if isAdmin();
     }

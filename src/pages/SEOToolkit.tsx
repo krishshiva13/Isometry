@@ -27,7 +27,7 @@ import { SEOAuditCard } from '../components/seo/SEOAuditCard';
 import { KeywordResearchInputField } from '../components/seo/KeywordResearchInputField';
 import { INITIAL_FACTS } from '../seed';
 import { useAuth } from '../contexts/AuthContext';
-import { getFirestore, collection, getDocs } from 'firebase/firestore';
+import { collection, getDocs } from 'firebase/firestore';
 import { db } from '../lib/firebase';
 import { cn } from '../lib/utils';
 

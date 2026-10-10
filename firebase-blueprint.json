@@ -248,6 +248,10 @@
     "/admins/{adminId}": {
       "schema": "AdminRecord",
       "description": "Admin authorization marker documents."
+    },
+    "/test/{testId}": {
+      "schema": "AdminRecord",
+      "description": "Health check and connection validation documents."
     }
   }
 }

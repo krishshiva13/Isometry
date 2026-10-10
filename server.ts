@@ -5,7 +5,7 @@ import { createServer as createViteServer } from "vite";
 import { GoogleGenAI, Type } from "@google/genai";
 import dotenv from "dotenv";
 import { initializeApp } from "firebase/app";
-import { getFirestore, collection, getDocs, getDoc, setDoc, doc, query, orderBy, limit, setLogLevel } from "firebase/firestore";
+import { initializeFirestore, getFirestore, collection, getDocs, getDoc, setDoc, doc, query, orderBy, limit, setLogLevel } from "firebase/firestore";
 import fs from "fs";
 import { extractVocabularyFallback, lookupWordFallback } from "./server/vocabularyFallback.ts";
 import { 
@@ -174,7 +174,13 @@ try {
   if (fs.existsSync(configPath)) {
     const firebaseConfig = JSON.parse(fs.readFileSync(configPath, "utf-8"));
     const firebaseApp = initializeApp(firebaseConfig, "server-app");
-    serverDb = getFirestore(firebaseApp, firebaseConfig.firestoreDatabaseId || "(default)");
+    try {
+      serverDb = initializeFirestore(firebaseApp, {
+        experimentalForceLongPolling: true,
+      }, firebaseConfig.firestoreDatabaseId || "(default)");
+    } catch {
+      serverDb = getFirestore(firebaseApp, firebaseConfig.firestoreDatabaseId || "(default)");
+    }
     try {
       setLogLevel("error");
     } catch {}
