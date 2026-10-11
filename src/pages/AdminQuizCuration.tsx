@@ -281,7 +281,10 @@ export const AdminQuizCuration: React.FC = () => {
         setShowFocusModal(false);
         showToast(`✨ Generated 10 candidate questions for ${data.draft.displayDate} (Grounded in ${data.draft.previousDayDisplay})!`);
       } else {
-        showToast(data.error || (data.locked ? data.message : 'Failed to generate candidates'));
+        const errorText = data.details
+          ? `${data.error || 'Failed to generate candidates'}: ${data.details}`
+          : (data.error || data.message || (data.locked ? data.message : 'Failed to generate candidates'));
+        showToast(errorText);
       }
     } catch (err: any) {
       console.error('Candidate generation failed:', err);
@@ -1355,6 +1358,25 @@ export const AdminQuizCuration: React.FC = () => {
                 <p className="text-xs text-ink3 dark:text-white/60">Grounded in events of {draft?.previousDayDisplay || 'preceding day'}</p>
               </div>
             </div>
+
+            {!lockStatus.allowed && !bypassTimeLock && (
+              <div className="mb-4 p-3 rounded-2xl bg-amber-500/10 border border-amber-500/30 flex items-start gap-2.5 text-xs text-amber-800 dark:text-amber-200">
+                <Lock size={15} className="mt-0.5 shrink-0 text-amber-500" />
+                <div className="space-y-1">
+                  <p className="font-semibold">{lockStatus.message || "Scheduled to unlock at 10:00 PM IST."}</p>
+                  <p className="text-[11px] opacity-80">
+                    Want to generate now in advance?{' '}
+                    <button
+                      type="button"
+                      onClick={() => setBypassTimeLock(true)}
+                      className="underline font-bold text-amber-600 dark:text-amber-400 cursor-pointer"
+                    >
+                      Enable Admin Test Override
+                    </button>
+                  </p>
+                </div>
+              </div>
+            )}
 
             <div className="space-y-3 mb-6">
               <label className="block text-xs font-mono font-bold text-ink3 dark:text-white/70 uppercase">

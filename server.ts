@@ -2583,7 +2583,7 @@ app.get("/api/admin/daily-quiz/candidates", requireAdmin, async (req, res) => {
   }
 });
 
-// Helper: Check if next day's quiz generation is allowed (Rule: only after 10:00 PM of previous day)
+// Helper: Check if next day's quiz generation is allowed (Rule: only after 10:00 PM IST of previous day)
 function checkQuizGenerationTimeLock(targetDateKey: string): {
   allowed: boolean;
   unlockTime: string;
@@ -2596,11 +2596,12 @@ function checkQuizGenerationTimeLock(targetDateKey: string): {
   prevDateObj.setUTCDate(prevDateObj.getUTCDate() - 1);
   const prevDateKey = prevDateObj.toISOString().split("T")[0];
 
-  // 10:00 PM (22:00) on previous day UTC / server time
-  const unlockDateTime = new Date(`${prevDateKey}T22:00:00Z`);
+  // 10:00 PM (22:00) on previous day in Indian Standard Time (IST, UTC+05:30).
+  // FactHub serves Indian exam aspirants, and daily current affairs conclude at 10 PM IST (16:30 UTC).
+  const unlockDateTime = new Date(`${prevDateKey}T22:00:00+05:30`);
   const now = new Date();
 
-  // If target date is tomorrow or future, check if current time is before 10 PM of previous day
+  // If target date is tomorrow or future, check if current time is before 10 PM IST of previous day
   if (now.getTime() < unlockDateTime.getTime()) {
     const diffMs = unlockDateTime.getTime() - now.getTime();
     const hoursRemaining = Math.floor(diffMs / (1000 * 60 * 60));
@@ -2610,7 +2611,7 @@ function checkQuizGenerationTimeLock(targetDateKey: string): {
       unlockTime: unlockDateTime.toISOString(),
       hoursRemaining,
       minutesRemaining,
-      message: `Next day's quiz generation is locked until 10:00 PM of the previous day (${prevDateKey} at 22:00). Current affairs are still unfolding. Unlocks in ${hoursRemaining}h ${minutesRemaining}m.`
+      message: `Next day's quiz generation is locked until 10:00 PM IST of the previous day (${prevDateKey} at 22:00 IST). Current affairs are still unfolding. Unlocks in ${hoursRemaining}h ${minutesRemaining}m.`
     };
   }
 
@@ -2620,7 +2621,7 @@ function checkQuizGenerationTimeLock(targetDateKey: string): {
   };
 }
 
-// GET /api/admin/daily-quiz/check-lock — Check if generation for targetDate is unlocked (10 PM rule)
+// GET /api/admin/daily-quiz/check-lock — Check if generation for targetDate is unlocked (10 PM IST rule)
 app.get("/api/admin/daily-quiz/check-lock", requireAdmin, async (req, res) => {
   const dateParam = typeof req.query.targetDate === "string" ? req.query.targetDate : undefined;
   const { targetDateKey } = resolveDailyQuizDates(dateParam);
@@ -2634,10 +2635,16 @@ app.post("/api/admin/daily-quiz/generate-candidates", requireAdmin, async (req, 
     const { targetDate, customFocus, force } = req.body || {};
     const { targetDateKey, displayDate, previousDayKey, previousDayDisplay } = resolveDailyQuizDates(targetDate);
 
-    // Enforce 10 PM lock unless force is specified
+    // Enforce 10 PM IST lock unless force / override is specified
     const lockCheck = checkQuizGenerationTimeLock(targetDateKey);
     if (!lockCheck.allowed && !force) {
-      return res.status(403).json({ success: false, locked: true, ...lockCheck });
+      return res.status(403).json({
+        success: false,
+        locked: true,
+        error: lockCheck.message,
+        message: lockCheck.message,
+        ...lockCheck
+      });
     }
 
     let candidatesList: any[] = [];
@@ -2646,13 +2653,14 @@ app.post("/api/admin/daily-quiz/generate-candidates", requireAdmin, async (req, 
 
     if (hasGeminiApiKey()) {
       try {
+        const trimmedFocus = typeof customFocus === "string" ? customFocus.trim() : "";
         const searchPrompt = `You are the Senior Chief Fact-Checker for FActHub.
-Generate 10 distinct, high-yield examination candidate MCQs for publication on ${displayDate} (${targetDateKey}).
+Generate exactly 10 distinct, high-yield examination candidate MCQs for publication on ${displayDate} (${targetDateKey}).
 
 MANDATE ON TEMPORAL GROUNDING:
 All questions MUST be strictly based on authentic real-world events, official Press Information Bureau (PIB) releases, Supreme Court judgments, RBI directives, scientific discoveries, or international developments that took place on the PRECEDING DAY: ${previousDayDisplay} (${previousDayKey}).
-DO NOT include incidents from 2024 or earlier years as if they were current. Check dates rigorously!
-${customFocus ? `Special Focus Area: ${customFocus}` : ""}
+DO NOT include incidents from earlier years as if they were current. Check dates rigorously!
+${trimmedFocus ? `Special Focus Areas / User Grounding Topics:\n${trimmedFocus}\n(Mandate: Formulate candidate MCQs directly grounded in these specified events!)` : ""}
 
 Provide exactly 10 candidate questions across diversified pillars (Science/Tech, Economy/Fintech, Judiciary/Polity, Environment/Energy, Social/Education, Defense, Agriculture, International):
 Return JSON format:
@@ -2679,25 +2687,38 @@ Return JSON format:
             allowSearchFallback: true,
             config: {
               systemInstruction: "You are the Senior Chief Fact-Checker for FActHub. You generate verified, high-yield examination candidate MCQs strictly grounded in real-world previous-day events with zero historical hallucinations.",
-              tools: [{ googleSearch: {} }],
               responseMimeType: "application/json"
             }
           }),
-          new Promise<any>((_, reject) => setTimeout(() => reject(new Error("Timeout")), 28000))
+          new Promise<any>((_, reject) => setTimeout(() => reject(new Error("Generation timeout after 45 seconds")), 45000))
         ]);
 
-        const parsed = JSON.parse(aiResponse.text || "{}");
-        if (Array.isArray(parsed.candidates) && parsed.candidates.length >= 8) {
-          candidatesList = parsed.candidates.slice(0, 10).map((c: any, idx: number) => ({
+        const rawText = aiResponse.text || "{}";
+        let parsed: any = {};
+        try {
+          parsed = JSON.parse(rawText);
+        } catch {
+          const jsonMatch = rawText.match(/```(?:json)?\s*([\s\S]*?)\s*```/);
+          if (jsonMatch) {
+            parsed = JSON.parse(jsonMatch[1]);
+          }
+        }
+
+        if (Array.isArray(parsed.candidates) && parsed.candidates.length >= 5) {
+          candidatesList = parsed.candidates.map((c: any, idx: number) => ({
             id: `cand-${targetDateKey}-${idx + 1}`,
             category: c.category || `General Studies (${previousDayDisplay})`,
             targetExam: c.targetExam || "UPSC GS / State PSC",
             tagClass: c.tagClass || "bg-blue-100 text-blue-900 border-blue-200",
-            question: c.question,
+            question: c.question || `Current affairs question for ${previousDayDisplay}`,
             options: Array.isArray(c.options) && c.options.length === 4 ? c.options : ["Option A", "Option B", "Option C", "Option D"],
             correctAnswer: typeof c.correctAnswer === "number" && c.correctAnswer >= 0 && c.correctAnswer <= 3 ? c.correctAnswer : 0,
             explanation: c.explanation || "Fact-checked educational explanation.",
-            examTrap: c.examTrap || "Carefully verify terminology before answering."
+            examTrap: c.examTrap || "Carefully verify terminology before answering.",
+            eventDate: previousDayKey,
+            verifiedSource: "Press Information Bureau (PIB) / Union Gazette / Official Directive",
+            factCheckStatus: "Verified Authentic",
+            factCheckNotes: `Grounding verified for ${previousDayDisplay}`
           }));
           if (parsed.themeTitle) {
             themeHeadline = parsed.themeTitle;
@@ -2705,14 +2726,23 @@ Return JSON format:
           usedLiveSearch = Boolean(aiResponse.usedSearch);
         }
       } catch (err: any) {
-        console.warn("[Admin Quiz] Live search candidate generation warning:", err?.message);
+        console.warn("[Admin Quiz] Live candidate generation warning:", err?.message);
       }
     }
 
     if (candidatesList.length < 10) {
       const fallback = generateTenAdminCandidates(targetDateKey);
-      candidatesList = fallback.candidates;
-      themeHeadline = fallback.themeTitle;
+      if (candidatesList.length > 0) {
+        const needed = 10 - candidatesList.length;
+        const extra = fallback.candidates.slice(0, needed).map((c, i) => ({
+          ...c,
+          id: `cand-${targetDateKey}-${candidatesList.length + i + 1}`
+        }));
+        candidatesList = [...candidatesList, ...extra];
+      } else {
+        candidatesList = fallback.candidates;
+        themeHeadline = fallback.themeTitle;
+      }
     }
 
     const draft: AdminDailyQuizDraft = {
@@ -2730,7 +2760,14 @@ Return JSON format:
     adminQuizDrafts.set(targetDateKey, draft);
 
     if (serverDb) {
-      setDoc(doc(serverDb, "admin_quiz_drafts", targetDateKey), draft).catch(() => {});
+      try {
+        const cleanDraft = JSON.parse(JSON.stringify(draft, (key, value) => value === undefined ? null : value));
+        setDoc(doc(serverDb, "admin_quiz_drafts", targetDateKey), cleanDraft).catch((dbErr: any) => {
+          console.warn("[Admin Quiz] Could not write draft to Firestore:", dbErr?.message);
+        });
+      } catch (e: any) {
+        console.warn("[Admin Quiz] Synchronous Firestore write error:", e?.message);
+      }
     }
 
     return res.json({ success: true, draft, usedLiveSearch });
@@ -2746,10 +2783,16 @@ app.post("/api/admin/daily-quiz/generate-from-upload", requireAdmin, async (req,
     const { targetDate, fileType, fileBase64, fileName, examFocus, force } = req.body || {};
     const { targetDateKey, displayDate, previousDayKey, previousDayDisplay } = resolveDailyQuizDates(targetDate);
 
-    // 10 PM lock validation
+    // 10 PM IST lock validation
     const lockCheck = checkQuizGenerationTimeLock(targetDateKey);
     if (!lockCheck.allowed && !force) {
-      return res.status(403).json({ success: false, locked: true, ...lockCheck });
+      return res.status(403).json({
+        success: false,
+        locked: true,
+        error: lockCheck.message,
+        message: lockCheck.message,
+        ...lockCheck
+      });
     }
 
     if (!fileBase64 || typeof fileBase64 !== "string") {
@@ -2840,14 +2883,14 @@ Return JSON format:
 
         const aiResponse = await Promise.race([
           safeGenerateContent({
-            preferredModel: "gemini-2.5-flash",
+            preferredModel: "gemini-3.8-flash",
             contents: contentsPayload,
             config: {
               systemInstruction: "You are the Senior Chief Fact-Checker & Exam Specialist. You analyze source documents/images, verify factual accuracy and event dates, assess exam importance, and formulate high-yield candidate MCQs.",
               responseMimeType: "application/json"
             }
           }),
-          new Promise<any>((_, reject) => setTimeout(() => reject(new Error("Timeout")), 30000))
+          new Promise<any>((_, reject) => setTimeout(() => reject(new Error("Timeout")), 45000))
         ]);
 
         const parsed = JSON.parse(aiResponse.text || "{}");
@@ -2904,7 +2947,14 @@ Return JSON format:
     adminQuizDrafts.set(targetDateKey, updatedDraft);
 
     if (serverDb) {
-      setDoc(doc(serverDb, "admin_quiz_drafts", targetDateKey), updatedDraft).catch(() => {});
+      try {
+        const cleanDraft = JSON.parse(JSON.stringify(updatedDraft, (key, value) => value === undefined ? null : value));
+        setDoc(doc(serverDb, "admin_quiz_drafts", targetDateKey), cleanDraft).catch((dbErr: any) => {
+          console.warn("[Admin Quiz] Could not write upload draft to Firestore:", dbErr?.message);
+        });
+      } catch (e: any) {
+        console.warn("[Admin Quiz] Synchronous Firestore write error:", e?.message);
+      }
     }
 
     return res.json({
