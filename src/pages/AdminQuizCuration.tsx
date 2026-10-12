@@ -107,9 +107,9 @@ export const AdminQuizCuration: React.FC = () => {
   }>({ allowed: true, unlockTime: '' });
   const [bypassTimeLock, setBypassTimeLock] = useState<boolean>(false);
 
-  // Upload Word Document / JPG Image to AI Quiz Generator
+  // Upload PDF / JPG Image / Word Document to AI Quiz Generator
   const [showUploadModal, setShowUploadModal] = useState<boolean>(false);
-  const [uploadType, setUploadType] = useState<'word' | 'image'>('word');
+  const [uploadType, setUploadType] = useState<'pdf' | 'image' | 'word'>('pdf');
   const [uploadFile, setUploadFile] = useState<File | null>(null);
   const [uploadPreview, setUploadPreview] = useState<string | null>(null);
   const [uploadExamFocus, setUploadExamFocus] = useState<string>('UPSC CSE Prelims & Mains GS-2/GS-3');
@@ -721,14 +721,14 @@ export const AdminQuizCuration: React.FC = () => {
               </div>
 
               <div className="flex flex-wrap items-center gap-2">
-                {/* Word Doc / Image JPG Upload Button (Point 4) */}
+                {/* PDF / JPEG News Image / Document Upload Button */}
                 <button
                   onClick={() => setShowUploadModal(true)}
-                  className="px-3.5 py-2 rounded-xl bg-gradient-to-r from-indigo-600 to-blue-600 hover:from-indigo-700 hover:to-blue-700 text-white text-xs font-black flex items-center gap-2 shadow-md transition-all cursor-pointer"
-                  title="Upload Word Document (.docx/.txt) or News Image (.jpg/.png) to generate fact-checked quiz"
+                  className="px-4 py-2.5 rounded-xl bg-gradient-to-r from-indigo-600 via-blue-600 to-sky-600 hover:from-indigo-700 hover:to-sky-700 text-white text-xs font-black flex items-center gap-2 shadow-lg transition-all cursor-pointer ring-2 ring-indigo-500/20 active:scale-95"
+                  title="Upload Current Affairs PDF (.pdf), News JPEG (.jpg/.jpeg), or Notes (.docx) to generate fact-checked quiz"
                 >
-                  <FileUp size={14} />
-                  <span>Upload Word Doc / JPG Image</span>
+                  <FileUp size={15} />
+                  <span>Upload PDF / JPEG to Create Quiz</span>
                 </button>
 
                 {/* AI Candidates Generation Button */}
@@ -1433,8 +1433,8 @@ export const AdminQuizCuration: React.FC = () => {
                   <Upload size={20} />
                 </div>
                 <div>
-                  <h3 className="font-serif font-bold text-lg">Generate AI Quiz from Source Upload</h3>
-                  <p className="text-xs text-ink3 dark:text-white/60">Upload notes, news clipping, or gazettes for fact-checking & MCQ generation</p>
+                  <h3 className="font-serif font-bold text-lg">Generate AI Quiz from PDF, JPEG or Notes</h3>
+                  <p className="text-xs text-ink3 dark:text-white/60">Upload Current Affairs PDF, News JPEG clipping, or Word document for fact-checking & 10 MCQ creation</p>
                 </div>
               </div>
               <button
@@ -1445,34 +1445,48 @@ export const AdminQuizCuration: React.FC = () => {
               </button>
             </div>
 
-            {/* Tabs: Word Document vs JPG Image */}
-            <div className="flex bg-paper2 dark:bg-white/5 p-1 rounded-2xl border border-black/5 dark:border-white/10">
+            {/* Tabs: PDF Document vs JPEG Image vs Word Doc */}
+            <div className="flex bg-paper2 dark:bg-white/5 p-1 rounded-2xl border border-black/5 dark:border-white/10 gap-1">
               <button
                 type="button"
-                onClick={() => { setUploadType('word'); setUploadFile(null); setUploadPreview(null); }}
+                onClick={() => { setUploadType('pdf'); setUploadFile(null); setUploadPreview(null); }}
                 className={cn(
-                  "flex-1 py-2 rounded-xl text-xs font-bold flex items-center justify-center gap-2 transition-all cursor-pointer",
-                  uploadType === 'word'
-                    ? "bg-white dark:bg-white/15 text-ink dark:text-white shadow-xs font-black"
-                    : "text-ink3 dark:text-white/60 hover:text-ink"
+                  "flex-1 py-2 rounded-xl text-xs font-bold flex items-center justify-center gap-1.5 transition-all cursor-pointer",
+                  uploadType === 'pdf'
+                    ? "bg-rose-500 text-white shadow-sm font-black"
+                    : "text-ink3 dark:text-white/60 hover:text-ink hover:bg-black/5 dark:hover:bg-white/5"
                 )}
               >
-                <FileText size={15} className="text-blue-500" />
-                <span>Word Document (.docx / .txt)</span>
+                <FileText size={15} />
+                <span>PDF Document (.pdf)</span>
               </button>
 
               <button
                 type="button"
                 onClick={() => { setUploadType('image'); setUploadFile(null); setUploadPreview(null); }}
                 className={cn(
-                  "flex-1 py-2 rounded-xl text-xs font-bold flex items-center justify-center gap-2 transition-all cursor-pointer",
+                  "flex-1 py-2 rounded-xl text-xs font-bold flex items-center justify-center gap-1.5 transition-all cursor-pointer",
                   uploadType === 'image'
-                    ? "bg-white dark:bg-white/15 text-ink dark:text-white shadow-xs font-black"
-                    : "text-ink3 dark:text-white/60 hover:text-ink"
+                    ? "bg-amber-500 text-white shadow-sm font-black"
+                    : "text-ink3 dark:text-white/60 hover:text-ink hover:bg-black/5 dark:hover:bg-white/5"
                 )}
               >
-                <ImageIcon size={15} className="text-amber-500" />
-                <span>News Image (.jpg / .png)</span>
+                <ImageIcon size={15} />
+                <span>JPEG / Image (.jpg, .png)</span>
+              </button>
+
+              <button
+                type="button"
+                onClick={() => { setUploadType('word'); setUploadFile(null); setUploadPreview(null); }}
+                className={cn(
+                  "flex-1 py-2 rounded-xl text-xs font-bold flex items-center justify-center gap-1.5 transition-all cursor-pointer",
+                  uploadType === 'word'
+                    ? "bg-blue-600 text-white shadow-sm font-black"
+                    : "text-ink3 dark:text-white/60 hover:text-ink hover:bg-black/5 dark:hover:bg-white/5"
+                )}
+              >
+                <FileText size={15} />
+                <span>Word / Notes (.docx)</span>
               </button>
             </div>
 
@@ -1481,13 +1495,13 @@ export const AdminQuizCuration: React.FC = () => {
               <input
                 type="file"
                 id="quiz-file-upload-input"
-                accept={uploadType === 'word' ? ".docx,.doc,.txt,.md" : ".jpg,.jpeg,.png,.webp"}
+                accept={uploadType === 'pdf' ? ".pdf,application/pdf" : uploadType === 'image' ? ".jpg,.jpeg,.png,.webp,image/jpeg,image/png" : ".docx,.doc,.txt,.md"}
                 className="hidden"
                 onChange={(e) => {
                   const file = e.target.files?.[0];
                   if (file) {
                     setUploadFile(file);
-                    if (uploadType === 'image') {
+                    if (uploadType === 'image' || file.type.startsWith('image/')) {
                       const reader = new FileReader();
                       reader.onload = () => setUploadPreview(reader.result as string);
                       reader.readAsDataURL(file);
@@ -1503,8 +1517,11 @@ export const AdminQuizCuration: React.FC = () => {
                     {uploadPreview ? (
                       <img src={uploadPreview} alt="Preview" className="max-h-36 mx-auto rounded-xl shadow-md border" />
                     ) : (
-                      <div className="w-12 h-12 mx-auto rounded-2xl bg-blue-500/10 text-blue-500 flex items-center justify-center">
-                        <FileText size={24} />
+                      <div className={cn(
+                        "w-12 h-12 mx-auto rounded-2xl flex items-center justify-center font-bold text-sm",
+                        uploadType === 'pdf' ? "bg-rose-500/15 text-rose-500" : "bg-blue-500/10 text-blue-500"
+                      )}>
+                        {uploadType === 'pdf' ? 'PDF' : <FileText size={24} />}
                       </div>
                     )}
                     <div className="text-xs font-bold text-ink dark:text-white">{uploadFile.name}</div>
@@ -1518,10 +1535,12 @@ export const AdminQuizCuration: React.FC = () => {
                       <FileUp size={24} />
                     </div>
                     <div className="text-xs font-bold">
-                      {uploadType === 'word' ? 'Click to select Word document (.docx, .doc, .txt)' : 'Click to select news clipping / press release image (.jpg, .jpeg, .png)'}
+                      {uploadType === 'pdf' && 'Click to select Current Affairs PDF (.pdf)'}
+                      {uploadType === 'image' && 'Click to select News JPEG / clipping (.jpg, .jpeg, .png)'}
+                      {uploadType === 'word' && 'Click to select Word document (.docx, .doc, .txt)'}
                     </div>
                     <p className="text-[11px] text-ink3 dark:text-white/60">
-                      AI will transcribe, fact-check authenticity & event dates, evaluate exam weightage, and generate 10 MCQs.
+                      AI will analyze the uploaded material, verify authenticity & event dates, assess exam importance, and generate 10 MCQs.
                     </p>
                   </div>
                 )}

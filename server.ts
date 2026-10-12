@@ -2796,13 +2796,29 @@ app.post("/api/admin/daily-quiz/generate-from-upload", requireAdmin, async (req,
     }
 
     if (!fileBase64 || typeof fileBase64 !== "string") {
-      return res.status(400).json({ error: "Missing uploaded file data. Please upload a Word document or JPG image." });
+      return res.status(400).json({ error: "Missing uploaded file data. Please upload a PDF, JPEG image, or Word document." });
     }
 
     let extractedText = "";
-    let imagePart: any = null;
+    let mediaPart: any = null;
 
-    if (fileType === "word") {
+    if (fileType === "pdf" || fileName?.toLowerCase().endsWith(".pdf")) {
+      const cleanBase64 = fileBase64.replace(/^data:application\/pdf;base64,/, "").replace(/^data:.*?;base64,/, "");
+      mediaPart = {
+        inlineData: {
+          mimeType: "application/pdf",
+          data: cleanBase64
+        }
+      };
+    } else if (fileType === "image" || fileName?.toLowerCase().match(/\.(jpg|jpeg|png|webp)$/)) {
+      const cleanBase64 = fileBase64.replace(/^data:image\/[a-zA-Z]+;base64,/, "").replace(/^data:.*?;base64,/, "");
+      mediaPart = {
+        inlineData: {
+          mimeType: fileName?.toLowerCase().endsWith(".png") ? "image/png" : "image/jpeg",
+          data: cleanBase64
+        }
+      };
+    } else if (fileType === "word" || fileName?.toLowerCase().match(/\.(docx|doc|txt|md)$/)) {
       try {
         const cleanBase64 = fileBase64.replace(/^data:.*?;base64,/, "");
         const buffer = Buffer.from(cleanBase64, "base64");
@@ -2818,18 +2834,11 @@ app.post("/api/admin/daily-quiz/generate-from-upload", requireAdmin, async (req,
         console.warn("Could not parse word doc via mammoth, using raw text:", docErr);
         extractedText = Buffer.from(fileBase64.replace(/^data:.*?;base64,/, ""), "base64").toString("utf-8");
       }
-    } else if (fileType === "image") {
-      const cleanBase64 = fileBase64.replace(/^data:image\/[a-zA-Z]+;base64,/, "");
-      imagePart = {
-        inlineData: {
-          mimeType: fileName?.endsWith(".png") ? "image/png" : "image/jpeg",
-          data: cleanBase64
-        }
-      };
     }
 
     let candidatesList: any[] = [];
-    let themeHeadline = `Curated from ${fileType === "word" ? "Word Document" : "News Image"} (${fileName || "Source Material"})`;
+    const sourceKind = fileType === "pdf" ? "PDF Document" : fileType === "word" ? "Word Document" : "News JPEG Image";
+    let themeHeadline = `Curated from ${sourceKind} (${fileName || "Source Material"})`;
     let analysisSummary = {
       sourceFile: fileName || "Uploaded Material",
       fileType: fileType || "document",
@@ -2846,7 +2855,7 @@ app.post("/api/admin/daily-quiz/generate-from-upload", requireAdmin, async (req,
     if (hasGeminiApiKey()) {
       try {
         const promptInstruction = `You are the Senior Chief Fact-Checker & Exam Specialist for FActHub.
-Analyze the attached ${fileType === "word" ? "document text" : "image of news clipping / government circular / infographic"}.
+Analyze the attached ${fileType === "pdf" ? "Current Affairs PDF document / gazette" : fileType === "word" ? "document text" : "news clipping image / JPEG infographic"}.
 
 MANDATORY OBJECTIVES:
 1. FACT-CHECK: Verify all events described. Did the event really happen? Identify the exact date it took place. Rigorously discard speculative or misattributed claims.
@@ -2855,7 +2864,7 @@ MANDATORY OBJECTIVES:
 Target Edition Date: ${displayDate} (Grounded in events of ${previousDayDisplay} / ${previousDayKey}).
 ${examFocus ? `Target Exam Focus: ${examFocus}` : ""}
 
-${fileType === "word" ? `EXTRACTED DOCUMENT TEXT:\n${extractedText.slice(0, 16000)}` : "IMAGE ATTACHED"}
+${extractedText ? `EXTRACTED DOCUMENT TEXT:\n${extractedText.slice(0, 16000)}` : "SOURCE FILE ATTACHED"}
 
 Return JSON format:
 {
@@ -2879,7 +2888,7 @@ Return JSON format:
   ]
 }`;
 
-        const contentsPayload = imagePart ? [promptInstruction, imagePart] : promptInstruction;
+        const contentsPayload = mediaPart ? [promptInstruction, mediaPart] : (extractedText ? `${promptInstruction}\n\nEXTRACTED DOCUMENT TEXT:\n${extractedText.slice(0, 16000)}` : promptInstruction);
 
         const aiResponse = await Promise.race([
           safeGenerateContent({
