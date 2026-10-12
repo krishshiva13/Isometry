@@ -327,6 +327,20 @@ export const AdminQuizCuration: React.FC = () => {
               force: bypassTimeLock
             })
           });
+          if (!res.ok) {
+            let errorText = `Server error (${res.status})`;
+            try {
+              const errData = await res.json();
+              errorText = errData.error || errData.message || errorText;
+            } catch {
+              if (res.status === 413) {
+                errorText = 'File is too large for upload. Please select a file under 35 MB.';
+              }
+            }
+            showToast(`⚠️ ${errorText}`);
+            return;
+          }
+
           const data = await res.json();
           if (data.success && data.draft) {
             setDraft(data.draft);
@@ -338,8 +352,9 @@ export const AdminQuizCuration: React.FC = () => {
           } else {
             showToast(data.error || (data.locked ? data.message : 'Upload analysis failed'));
           }
-        } catch (postErr) {
-          showToast('Failed to send uploaded document to AI engine');
+        } catch (postErr: any) {
+          console.error('Upload processing error:', postErr);
+          showToast(`Failed to process upload: ${postErr?.message || 'Network error'}`);
         } finally {
           setUploadProcessing(false);
         }

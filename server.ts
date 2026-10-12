@@ -69,8 +69,9 @@ app.use((req, res, next) => {
   next();
 });
 
-// Enforce reasonable payload size to prevent Denial of Service
-app.use(express.json({ limit: "1mb" }));
+// Enable support for Current Affairs PDF documents, high-resolution newspaper clippings, and Word files
+app.use(express.json({ limit: "50mb" }));
+app.use(express.urlencoded({ limit: "50mb", extended: true }));
 
 // In-Memory Rate Limiting Guard
 const rateLimitMap = new Map<string, { count: number; resetTime: number }>();
@@ -2888,7 +2889,9 @@ Return JSON format:
   ]
 }`;
 
-        const contentsPayload = mediaPart ? [promptInstruction, mediaPart] : (extractedText ? `${promptInstruction}\n\nEXTRACTED DOCUMENT TEXT:\n${extractedText.slice(0, 16000)}` : promptInstruction);
+        const contentsPayload = mediaPart
+          ? [mediaPart, { text: promptInstruction }]
+          : (extractedText ? `${promptInstruction}\n\nEXTRACTED DOCUMENT TEXT:\n${extractedText.slice(0, 16000)}` : promptInstruction);
 
         const aiResponse = await Promise.race([
           safeGenerateContent({
@@ -2902,7 +2905,16 @@ Return JSON format:
           new Promise<any>((_, reject) => setTimeout(() => reject(new Error("Timeout")), 45000))
         ]);
 
-        const parsed = JSON.parse(aiResponse.text || "{}");
+        const rawText = aiResponse.text || "{}";
+        let parsed: any = {};
+        try {
+          parsed = JSON.parse(rawText);
+        } catch {
+          const jsonMatch = rawText.match(/```(?:json)?\s*([\s\S]*?)\s*```/);
+          if (jsonMatch) {
+            parsed = JSON.parse(jsonMatch[1]);
+          }
+        }
         if (Array.isArray(parsed.candidates) && parsed.candidates.length > 0) {
           candidatesList = parsed.candidates.slice(0, 10).map((c: any, idx: number) => ({
             id: `cand-upload-${Date.now()}-${idx + 1}`,
