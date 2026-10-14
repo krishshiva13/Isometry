@@ -114,13 +114,16 @@ export const AdminQuizCuration: React.FC = () => {
   const [uploadPreview, setUploadPreview] = useState<string | null>(null);
   const [uploadExamFocus, setUploadExamFocus] = useState<string>('UPSC CSE Prelims & Mains GS-2/GS-3');
   const [uploadProcessing, setUploadProcessing] = useState<boolean>(false);
+  const [uploadProcessingStep, setUploadProcessingStep] = useState<string>('');
   const [analysisSummary, setAnalysisSummary] = useState<{
     sourceFile?: string;
     fileType?: string;
     extractedWordCount?: number;
     examImportance?: string;
     factCheckStatus?: string;
+    browserResearchSummary?: string;
     keyInsights?: string[];
+    pageLayout?: any;
   } | null>(null);
 
   // Live Fact-Checking & Search Verification State
@@ -294,22 +297,20 @@ export const AdminQuizCuration: React.FC = () => {
     }
   };
 
-  // Upload Word Doc / JPG Image & Generate 10 MCQs
+  // Upload Word Doc / JPG Image / PDF & Generate 10 MCQs
   const handleUploadAndGenerate = async () => {
     if (!uploadFile) {
       showToast('⚠️ Please select a file to upload first.');
       return;
     }
-    if (!lockStatus.allowed && !bypassTimeLock) {
-      showToast(`🔒 Next day generation locked until 10:00 PM: ${lockStatus.message}`);
-      return;
-    }
 
     setUploadProcessing(true);
+    setUploadProcessingStep('Reading uploaded document & extracting claims...');
     try {
       const reader = new FileReader();
       reader.onload = async () => {
         try {
+          setUploadProcessingStep('Researching online, verifying event dates & fact-checking...');
           const fileBase64 = reader.result as string;
           const headers = await getAuthHeader();
           const res = await fetch('/api/admin/daily-quiz/generate-from-upload', {
@@ -324,7 +325,7 @@ export const AdminQuizCuration: React.FC = () => {
               fileBase64,
               fileName: uploadFile.name,
               examFocus: uploadExamFocus,
-              force: bypassTimeLock
+              force: true // Custom upload is always allowed for admin editorial curation
             })
           });
           if (!res.ok) {
@@ -341,6 +342,7 @@ export const AdminQuizCuration: React.FC = () => {
             return;
           }
 
+          setUploadProcessingStep('Formulating 10 high-yield MCQs & structuring 2-Page A4 layout...');
           const data = await res.json();
           if (data.success && data.draft) {
             setDraft(data.draft);
@@ -349,6 +351,49 @@ export const AdminQuizCuration: React.FC = () => {
             setUploadFile(null);
             setUploadPreview(null);
             showToast(`🎉 Generated 10 Fact-Checked MCQs from ${uploadFile.name}!`);
+
+            // Automatically configure the 2-Page A4 Handout Page Layout Preview
+            const cleanId = data.draft.targetDateKey.replace(/[^a-zA-Z0-9]/g, '');
+            const previewCandidates = data.draft.candidates.slice(0, 5);
+            const previewData: DailyCapsuleData = {
+              dateKey: data.draft.targetDateKey,
+              displayDate: data.draft.displayDate,
+              previousDayKey: data.draft.previousDayKey,
+              previousDayDisplay: data.draft.previousDayDisplay,
+              dayBadge: `Edition: ${data.draft.displayDate} • Grounded in ${data.draft.previousDayDisplay}`,
+              themeTitle: data.draft.themeTitle,
+              pdfFileName: `FactHub-Daily-Current-Affairs-${data.draft.targetDateKey}.pdf`,
+              pdfFileSize: '1.4 MB',
+              pdfPageCount: 2,
+              quickPointers: previewCandidates.map(q => `${q.question.slice(0, 75)}… — ${q.options[q.correctAnswer]}`),
+              mcqs: previewCandidates.map((q, i) => ({
+                id: `q-${cleanId}-${i + 1}`,
+                category: q.category,
+                targetExam: q.targetExam,
+                tagClass: q.tagClass,
+                question: q.question,
+                options: q.options,
+                correctAnswer: q.correctAnswer,
+                explanation: q.explanation,
+                examTrap: q.examTrap
+              })),
+              currentAffairs: previewCandidates.slice(0, 4).map((q, i) => ({
+                id: `ca-${cleanId}-${i + 1}`,
+                num: `0${i + 1}`,
+                title: q.question.slice(0, 95) + '…',
+                summary: q.explanation.slice(0, 220) + '…',
+                category: q.category.replace(/\(.*?\)/g, '').trim(),
+                examAngle: `${q.targetExam}: Core concepts and statutory background.`,
+                keyTakeaway: `Key Fact: ${q.options[q.correctAnswer]}`,
+                source: q.verifiedSource || `Verified Live Editorial (${data.draft.previousDayDisplay} Event)`,
+                exams: [{ 
+                  name: q.targetExam.split('/')[0].trim(), 
+                  tagClass: q.tagClass,
+                  examCode: q.targetExam.split('/')[0].trim().toUpperCase()
+                }]
+              }))
+            };
+            setPreviewCapsule(previewData);
           } else {
             showToast(data.error || (data.locked ? data.message : 'Upload analysis failed'));
           }
@@ -357,6 +402,7 @@ export const AdminQuizCuration: React.FC = () => {
           showToast(`Failed to process upload: ${postErr?.message || 'Network error'}`);
         } finally {
           setUploadProcessing(false);
+          setUploadProcessingStep('');
         }
       };
       reader.readAsDataURL(uploadFile);
@@ -364,6 +410,7 @@ export const AdminQuizCuration: React.FC = () => {
       console.error('File reading failed:', err);
       showToast('Failed to read uploaded file');
       setUploadProcessing(false);
+      setUploadProcessingStep('');
     }
   };
 
@@ -619,8 +666,16 @@ export const AdminQuizCuration: React.FC = () => {
               </p>
             </div>
 
-            {/* Quick Links */}
-            <div className="flex items-center gap-2">
+            {/* Quick Links & Persistent Document Upload Action */}
+            <div className="flex flex-wrap items-center gap-2">
+              <button
+                onClick={() => setShowUploadModal(true)}
+                className="px-4 py-2 rounded-xl bg-gradient-to-r from-indigo-500 via-blue-600 to-sky-500 hover:from-indigo-600 hover:to-sky-600 text-white text-xs font-black flex items-center gap-2 shadow-lg transition-all cursor-pointer ring-2 ring-indigo-400/30 active:scale-95"
+                title="Upload Current Affairs PDF (.pdf), News JPEG (.jpg/.jpeg), or Notes (.docx) to generate 10 MCQs"
+              >
+                <FileUp size={14} className="text-white" />
+                <span>Upload PDF / JPEG to Create Quiz</span>
+              </button>
               <Link
                 to="/quiz"
                 className="px-3 py-2 rounded-xl bg-white/10 hover:bg-white/20 text-white text-xs font-bold flex items-center gap-1.5 transition-all"
@@ -708,6 +763,53 @@ export const AdminQuizCuration: React.FC = () => {
 
       {/* Main Workbench Body */}
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 mt-6">
+        {/* PERMANENT DOCUMENT-TO-QUIZ STUDIO SECTION (Always visible regardless of draft load status) */}
+        <div className="bg-gradient-to-r from-indigo-950/80 via-slate-900/90 to-blue-950/80 border-2 border-indigo-500/40 rounded-3xl p-5 sm:p-6 mb-6 shadow-2xl backdrop-blur-md text-white">
+          <div className="flex flex-col lg:flex-row items-start lg:items-center justify-between gap-5">
+            <div className="space-y-2 max-w-3xl">
+              <div className="flex flex-wrap items-center gap-2">
+                <span className="px-2.5 py-0.5 rounded-full bg-indigo-500/25 text-indigo-300 border border-indigo-400/30 font-mono text-[10px] font-black uppercase tracking-wider flex items-center gap-1.5">
+                  <FileUp size={12} />
+                  AI Document-to-Quiz Studio
+                </span>
+                <span className="px-2.5 py-0.5 rounded-full bg-emerald-500/20 text-emerald-300 border border-emerald-400/30 font-mono text-[10px] font-bold">
+                  PDF • JPEG / Image • Word / Notes
+                </span>
+                <span className="px-2 py-0.5 rounded-full bg-gold/20 text-gold font-mono text-[10px] font-bold">
+                  Browser Researched & Fact-Checked
+                </span>
+              </div>
+              <h2 className="text-lg sm:text-xl font-serif font-black tracking-tight text-white">
+                Upload Current Affairs Material & Generate 10 Fact-Checked MCQs
+              </h2>
+              <p className="text-xs sm:text-sm text-white/70 leading-relaxed">
+                Upload Current Affairs PDFs, News clipping images, or Word notes. AI analyzes the events, performs browser research, verifies factual authenticity & event dates against official records (PIB/Union Gazette), formulates 10 high-yield MCQs, and configures the 2-Page A4 printable page layout.
+              </p>
+            </div>
+
+            <div className="flex flex-wrap items-center gap-3 shrink-0">
+              <button
+                onClick={() => setShowUploadModal(true)}
+                className="px-5 py-3 rounded-2xl bg-gradient-to-r from-indigo-500 via-blue-600 to-sky-500 hover:from-indigo-600 hover:to-sky-600 text-white text-xs font-black flex items-center gap-2.5 shadow-xl transition-all cursor-pointer ring-2 ring-indigo-400/40 active:scale-95"
+              >
+                <FileUp size={16} />
+                <span>Upload PDF / JPEG to Create Quiz</span>
+              </button>
+
+              {draft && (
+                <button
+                  onClick={handleOpenHandoutPreview}
+                  className="px-4 py-3 rounded-2xl bg-white/10 hover:bg-white/20 border border-white/20 text-white text-xs font-bold flex items-center gap-2 transition-all cursor-pointer"
+                  title="View 2-Page A4 Exam Handout & Printable Layout"
+                >
+                  <Printer size={15} className="text-gold" />
+                  <span>View 2-Page A4 Page Layout</span>
+                </button>
+              )}
+            </div>
+          </div>
+        </div>
+
         {loading ? (
           <div className="py-24 text-center">
             <RefreshCw size={32} className="animate-spin text-gold mx-auto mb-4" />
@@ -821,35 +923,63 @@ export const AdminQuizCuration: React.FC = () => {
               </div>
             )}
 
-            {/* ANALYSIS SUMMARY CARD (If generated from uploaded Word doc or JPG image) */}
+            {/* ANALYSIS SUMMARY CARD (If generated from uploaded Word doc, PDF or JPG image) */}
             {analysisSummary && (
-              <div className="bg-indigo-500/10 dark:bg-indigo-500/15 border border-indigo-500/30 rounded-2xl p-4 sm:p-5 mb-6 text-xs space-y-2 animate-in fade-in duration-300">
-                <div className="flex items-center justify-between">
-                  <div className="flex items-center gap-2">
-                    <FileText size={16} className="text-indigo-400" />
-                    <span className="font-bold text-sm text-indigo-950 dark:text-indigo-200">
-                      AI Analysis & Fact-Check Report for: {analysisSummary.sourceFile}
-                    </span>
+              <div className="bg-indigo-500/10 dark:bg-indigo-500/15 border-2 border-indigo-500/40 rounded-3xl p-5 sm:p-6 mb-6 text-xs space-y-4 animate-in fade-in duration-300 shadow-lg">
+                <div className="flex items-center justify-between pb-3 border-b border-indigo-500/20">
+                  <div className="flex items-center gap-2.5">
+                    <div className="w-8 h-8 rounded-xl bg-indigo-500/20 text-indigo-400 flex items-center justify-center">
+                      <FileText size={18} />
+                    </div>
+                    <div>
+                      <span className="font-bold text-sm sm:text-base text-indigo-950 dark:text-indigo-200">
+                        AI Analysis & Fact-Check Report: {analysisSummary.sourceFile}
+                      </span>
+                      <p className="text-[11px] text-indigo-900/70 dark:text-indigo-300/70">
+                        {analysisSummary.fileType?.toUpperCase()} Material • {analysisSummary.extractedWordCount ? `${analysisSummary.extractedWordCount} words analyzed • ` : ''}10 MCQs Formulated & Researched
+                      </p>
+                    </div>
                   </div>
                   <button
                     onClick={() => setAnalysisSummary(null)}
-                    className="p-1 hover:bg-black/10 dark:hover:bg-white/10 rounded-lg text-ink3 dark:text-white/60"
+                    className="p-1 hover:bg-black/10 dark:hover:bg-white/10 rounded-lg text-ink3 dark:text-white/60 cursor-pointer"
                   >
-                    <X size={14} />
+                    <X size={16} />
                   </button>
                 </div>
-                <div className="grid sm:grid-cols-2 gap-3 pt-1">
-                  <div className="space-y-1">
-                    <span className="font-mono text-[10px] uppercase font-bold text-indigo-800 dark:text-indigo-300 block">
-                      Exam Relevance & Importance:
+
+                <div className="grid sm:grid-cols-2 lg:grid-cols-3 gap-4 pt-1">
+                  <div className="space-y-1.5 p-3 rounded-2xl bg-indigo-500/5 dark:bg-white/5 border border-indigo-500/15">
+                    <span className="font-mono text-[10px] uppercase font-black text-indigo-800 dark:text-indigo-300 block">
+                      Exam Relevance & Syllabus:
                     </span>
-                    <p className="text-ink2 dark:text-white/90">{analysisSummary.examImportance}</p>
+                    <p className="text-ink2 dark:text-white/90 leading-relaxed">{analysisSummary.examImportance}</p>
                   </div>
-                  <div className="space-y-1">
-                    <span className="font-mono text-[10px] uppercase font-bold text-emerald-800 dark:text-emerald-300 block">
-                      Fact-Check Verification:
+
+                  <div className="space-y-1.5 p-3 rounded-2xl bg-emerald-500/5 dark:bg-white/5 border border-emerald-500/15">
+                    <span className="font-mono text-[10px] uppercase font-black text-emerald-800 dark:text-emerald-300 block">
+                      Browser Research & Fact-Check:
                     </span>
-                    <p className="text-ink2 dark:text-white/90">{analysisSummary.factCheckStatus}</p>
+                    <p className="text-ink2 dark:text-white/90 leading-relaxed">{analysisSummary.factCheckStatus}</p>
+                    {analysisSummary.browserResearchSummary && (
+                      <p className="text-[11px] text-ink3 dark:text-white/70 italic mt-1">{analysisSummary.browserResearchSummary}</p>
+                    )}
+                  </div>
+
+                  <div className="space-y-1.5 p-3 rounded-2xl bg-amber-500/5 dark:bg-white/5 border border-amber-500/15 sm:col-span-2 lg:col-span-1">
+                    <span className="font-mono text-[10px] uppercase font-black text-amber-800 dark:text-amber-300 block">
+                      2-Page A4 Handout Layout:
+                    </span>
+                    <p className="text-ink2 dark:text-white/90 leading-relaxed">
+                      Questions formatted for standard 2-page print edition (Page 1: Q1-Q5 Core Polity & Economy; Page 2: Q6-Q10 Science, Global & Key).
+                    </p>
+                    <button
+                      onClick={handleOpenHandoutPreview}
+                      className="mt-2 w-full py-2 px-3 rounded-xl bg-gold hover:bg-gold-l text-black font-black text-xs flex items-center justify-center gap-1.5 shadow-sm transition-all cursor-pointer"
+                    >
+                      <Printer size={13} />
+                      <span>Open 2-Page A4 Page Layout</span>
+                    </button>
                   </div>
                 </div>
               </div>
@@ -1576,11 +1706,30 @@ export const AdminQuizCuration: React.FC = () => {
               />
             </div>
 
+            {/* Live Processing Stepper Status */}
+            {uploadProcessing && (
+              <div className="p-3.5 rounded-2xl bg-indigo-500/10 border border-indigo-500/25 space-y-2 animate-in fade-in duration-200">
+                <div className="flex items-center gap-2 text-xs font-bold text-indigo-950 dark:text-indigo-200">
+                  <RefreshCw size={14} className="animate-spin text-indigo-400" />
+                  <span>{uploadProcessingStep || 'AI is analyzing your material & researching online...'}</span>
+                </div>
+                <div className="grid grid-cols-3 gap-1.5 pt-1">
+                  <div className="h-1.5 rounded-full bg-indigo-500 animate-pulse"></div>
+                  <div className="h-1.5 rounded-full bg-blue-500 animate-pulse delay-75"></div>
+                  <div className="h-1.5 rounded-full bg-emerald-500 animate-pulse delay-150"></div>
+                </div>
+                <p className="text-[10px] text-ink3 dark:text-white/60">
+                  Extracting events • Fact-checking claims via search & PIB archives • Formulating 10 MCQs & 2-Page A4 printable layout
+                </p>
+              </div>
+            )}
+
             {/* Actions */}
             <div className="flex items-center justify-end gap-2.5 pt-2">
               <button
                 onClick={() => { setShowUploadModal(false); setUploadFile(null); setUploadPreview(null); }}
-                className="px-4 py-2 rounded-xl text-xs font-bold bg-paper2 dark:bg-white/10 hover:bg-black/5 dark:hover:bg-white/20 text-ink dark:text-white cursor-pointer"
+                disabled={uploadProcessing}
+                className="px-4 py-2 rounded-xl text-xs font-bold bg-paper2 dark:bg-white/10 hover:bg-black/5 dark:hover:bg-white/20 text-ink dark:text-white cursor-pointer disabled:opacity-50"
               >
                 Cancel
               </button>
@@ -1588,12 +1737,12 @@ export const AdminQuizCuration: React.FC = () => {
               <button
                 onClick={handleUploadAndGenerate}
                 disabled={!uploadFile || uploadProcessing}
-                className="px-5 py-2 rounded-xl text-xs font-black bg-gradient-to-r from-gold to-amber-500 hover:from-gold-l hover:to-amber-400 text-black flex items-center gap-2 cursor-pointer shadow-lg disabled:opacity-50"
+                className="px-5 py-2.5 rounded-xl text-xs font-black bg-gradient-to-r from-gold to-amber-500 hover:from-gold-l hover:to-amber-400 text-black flex items-center gap-2 cursor-pointer shadow-lg disabled:opacity-50"
               >
                 {uploadProcessing ? (
                   <>
                     <RefreshCw size={14} className="animate-spin" />
-                    <span>Analyzing & Fact-Checking...</span>
+                    <span>Analyzing & Researching...</span>
                   </>
                 ) : (
                   <>
