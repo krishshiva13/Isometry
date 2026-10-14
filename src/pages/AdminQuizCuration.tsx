@@ -40,8 +40,11 @@ import {
 import { useAuth } from '../contexts/AuthContext';
 import { auth } from '../lib/firebase';
 import { cn } from '../lib/utils';
-import { PrintableA4HandoutModal } from '../components/exam/PrintableA4HandoutModal';
-import { DailyCapsuleData, downloadCurrentAffairsPdf } from '../lib/currentAffairsPdfExport';
+import type { DailyCapsuleData } from '../lib/currentAffairsPdfExport';
+
+const PrintableA4HandoutModal = React.lazy(() => 
+  import('../components/exam/PrintableA4HandoutModal').then(m => ({ default: m.PrintableA4HandoutModal }))
+);
 
 interface CandidateMCQ {
   id: string;
@@ -156,10 +159,29 @@ export const AdminQuizCuration: React.FC = () => {
     setTimeout(() => setToastMessage(null), 4500);
   };
 
-  // Helper to fetch authorization header
+  // Helper to fetch authorization header with fallback wait for currentUser restoration
   const getAuthHeader = async () => {
     try {
-      const token = await auth.currentUser?.getIdToken();
+      if (auth.currentUser) {
+        const token = await auth.currentUser.getIdToken();
+        return token ? { 'Authorization': `Bearer ${token}` } : {};
+      }
+      // If auth is still restoring from IndexedDB on page reload, wait briefly (up to 800ms)
+      const token = await new Promise<string | null>((resolve) => {
+        const timer = setTimeout(() => resolve(null), 800);
+        const unsubscribe = auth.onAuthStateChanged(async (u) => {
+          if (u) {
+            clearTimeout(timer);
+            unsubscribe();
+            try {
+              const t = await u.getIdToken();
+              resolve(t);
+            } catch {
+              resolve(null);
+            }
+          }
+        });
+      });
       return token ? { 'Authorization': `Bearer ${token}` } : {};
     } catch {
       return {};
@@ -1756,13 +1778,15 @@ export const AdminQuizCuration: React.FC = () => {
         </div>
       )}
 
-      {/* 2-Page A4 Handout Printable Modal */}
+      {/* 2-Page A4 Handout Printable Modal (Lazy Loaded on demand) */}
       {previewCapsule && (
-        <PrintableA4HandoutModal
-          isOpen={isPreviewModalOpen}
-          onClose={() => setIsPreviewModalOpen(false)}
-          capsule={previewCapsule}
-        />
+        <React.Suspense fallback={null}>
+          <PrintableA4HandoutModal
+            isOpen={isPreviewModalOpen}
+            onClose={() => setIsPreviewModalOpen(false)}
+            capsule={previewCapsule}
+          />
+        </React.Suspense>
       )}
     </div>
   );

@@ -26,24 +26,29 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    const unsubscribe = onAuthStateChanged(auth, async (u) => {
+    const unsubscribe = onAuthStateChanged(auth, (u) => {
       setUser(u);
+      setLoading(false); // Unblock UI immediately so pages render instantaneously
+
       if (u) {
-        // Securely sync and fetch profile from backend & Firestore
-        const synced = await authService.syncProfile(u);
-        if (synced) {
-          setProfile(synced);
-        } else {
-          const userRef = doc(db, 'users', u.uid);
-          const snap = await getDoc(userRef);
-          if (snap.exists()) {
-            setProfile(snap.data());
+        // Sync and fetch profile asynchronously in the background without stalling page loads
+        authService.syncProfile(u).then((synced) => {
+          if (synced) {
+            setProfile(synced);
+          } else {
+            const userRef = doc(db, 'users', u.uid);
+            getDoc(userRef).then((snap) => {
+              if (snap.exists()) {
+                setProfile(snap.data());
+              }
+            }).catch(() => {});
           }
-        }
+        }).catch((err) => {
+          console.warn('[AuthContext] Background profile sync skipped:', err);
+        });
       } else {
         setProfile(null);
       }
-      setLoading(false);
     });
 
     return () => unsubscribe();

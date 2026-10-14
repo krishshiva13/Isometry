@@ -11,35 +11,29 @@ import { AdminRoute } from './components/auth/AdminRoute';
 import { RefreshCw, Home as HomeIcon, AlertCircle } from 'lucide-react';
 
 /**
- * Resilient lazy loader that auto-recovers from dynamic import errors caused by stale build chunks
+ * Resilient lazy loader that retries failed chunk fetches in-memory before failing cleanly
  */
 function lazyWithRetry<T extends React.ComponentType<any>>(
   factory: () => Promise<any>,
   componentName: string
 ) {
   return lazy(async () => {
-    try {
-      const module: any = await factory();
-      if (!module) {
-        throw new Error(`Failed to load module for ${componentName} (module is undefined)`);
+    let lastError: any;
+    for (let attempt = 0; attempt < 2; attempt++) {
+      try {
+        const module: any = await factory();
+        if (module) {
+          const Component = module.default || module[componentName] || module;
+          if (Component) return { default: Component };
+        }
+      } catch (error: any) {
+        lastError = error;
+        // Short pause between in-memory retries
+        await new Promise((r) => setTimeout(r, 350));
       }
-      const Component = module.default || module[componentName] || module;
-      if (!Component) {
-        throw new Error(`Component "${componentName}" was not found in module`);
-      }
-      return { default: Component };
-    } catch (error: any) {
-      console.warn(`Dynamic chunk loading failed for ${componentName}:`, error);
-      const retryKey = `retry_import_${componentName}`;
-      const hasRetried = window.sessionStorage.getItem(retryKey);
-      if (!hasRetried) {
-        window.sessionStorage.setItem(retryKey, 'true');
-        window.location.reload();
-        return new Promise(() => {}); // Wait for reload
-      }
-      window.sessionStorage.removeItem(retryKey);
-      throw error;
     }
+    console.warn(`Dynamic chunk loading failed for ${componentName}:`, lastError);
+    throw lastError || new Error(`Failed to load ${componentName}`);
   });
 }
 
@@ -67,19 +61,16 @@ class RouteErrorBoundary extends Component<{ children: ReactNode }, { hasError: 
 
   componentDidCatch(error: Error, info: ErrorInfo) {
     console.error('Route error caught by RouteErrorBoundary:', error, info);
-    // If it's a chunk fetch failure, trigger a one-time clean reload
-    if (this.state.isChunkError) {
-      const reloadKey = 'route_chunk_error_reload';
-      const lastReload = sessionStorage.getItem(reloadKey);
-      const now = Date.now();
-      if (!lastReload || now - parseInt(lastReload, 10) > 10000) {
-        sessionStorage.setItem(reloadKey, now.toString());
-        window.location.reload();
-      }
-    }
   }
 
-  handleReload = () => {
+  handleReload = async () => {
+    // Clear any stale caches before reloading on user click
+    try {
+      if ('caches' in window) {
+        const keys = await caches.keys();
+        await Promise.all(keys.map(k => caches.delete(k)));
+      }
+    } catch {}
     window.location.reload();
   };
 
